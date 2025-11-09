@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node check-dimensions.js:*)",
+      "Bash(node resize-sprites.js:*)",
+      "Bash(node setup-animation-sprites.js:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

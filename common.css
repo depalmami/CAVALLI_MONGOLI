@@ -26,3 +26,64 @@ body          { font-family: Arial, Helvetica, sans-serif; }
 #hud .value            { color: black; font-weight: bold; }
 #hud .fastest          { background-color: rgba(255,215,0,0.5); }
 
+/**************************************************/
+/* fullscreen mode styles                         */
+/**************************************************/
+
+#racer:fullscreen,
+#racer:-webkit-full-screen,
+#racer:-moz-full-screen,
+#racer:-ms-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: black;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+#racer:fullscreen #canvas,
+#racer:-webkit-full-screen #canvas,
+#racer:-moz-full-screen #canvas,
+#racer:-ms-fullscreen #canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  object-fit: fill !important;
+  image-rendering: auto !important;
+}
+
+#racer:fullscreen #hud,
+#racer:-webkit-full-screen #hud,
+#racer:-moz-full-screen #hud,
+#racer:-ms-fullscreen #hud {
+  width: 100vw !important;
+  font-size: 1.5em;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 10 !important;
+}
+
+#fullscreen-btn {
+  background: linear-gradient(to bottom, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: all 0.3s;
+}
+
+#fullscreen-btn:hover {
+  background: linear-gradient(to bottom, #45a049, #3d8b40);
+  transform: scale(1.05);
+}
+
+#fullscreen-btn:active {
+  transform: scale(0.98);
+}
+
