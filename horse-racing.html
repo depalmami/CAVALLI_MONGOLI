@@ -374,6 +374,7 @@
       <span class="asset-editor-close">&times;</span>
       <h2>🎨 Asset Editor</h2>
       <p style="color: #aaa; font-size: 14px;">Customize game sprites by uploading your own images. Click "Upload" to replace any sprite, or "Reset" to restore defaults.</p>
+      <p style="color: #4CAF50; font-size: 14px; font-weight: bold;">📋 Billboard Tip: Your uploaded images will be stretched to fit the billboard frame. For best results, use images with similar aspect ratios to the original billboard.</p>
 
       <div id="asset-categories-container">
         <!-- Categories will be generated dynamically -->
@@ -1570,7 +1571,7 @@
 
     function loadHorseSprites(callback) {
       // Animation frames for gallop
-      // STRAIGHT has 8 frames, other directions have 4 frames
+      // STRAIGHT has 8 frames, other directions have 8 frames (from DX/SX folders)
       var directions = ['STRAIGHT', 'LEFT', 'RIGHT'];
       var terrains = ['', 'UPHILL_'];
 
@@ -1579,8 +1580,8 @@
       // Generate all sprite names: PLAYER_[UPHILL_]DIRECTION_FRAME
       terrains.forEach(function(terrain) {
         directions.forEach(function(direction) {
-          // STRAIGHT direction has 8 frames, others have 4
-          var frameCount = (direction === 'STRAIGHT') ? 8 : 4;
+          // All directions now have 8 frames
+          var frameCount = 8;
 
           for (var frame = 1; frame <= frameCount; frame++) {
             var name = 'PLAYER_' + terrain + direction + '_' + frame;
@@ -1630,7 +1631,23 @@
             }
           }
         };
-        img.src = 'images/horses/' + name + '.png';
+
+        // Determine the correct path based on direction
+        var imgPath;
+        var frameNum = name.match(/_(\d+)$/)[1]; // Extract frame number
+
+        if (name.includes('_LEFT_')) {
+          // Use images from Cavallone SX folder
+          imgPath = 'images/horses/Cavallone SX/0' + frameNum + '_sx.png';
+        } else if (name.includes('_RIGHT_')) {
+          // Use images from Cavallone DX folder
+          imgPath = 'images/horses/Cavallone DX/0' + frameNum + '_dx.png';
+        } else {
+          // STRAIGHT uses existing images
+          imgPath = 'images/horses/' + name + '.png';
+        }
+
+        img.src = imgPath;
         horseSprites[name] = img;
       });
     }
@@ -1978,8 +1995,8 @@
       var animationSpeed = 10 + (speedPercent * 20); // Range: 10-30 fps for animation
       gallopAnimationTime += (step * animationSpeed);
 
-      // STRAIGHT direction has 8 frames, others have 4 frames
-      var maxFrames = (direction === 'STRAIGHT') ? 8 : 4;
+      // All directions now have 8 frames
+      var maxFrames = 8;
 
       // Cycle through frames (1, 2, 3, ..., maxFrames)
       var frameIndex = Math.floor(gallopAnimationTime % maxFrames) + 1;
@@ -2006,7 +2023,7 @@
 
       // Horse size multiplier - adjust this value to make horses bigger/smaller
       // 1.0 = same width as original car, <1.0 = smaller, >1.0 = bigger
-      var horseSizeMultiplier = 0.4; // 0.15 + 16% = 0.174
+      var horseSizeMultiplier = 0.35;
 
       var destW = (baseWidth * horseSizeMultiplier * scale * width/2) * (SPRITES.SCALE * roadWidth);
 
@@ -2485,6 +2502,13 @@
           canvas.style.width = w + 'px';
           canvas.style.height = h + 'px';
 
+          // Update HUD width to match screen width
+          var hudElement = Dom.get('hud');
+          if (hudElement) {
+            hudElement.style.width = w + 'px';
+            hudElement.style.maxWidth = 'none';
+          }
+
           // Reset game with new dimensions
           reset({ width: w, height: h });
 
@@ -2502,6 +2526,13 @@
           // Restore CSS display size
           canvas.style.width = '640px';
           canvas.style.height = '480px';
+
+          // Restore HUD width
+          var hudElement = Dom.get('hud');
+          if (hudElement) {
+            hudElement.style.width = '';
+            hudElement.style.maxWidth = '';
+          }
 
           // Reset game with original dimensions
           reset({ width: 1024, height: 768 });
