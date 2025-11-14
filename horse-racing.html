@@ -4,8 +4,77 @@
 <head>
   <title>Horse Racing Game - Mongolian Horses</title>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link href="common.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#6366F1",
+            "background-light": "#F9FAFB",
+            "background-dark": "#111827",
+          },
+          fontFamily: {
+            display: ["Roboto", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+          },
+        },
+      },
+    };
+  </script>
   <style>
+    /* Tailwind Range Slider Styles */
+    input[type=range]::-webkit-slider-runnable-track {
+      background: #E5E7EB;
+    }
+    .dark input[type=range]::-webkit-slider-runnable-track {
+      background: #4B5563;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: #6366F1;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 9999px;
+      margin-top: -6px;
+    }
+
+    /* Override common.css fixed dimensions for responsive canvas */
+    #racer {
+      width: 100% !important;
+      height: auto !important;
+      margin-left: 0 !important;
+      border: none !important;
+      position: relative !important;
+    }
+    #canvas {
+      position: relative !important;
+      width: 100% !important;
+      height: auto !important;
+      display: block;
+    }
+    #hud {
+      max-width: 100% !important;
+    }
+
+    /* Intro screen animation */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
     /* Asset Editor Modal Styles */
     #asset-editor-modal {
       display: none;
@@ -221,9 +290,233 @@
   </style>
 </head>
 
-<body>
+<body class="bg-background-light dark:bg-background-dark font-display">
 
-  <table id="controls">
+  <!-- Modern Control Panel -->
+  <div class="min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Horse Racing Visuals</h1>
+          <p class="text-gray-600 dark:text-gray-400">Control Panel for Live Performance</p>
+        </div>
+        <button id="theme-toggle" class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+          <span class="material-icons text-gray-700 dark:text-gray-200">dark_mode</span>
+        </button>
+      </div>
+
+      <!-- Game Preview Card -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6">
+        <h2 class="text-lg font-bold mb-3 text-gray-900 dark:text-white">Game Preview</h2>
+        <div id="racer-container" class="aspect-video bg-black rounded overflow-hidden">
+          <!-- Canvas will be moved here -->
+        </div>
+      </div>
+
+      <!-- Control Panels Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <!-- Game Settings Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Game Settings</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Resolution</label>
+              <select id="resolution" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                <option value='fine'>Fine (1280x960)</option>
+                <option selected value='high'>High (1024x768)</option>
+                <option value='medium'>Medium (640x480)</option>
+                <option value='low'>Low (480x360)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Lanes</label>
+              <input id="lanes" type="range" min="1" max="4" value="3" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>1</span>
+                <span id="lanes-value" class="font-medium">3</span>
+                <span>4</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Track Width</label>
+              <input id="roadWidth" type="range" min="500" max="3000" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="roadWidth-value">1500</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Cam Height</label>
+              <input id="cameraHeight" type="range" min="500" max="5000" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="cameraHeight-value">1000</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Draw Dist</label>
+              <input id="drawDistance" type="range" min="100" max="500" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="drawDistance-value">300</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Reactivity Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Audio Reactivity</h3>
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-2">
+              <button id="audio-file-btn" class="flex flex-col items-center justify-center gap-2 py-3 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                <span class="material-icons text-base">audiotrack</span>
+                <span class="text-xs">Use Audio File</span>
+              </button>
+              <button id="use-mic-btn" class="flex flex-col items-center justify-center gap-2 py-3 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity">
+                <span class="material-icons text-base">mic</span>
+                <span class="text-xs">Use IN</span>
+              </button>
+            </div>
+            <input id="audioFile" type="file" accept="audio/*" class="hidden">
+            <div id="audio-status" class="text-xs text-center text-gray-500 dark:text-gray-400 py-2 bg-gray-100 dark:bg-gray-700 rounded">
+              No audio source selected
+            </div>
+            <audio id="audioPlayer" controls class="w-full hidden"></audio>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Shake</label>
+              <input id="shakeIntensity" type="range" min="0" max="100" value="50" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>0%</span>
+                <span id="shake-value">50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Zoom</label>
+              <input id="zoomIntensity" type="range" min="0" max="100" value="50" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>0%</span>
+                <span id="zoom-value">50%</span>
+                <span>100%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visual Effects Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Visual Effects</h3>
+          <div class="space-y-4">
+            <button id="tap-btn" class="w-full flex items-center justify-center gap-2 py-3 px-3 bg-primary text-white text-lg font-medium rounded hover:opacity-90 transition-opacity">
+              <span class="material-icons">touch_app</span>
+              TAP (T)
+            </button>
+            <div class="text-center">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Current BPM:</div>
+              <div id="bpm-display" class="text-2xl font-bold text-primary">511</div>
+            </div>
+            <div class="flex items-center justify-between py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">White Flash Controls</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="flash-toggle" type="checkbox" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Asset Management Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Asset Management</h3>
+          <div class="space-y-3">
+            <button id="open-asset-editor" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">collections</span>
+              Open Asset Editor
+            </button>
+            <button id="open-sprite-selector" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">casino</span>
+              Configure Randomization
+            </button>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Sky Layer</label>
+              <select id="skySelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
+                <option value="default">Default</option>
+                <option value="sky_1">Sky 1</option>
+                <option value="sky_2">Sky 2</option>
+                <option value="sky_3">Sky 3</option>
+                <option value="sky_4" selected>Sky 4</option>
+                <option value="sky_5">Sky 5</option>
+                <option value="sky_6">Sky 6</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Hills Layer</label>
+              <select id="hillsSelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
+                <option value="default">Default</option>
+                <option value="hills_1">Custom Hills 1</option>
+                <option value="hills_2">Custom Hills 2</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Trees Layer</label>
+              <select id="treesSelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
+                <option value="default">Default</option>
+                <option value="trees_1">Custom Trees 1</option>
+              </select>
+            </div>
+            <button id="clear-storage-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600 transition-colors">
+              <span class="material-icons text-base">delete_sweep</span>
+              Clear All Saved
+            </button>
+            <div id="storage-status" class="text-xs text-center text-gray-500 dark:text-gray-400"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Display Mode & Controller Info Row -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+
+        <!-- Display Mode Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Display Mode</h3>
+          <div class="space-y-3">
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="fullscreen-btn">
+              <span class="material-icons text-base">fullscreen</span>
+              Fullscreen Mode
+            </button>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="dual-monitor-btn">
+              <span class="material-icons text-base">desktop_windows</span>
+              Dual Monitor Mode
+            </button>
+            <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
+          </div>
+        </div>
+
+        <!-- Controller Info Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Controller Info</h3>
+          <div class="space-y-3">
+            <div class="text-sm text-gray-700 dark:text-gray-300">
+              <p class="mb-2">Use the <strong>arrow keys</strong> or <strong>Xbox controller</strong> to control your horse!</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Left Stick/D-Pad = Steer | RT/A = Accelerate | LT/B = Brake
+              </p>
+            </div>
+            <div id="gamepad-status-display" class="flex items-center gap-2 py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <span class="material-icons text-gray-400">sports_esports</span>
+              <span id="gamepad-status-text" class="text-sm font-medium text-gray-500 dark:text-gray-400">No controller connected</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden elements for compatibility -->
+  <div style="display: none;">
+    <table id="controls">
     <tr>
       <td colspan="2">
         <a href='v4.final.html'>car version</a> |
@@ -343,16 +636,8 @@
       </th>
     </tr>
   </table>
-
-  <div id='instructions'>
-    <p>Use the <b>arrow keys</b> or <b>Xbox controller</b> to control your horse!</p>
-    <p style="font-size: 14px; color: #888;">Controller: Left Stick/D-Pad = Steer | RT/A = Accelerate | LT/B = Brake</p>
-    <p id="gamepad-status" style="font-size: 14px; color: #666;">🎮 No controller</p>
-    <p>
-      <button id="fullscreen-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; margin-right: 10px;">🖥️ Fullscreen Mode</button>
-      <button id="dual-monitor-btn" style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #2196F3; color: white; border: none; border-radius: 3px;">🖥️🖥️ Dual Monitor Mode</button>
-    </p>
-    <p id="dual-monitor-status" style="font-size: 12px; color: #666; display: none;">Dual monitor active - Game on second screen</p>
+  <div id="gamepad-status" style="display:none;"></div>
+  <div id='instructions' style="display:none;"></div>
   </div>
 
   <div id="racer">
@@ -402,6 +687,129 @@
 
   <script src="stats.js"></script>
   <script src="common.js"></script>
+
+  <!-- Dark Mode Toggle Script -->
+  <script>
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      document.documentElement.classList.toggle('dark');
+      // Save preference to localStorage
+      if (document.documentElement.classList.contains('dark')) {
+        localStorage.setItem('theme', 'dark');
+      } else {
+        localStorage.setItem('theme', 'light');
+      }
+    });
+
+    // Load saved theme preference and move racer div
+    window.addEventListener('DOMContentLoaded', function() {
+      var savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+
+      // Move #racer div into the game preview container
+      var racerDiv = document.getElementById('racer');
+      var racerContainer = document.getElementById('racer-container');
+      if (racerDiv && racerContainer) {
+        racerContainer.appendChild(racerDiv);
+        // Remove the aspect-video class and styles since racer has its own sizing
+        racerContainer.classList.remove('aspect-video');
+        racerContainer.style.height = 'auto';
+      }
+    });
+
+    // Sync flash toggle checkbox with flashEnabled variable
+    document.getElementById('flash-toggle').addEventListener('change', function() {
+      toggleFlash();
+    });
+
+    // Update gamepad status display
+    function updateGamepadUIStatus() {
+      var statusIcon = document.querySelector('#gamepad-status-display .material-icons');
+      var statusText = document.getElementById('gamepad-status-text');
+      if (gamepadConnected) {
+        statusIcon.className = 'material-icons text-green-500';
+        statusText.className = 'font-medium text-green-600 dark:text-green-400';
+        statusText.textContent = 'Xbox Controller Connected';
+      } else {
+        statusIcon.className = 'material-icons text-gray-400';
+        statusText.className = 'font-medium text-gray-500 dark:text-gray-400';
+        statusText.textContent = 'No controller connected';
+      }
+    }
+
+    // Update slider values
+    function updateSliderValues() {
+      // Lanes
+      var lanesSlider = document.getElementById('lanes');
+      var lanesValue = document.getElementById('lanes-value');
+      if (lanesSlider && lanesValue) {
+        lanesSlider.addEventListener('input', function() {
+          lanesValue.textContent = this.value;
+        });
+      }
+
+      // Track Width
+      var roadWidthSlider = document.getElementById('roadWidth');
+      var roadWidthValue = document.getElementById('roadWidth-value');
+      if (roadWidthSlider && roadWidthValue) {
+        roadWidthSlider.addEventListener('input', function() {
+          roadWidthValue.textContent = this.value;
+        });
+      }
+
+      // Camera Height
+      var cameraHeightSlider = document.getElementById('cameraHeight');
+      var cameraHeightValue = document.getElementById('cameraHeight-value');
+      if (cameraHeightSlider && cameraHeightValue) {
+        cameraHeightSlider.addEventListener('input', function() {
+          cameraHeightValue.textContent = this.value;
+        });
+      }
+
+      // Draw Distance
+      var drawDistanceSlider = document.getElementById('drawDistance');
+      var drawDistanceValue = document.getElementById('drawDistance-value');
+      if (drawDistanceSlider && drawDistanceValue) {
+        drawDistanceSlider.addEventListener('input', function() {
+          drawDistanceValue.textContent = this.value;
+        });
+      }
+
+      // Shake
+      var shakeSlider = document.getElementById('shakeIntensity');
+      var shakeValue = document.getElementById('shake-value');
+      if (shakeSlider && shakeValue) {
+        shakeSlider.addEventListener('input', function() {
+          shakeValue.textContent = this.value + '%';
+        });
+      }
+
+      // Zoom
+      var zoomSlider = document.getElementById('zoomIntensity');
+      var zoomValue = document.getElementById('zoom-value');
+      if (zoomSlider && zoomValue) {
+        zoomSlider.addEventListener('input', function() {
+          zoomValue.textContent = this.value + '%';
+        });
+      }
+    }
+
+    // Initialize slider values on load
+    window.addEventListener('DOMContentLoaded', updateSliderValues);
+
+    // Audio File button
+    document.getElementById('audio-file-btn').addEventListener('click', function() {
+      document.getElementById('audioFile').click();
+    });
+
+    // Use IN (Microphone) button
+    document.getElementById('use-mic-btn').addEventListener('click', function() {
+      setupMicrophoneInput();
+    });
+
+  </script>
+
   <script>
 
     var fps            = 60;                      // how many 'update' frames per second
@@ -535,9 +943,21 @@
     var audioBufferLength = 0;
     var audioSource = null;
     var shakeIntensity = 50; // 0-100
+    var zoomIntensity = 50; // 0-100
     var currentAudioLevel = 0; // Current audio level (0-1)
     var cameraShakeX = 0; // Camera shake offset X
     var cameraShakeY = 0; // Camera shake offset Y
+    var flashEnabled = false; // White flash on/off
+    var isFlashing = false; // Currently flashing
+    var flashEndTime = 0; // When current flash ends
+
+    // BPM Detection
+    var lastTapTime = 0;
+    var tapTimes = [];
+    var currentBPM = 0;
+    var bpmInterval = 0; // Interval in ms between beats
+    var lastAutoFlashTime = 0; // Last time auto-flash triggered
+    var nextFlashTime = 0; // When next auto-flash should trigger
 
     var hud = {
       speed:            { value: null, dom: Dom.get('speed_value')            },
@@ -721,7 +1141,7 @@
     function restartRace() {
       isPaused = false;
       Dom.get('pause-menu').style.display = 'none';
-      Game.reset();
+      reset();
     }
 
     function checkPauseInput() {
@@ -969,6 +1389,43 @@
       console.log('Audio file loaded:', file.name);
     }
 
+    function setupMicrophoneInput() {
+      initAudioContext();
+
+      var audioStatus = Dom.get('audio-status');
+      var audioPlayer = Dom.get('audioPlayer');
+
+      // Hide audio player if showing
+      audioPlayer.style.display = 'none';
+      audioStatus.style.display = 'block';
+      audioStatus.textContent = 'Requesting microphone access...';
+
+      // Request microphone access
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+          // Disconnect old source if exists
+          if (audioSource) {
+            audioSource.disconnect();
+          }
+
+          // Create audio source from microphone stream
+          audioSource = audioContext.createMediaStreamSource(stream);
+          audioSource.connect(audioAnalyser);
+
+          audioStatus.textContent = 'Microphone active';
+          audioStatus.classList.add('text-green-600', 'dark:text-green-400');
+          audioStatus.classList.remove('text-gray-500', 'dark:text-gray-400');
+
+          console.log('Microphone input active');
+        })
+        .catch(function(err) {
+          console.error('Error accessing microphone:', err);
+          audioStatus.textContent = 'Microphone access denied';
+          audioStatus.classList.add('text-red-600', 'dark:text-red-400');
+          audioStatus.classList.remove('text-gray-500', 'dark:text-gray-400');
+        });
+    }
+
     function getAudioLevel() {
       if (!audioAnalyser || !audioDataArray) {
         return 0;
@@ -1001,6 +1458,83 @@
       // Smooth out the shake (damping)
       cameraShakeX *= 0.8;
       cameraShakeY *= 0.8;
+    }
+
+    //=========================================================================
+    // FLASH & BPM FUNCTIONS
+    //=========================================================================
+
+    function toggleFlash() {
+      flashEnabled = !flashEnabled;
+      console.log('Flash enabled:', flashEnabled);
+    }
+
+    function triggerFlash(duration) {
+      if (!flashEnabled) return;
+
+      isFlashing = true;
+      flashEndTime = Date.now() + (duration || 100); // Default 100ms flash
+    }
+
+    function updateFlash() {
+      var now = Date.now();
+
+      // End current flash if time expired
+      if (isFlashing && now > flashEndTime) {
+        isFlashing = false;
+      }
+
+      // Auto-flash based on BPM if enabled and BPM is set
+      if (flashEnabled && currentBPM > 0 && bpmInterval > 0) {
+        // Check if it's time for the next flash
+        if (now >= nextFlashTime) {
+          triggerFlash(100);
+          nextFlashTime = now + bpmInterval;
+        }
+      }
+    }
+
+    function handleTap() {
+      var now = Date.now();
+
+      // Add this tap to our history
+      tapTimes.push(now);
+
+      // Keep only last 8 taps (for BPM calculation)
+      if (tapTimes.length > 8) {
+        tapTimes.shift();
+      }
+
+      // Calculate BPM if we have at least 2 taps
+      if (tapTimes.length >= 2) {
+        var intervals = [];
+        for (var i = 1; i < tapTimes.length; i++) {
+          intervals.push(tapTimes[i] - tapTimes[i-1]);
+        }
+
+        // Average interval in milliseconds
+        var avgInterval = intervals.reduce(function(a, b) { return a + b; }) / intervals.length;
+
+        // Store interval for auto-flash
+        bpmInterval = avgInterval;
+
+        // Convert to BPM (60000 ms per minute)
+        currentBPM = Math.round(60000 / avgInterval);
+
+        // Update UI
+        var bpmDisplay = document.getElementById('bpm-display');
+        if (bpmDisplay) {
+          bpmDisplay.textContent = currentBPM;
+        }
+
+        // Sync next flash time to current tap
+        nextFlashTime = now + bpmInterval;
+      }
+
+      // Trigger flash immediately for this tap
+      triggerFlash(100);
+
+      lastTapTime = now;
     }
 
     //=========================================================================
@@ -1426,15 +1960,175 @@
               0%, 80% { opacity: 1; }
               100% { opacity: 0; }
             }
+
+            /* Intro Screen */
+            #intro-screen {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: #000;
+              z-index: 20000;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+            }
+            #intro-canvas {
+              max-width: 100%;
+              max-height: 80vh;
+              image-rendering: pixelated;
+            }
+            #intro-text {
+              color: #fff;
+              font-size: 32px;
+              margin-top: 30px;
+              text-align: center;
+              font-family: Arial, sans-serif;
+              animation: introPulse 2s ease-in-out infinite;
+            }
+            #intro-hint {
+              color: #888;
+              font-size: 18px;
+              margin-top: 15px;
+              text-align: center;
+              font-family: Arial, sans-serif;
+            }
+            @keyframes introPulse {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.5; }
+            }
           </style>
         </head>
         <body>
+          <div id="intro-screen">
+            <canvas id="intro-canvas"></canvas>
+            <div id="intro-text">Premi un tasto qualsiasi per iniziare</div>
+            <div id="intro-hint">Premi F11 per attivare la modalità fullscreen</div>
+          </div>
           <canvas id="game-canvas"></canvas>
           <div id="fullscreen-hint">Press F11 for true fullscreen • Press ESC to exit</div>
         </body>
         </html>
       `);
       dualMonitorWindow.document.close();
+
+      // Setup intro animation in secondary window
+      var introScreen = dualMonitorWindow.document.getElementById('intro-screen');
+      var introCanvas = dualMonitorWindow.document.getElementById('intro-canvas');
+      var introCtx = introCanvas.getContext('2d');
+
+      var INTRO_FRAMES = 61;
+      var FRAME_RATE = 30;
+      var FRAME_DURATION = 1000 / FRAME_RATE;
+      var introFrames = [];
+      var introCurrentFrame = 0;
+      var introLastFrameTime = 0;
+      var introAnimationId = null;
+      var introActive = true;
+
+      // Load intro frames
+      var introLoadedCount = 0;
+      for (var i = 0; i < INTRO_FRAMES; i++) {
+        (function(index) {
+          var img = new Image();
+          var frameNumber = String(index).padStart(4, '0');
+          img.src = 'images/loop intro cavalli mongoli/loop iniziale' + frameNumber + '.png';
+
+          img.onload = function() {
+            introLoadedCount++;
+            if (introLoadedCount === 1) {
+              introCanvas.width = img.width;
+              introCanvas.height = img.height;
+            }
+            if (introLoadedCount === INTRO_FRAMES) {
+              // Start intro animation
+              function animateIntro(timestamp) {
+                if (!introActive) return;
+
+                if (timestamp - introLastFrameTime >= FRAME_DURATION) {
+                  if (introFrames[introCurrentFrame] && introFrames[introCurrentFrame].complete) {
+                    introCtx.clearRect(0, 0, introCanvas.width, introCanvas.height);
+                    introCtx.drawImage(introFrames[introCurrentFrame], 0, 0);
+                  }
+
+                  introCurrentFrame = (introCurrentFrame + 1) % INTRO_FRAMES;
+                  introLastFrameTime = timestamp;
+                }
+
+                introAnimationId = dualMonitorWindow.requestAnimationFrame(animateIntro);
+              }
+
+              introLastFrameTime = performance.now();
+              animateIntro(introLastFrameTime);
+            }
+          };
+
+          img.onerror = function() {
+            console.error('Failed to load intro frame ' + frameNumber);
+          };
+
+          introFrames[index] = img;
+        })(i);
+      }
+
+      // Hide intro on key press or click
+      function hideIntro() {
+        if (!introActive) return;
+
+        introActive = false;
+        if (introAnimationId) {
+          dualMonitorWindow.cancelAnimationFrame(introAnimationId);
+        }
+
+        // Try to request fullscreen when user interacts
+        var elem = dualMonitorWindow.document.documentElement;
+        if (!dualMonitorWindow.document.fullscreenElement) {
+          if (elem.requestFullscreen) {
+            elem.requestFullscreen().catch(function(err) {
+              console.log('Fullscreen request failed:', err);
+            });
+          } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+          } else if (elem.mozRequestFullScreen) {
+            elem.mozRequestFullScreen();
+          } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+          }
+        }
+
+        introScreen.style.transition = 'opacity 0.5s ease-out';
+        introScreen.style.opacity = '0';
+
+        setTimeout(function() {
+          introScreen.style.display = 'none';
+        }, 500);
+      }
+
+      dualMonitorWindow.document.addEventListener('keydown', function(e) {
+        if (e.key === 'F11') {
+          e.preventDefault();
+          var elem = dualMonitorWindow.document.documentElement;
+          if (dualMonitorWindow.document.fullscreenElement) {
+            if (dualMonitorWindow.document.exitFullscreen) {
+              dualMonitorWindow.document.exitFullscreen();
+            }
+          } else {
+            if (elem.requestFullscreen) {
+              elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) {
+              elem.webkitRequestFullscreen();
+            } else if (elem.mozRequestFullScreen) {
+              elem.mozRequestFullScreen();
+            }
+          }
+          return;
+        }
+        hideIntro();
+      });
+
+      dualMonitorWindow.document.addEventListener('click', hideIntro);
 
       // Get canvas from secondary window
       dualMonitorCanvas = dualMonitorWindow.document.getElementById('game-canvas');
@@ -1678,6 +2372,9 @@
 
       // Update audio-reactive camera shake
       updateCameraShake();
+
+      // Update flash effect
+      updateFlash();
 
       updateCars(dt, playerSegment, playerW);
 
@@ -1962,6 +2659,12 @@
                         speed * (keyLeft ? -1 : keyRight ? 1 : 0),
                         playerSegment.p2.world.y - playerSegment.p1.world.y);
         }
+      }
+
+      // Flash overlay
+      if (isFlashing) {
+        context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        context.fillRect(-cameraShakeX, -cameraShakeY, renderWidth, renderHeight);
       }
 
       // Restore canvas state after camera shake
@@ -2276,7 +2979,8 @@
               { keys: [KEY.LEFT,  KEY.A], mode: 'up',   action: function() { keyLeft   = false; } },
               { keys: [KEY.RIGHT, KEY.D], mode: 'up',   action: function() { keyRight  = false; } },
               { keys: [KEY.UP,    KEY.W], mode: 'up',   action: function() { keyFaster = false; } },
-              { keys: [KEY.DOWN,  KEY.S], mode: 'up',   action: function() { keySlower = false; } }
+              { keys: [KEY.DOWN,  KEY.S], mode: 'up',   action: function() { keySlower = false; } },
+              { keys: [KEY.T],            mode: 'down', action: function() { handleTap(); } }
             ],
             ready: function(images) {
               background = images[0];
@@ -2344,7 +3048,17 @@
 
     Dom.on('shakeIntensity', 'input', function(ev) {
       shakeIntensity = Util.toInt(ev.target.value);
-      Dom.get('currentShakeIntensity').innerHTML = shakeIntensity;
+      var currentShake = Dom.get('currentShakeIntensity');
+      if (currentShake) currentShake.innerHTML = shakeIntensity;
+    });
+
+    Dom.on('zoomIntensity', 'input', function(ev) {
+      zoomIntensity = Util.toInt(ev.target.value);
+    });
+
+    // TAP button handler
+    Dom.on('tap-btn', 'click', function(ev) {
+      handleTap();
     });
 
     // Background layer selection handlers
@@ -2562,6 +3276,14 @@
       if (ev.keyCode === 27 || ev.keyCode === 80) { // ESC or P key
         ev.preventDefault();
         togglePause();
+      }
+    });
+
+    // TAP tempo keyboard control: T key
+    document.addEventListener('keydown', function(ev) {
+      if (ev.keyCode === 84 && !ev.ctrlKey && !ev.altKey) { // T key
+        ev.preventDefault();
+        handleTap();
       }
     });
 
