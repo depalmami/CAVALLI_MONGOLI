@@ -382,22 +382,32 @@
               No audio source selected
             </div>
             <audio id="audioPlayer" controls class="w-full hidden"></audio>
+            <!-- Audio Level Meter -->
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Audio Level</label>
+              <div class="w-full h-8 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden relative">
+                <div id="audio-meter-bar" class="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75" style="width: 0%"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <span id="audio-meter-value" class="text-xs font-bold text-gray-700 dark:text-gray-200">0%</span>
+                </div>
+              </div>
+            </div>
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Shake</label>
-              <input id="shakeIntensity" type="range" min="0" max="100" value="50" class="w-full">
+              <input id="shakeIntensity" type="range" min="0" max="200" value="50" class="w-full">
               <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span>0%</span>
                 <span id="shake-value">50%</span>
-                <span>100%</span>
+                <span>200%</span>
               </div>
             </div>
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Zoom</label>
-              <input id="zoomIntensity" type="range" min="0" max="100" value="50" class="w-full">
+              <input id="zoomIntensity" type="range" min="0" max="200" value="50" class="w-full">
               <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span>0%</span>
                 <span id="zoom-value">50%</span>
-                <span>100%</span>
+                <span>200%</span>
               </div>
             </div>
           </div>
@@ -488,6 +498,10 @@
             <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="dual-monitor-btn">
               <span class="material-icons text-base">desktop_windows</span>
               Dual Monitor Mode
+            </button>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors" id="show-intro-btn">
+              <span class="material-icons text-base">play_circle</span>
+              Show Intro on Second Screen
             </button>
             <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
           </div>
@@ -836,6 +850,8 @@
     var dualMonitorCanvas = null;                 // Canvas in secondary window
     var dualMonitorCtx = null;                    // Context for secondary canvas
     var isDualMonitorMode = false;                // Track if dual monitor is active
+    var introScreenElement = null;                // Reference to intro screen element
+    var introActive = false;                      // Track if intro is currently active
     var sprites        = null;                    // our spritesheet (original)
     var horseSprites   = {};                      // our horse sprites (loaded separately)
     var resolution     = null;                    // scaling factor
@@ -1458,6 +1474,20 @@
       // Smooth out the shake (damping)
       cameraShakeX *= 0.8;
       cameraShakeY *= 0.8;
+
+      // Update audio meter UI
+      updateAudioMeter();
+    }
+
+    function updateAudioMeter() {
+      var meterBar = document.getElementById('audio-meter-bar');
+      var meterValue = document.getElementById('audio-meter-value');
+
+      if (meterBar && meterValue) {
+        var percentage = Math.round(currentAudioLevel * 100);
+        meterBar.style.width = percentage + '%';
+        meterValue.textContent = percentage + '%';
+      }
     }
 
     //=========================================================================
@@ -2004,8 +2034,11 @@
         <body>
           <div id="intro-screen">
             <canvas id="intro-canvas"></canvas>
-            <div id="intro-text">Premi un tasto qualsiasi per iniziare</div>
-            <div id="intro-hint">Premi F11 per attivare la modalità fullscreen</div>
+            <div id="intro-text" style="display: none;">Premi un tasto qualsiasi per iniziare</div>
+            <div id="intro-hint" style="display: none;">Premi F11 per attivare la modalità fullscreen</div>
+          </div>
+          <div id="title-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 19999; justify-content: center; align-items: center;">
+            <img id="title-image" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
           </div>
           <canvas id="game-canvas"></canvas>
           <div id="fullscreen-hint">Press F11 for true fullscreen • Press ESC to exit</div>
@@ -2015,9 +2048,14 @@
       dualMonitorWindow.document.close();
 
       // Setup intro animation in secondary window
-      var introScreen = dualMonitorWindow.document.getElementById('intro-screen');
+      introScreenElement = dualMonitorWindow.document.getElementById('intro-screen');
       var introCanvas = dualMonitorWindow.document.getElementById('intro-canvas');
       var introCtx = introCanvas.getContext('2d');
+
+      // Title screen elements
+      var titleScreenElement = dualMonitorWindow.document.getElementById('title-screen');
+      var titleImageElement = dualMonitorWindow.document.getElementById('title-image');
+      var currentTitleFrame = 0; // 0 = not shown, 1 = first frame, 2 = second frame
 
       var INTRO_FRAMES = 61;
       var FRAME_RATE = 30;
@@ -2026,7 +2064,7 @@
       var introCurrentFrame = 0;
       var introLastFrameTime = 0;
       var introAnimationId = null;
-      var introActive = true;
+      introActive = true;
 
       // Load intro frames
       var introLoadedCount = 0;
@@ -2073,7 +2111,7 @@
         })(i);
       }
 
-      // Hide intro on key press or click
+      // Hide intro and show title screen
       function hideIntro() {
         if (!introActive) return;
 
@@ -2098,11 +2136,43 @@
           }
         }
 
-        introScreen.style.transition = 'opacity 0.5s ease-out';
-        introScreen.style.opacity = '0';
+        introScreenElement.style.transition = 'opacity 0.5s ease-out';
+        introScreenElement.style.opacity = '0';
 
         setTimeout(function() {
-          introScreen.style.display = 'none';
+          introScreenElement.style.display = 'none';
+          // Show first title frame
+          showTitleScreen(1);
+        }, 500);
+      }
+
+      // Show title screen
+      function showTitleScreen(frameNumber) {
+        currentTitleFrame = frameNumber;
+
+        if (frameNumber === 1) {
+          titleImageElement.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
+        } else if (frameNumber === 2) {
+          titleImageElement.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg';
+        }
+
+        titleScreenElement.style.display = 'flex';
+        titleScreenElement.style.opacity = '0';
+        titleScreenElement.style.transition = 'opacity 0.5s ease-in';
+
+        setTimeout(function() {
+          titleScreenElement.style.opacity = '1';
+        }, 50);
+      }
+
+      // Hide title screen and start game
+      function hideTitleScreen() {
+        titleScreenElement.style.transition = 'opacity 0.5s ease-out';
+        titleScreenElement.style.opacity = '0';
+
+        setTimeout(function() {
+          titleScreenElement.style.display = 'none';
+          currentTitleFrame = 0;
         }, 500);
       }
 
@@ -2125,10 +2195,26 @@
           }
           return;
         }
-        hideIntro();
+
+        // Handle key press based on current state
+        if (introActive) {
+          hideIntro(); // Go from intro to first title
+        } else if (currentTitleFrame === 1) {
+          showTitleScreen(2); // Go from first title to second title
+        } else if (currentTitleFrame === 2) {
+          hideTitleScreen(); // Go from second title to game
+        }
       });
 
-      dualMonitorWindow.document.addEventListener('click', hideIntro);
+      dualMonitorWindow.document.addEventListener('click', function() {
+        if (introActive) {
+          hideIntro();
+        } else if (currentTitleFrame === 1) {
+          showTitleScreen(2);
+        } else if (currentTitleFrame === 2) {
+          hideTitleScreen();
+        }
+      });
 
       // Get canvas from secondary window
       dualMonitorCanvas = dualMonitorWindow.document.getElementById('game-canvas');
@@ -2257,6 +2343,21 @@
       btn.style.background = '#2196F3';
 
       console.log('Dual monitor mode deactivated');
+    }
+
+    function showIntroOnSecondScreen() {
+      if (!isDualMonitorMode || !introScreenElement) {
+        console.log('Cannot show intro: dual monitor not active or intro not available');
+        return;
+      }
+
+      // Reset and show intro screen
+      introActive = true;
+      introScreenElement.style.display = 'flex';
+      introScreenElement.style.opacity = '1';
+      introScreenElement.style.transition = 'none';
+
+      console.log('Intro animation restarted on second screen');
     }
 
     //=========================================================================
@@ -3262,6 +3363,11 @@
 
     // Attach click handler to dual monitor button
     Dom.on('dual-monitor-btn', 'click', openDualMonitorMode);
+
+    // Attach click handler to show intro button
+    Dom.on('show-intro-btn', 'click', function() {
+      showIntroOnSecondScreen();
+    });
 
     // Alternative: Press F key for fullscreen
     document.addEventListener('keydown', function(ev) {
