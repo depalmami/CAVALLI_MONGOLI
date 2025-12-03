@@ -324,6 +324,7 @@
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Resolution</label>
               <select id="resolution" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                <option value='fullhd'>Full HD (1920x1080)</option>
                 <option value='fine'>Fine (1280x960)</option>
                 <option selected value='high'>High (1024x768)</option>
                 <option value='medium'>Medium (640x480)</option>
@@ -377,6 +378,10 @@
                 <span class="text-xs">Use IN</span>
               </button>
             </div>
+            <button id="mute-audio-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">volume_up</span>
+              Mute Audio Input
+            </button>
             <input id="audioFile" type="file" accept="audio/*" class="hidden">
             <div id="audio-status" class="text-xs text-center text-gray-500 dark:text-gray-400 py-2 bg-gray-100 dark:bg-gray-700 rounded">
               No audio source selected
@@ -432,6 +437,13 @@
                 <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
               </label>
             </div>
+            <div class="flex items-center justify-between py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Image Flash (Cavalli Mongoli)</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="flash-image-toggle" type="checkbox" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -447,33 +459,6 @@
               <span class="material-icons text-base">casino</span>
               Configure Randomization
             </button>
-            <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Sky Layer</label>
-              <select id="skySelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
-                <option value="default">Default</option>
-                <option value="sky_1">Sky 1</option>
-                <option value="sky_2">Sky 2</option>
-                <option value="sky_3">Sky 3</option>
-                <option value="sky_4" selected>Sky 4</option>
-                <option value="sky_5">Sky 5</option>
-                <option value="sky_6">Sky 6</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Hills Layer</label>
-              <select id="hillsSelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
-                <option value="default">Default</option>
-                <option value="hills_1">Custom Hills 1</option>
-                <option value="hills_2">Custom Hills 2</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Trees Layer</label>
-              <select id="treesSelect" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white">
-                <option value="default">Default</option>
-                <option value="trees_1">Custom Trees 1</option>
-              </select>
-            </div>
             <button id="clear-storage-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600 transition-colors">
               <span class="material-icons text-base">delete_sweep</span>
               Clear All Saved
@@ -498,10 +483,6 @@
             <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="dual-monitor-btn">
               <span class="material-icons text-base">desktop_windows</span>
               Dual Monitor Mode
-            </button>
-            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors" id="show-intro-btn">
-              <span class="material-icons text-base">play_circle</span>
-              Show Intro on Second Screen
             </button>
             <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
           </div>
@@ -542,6 +523,7 @@
       <th><label for="resolution">Resolution :</label></th>
       <td>
         <select id="resolution" style="width:100%">
+          <option value='fullhd'>Full HD (1920x1080)</option>
           <option value='fine'>Fine (1280x960)</option>
           <option selected value='high'>High (1024x768)</option>
           <option value='medium'>Medium (640x480)</option>
@@ -607,41 +589,6 @@
       </th>
     </tr>
     <tr>
-      <th colspan="2" style="padding-top: 10px;">Background Elements</th>
-    </tr>
-    <tr>
-      <th><label for="skySelect">Sky Layer :</label></th>
-      <td>
-        <select id="skySelect" style="width:100%">
-          <option value="default">Default</option>
-          <option value="sky_1">Sky 1</option>
-          <option value="sky_2">Sky 2</option>
-          <option value="sky_3">Sky 3</option>
-          <option value="sky_4">Sky 4</option>
-          <option value="sky_5">Sky 5</option>
-          <option value="sky_6">Sky 6</option>
-        </select>
-      </td>
-    </tr>
-    <tr>
-      <th><label for="hillsSelect">Hills Layer :</label></th>
-      <td>
-        <select id="hillsSelect" style="width:100%">
-          <option value="default">Default</option>
-          <option value="custom">Custom Hills</option>
-        </select>
-      </td>
-    </tr>
-    <tr>
-      <th><label for="treesSelect">Trees Layer :</label></th>
-      <td>
-        <select id="treesSelect" style="width:100%">
-          <option value="default">Default</option>
-          <option value="custom">Custom Trees</option>
-        </select>
-      </td>
-    </tr>
-    <tr>
       <th colspan="2" style="padding-top: 10px; text-align: center;">
         <button id="clear-storage-btn" style="padding: 8px 20px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 3px; font-weight: bold;">
           🗑️ Clear All Saved Customizations
@@ -655,6 +602,14 @@
   </div>
 
   <div id="racer">
+    <!-- Intro Screen (hidden - now rendered on canvas) -->
+    <div id="main-intro-screen" style="display: none;">
+      <canvas id="main-intro-canvas"></canvas>
+    </div>
+    <!-- Title Screen (hidden - now rendered on canvas) -->
+    <div id="main-title-screen" style="display: none;">
+      <img id="main-title-image" style="width: 100%; height: 100%; object-fit: cover;" />
+    </div>
     <div id="hud">
       <span id="speed"            class="hud"><span id="speed_value" class="value">0</span> km/h</span>
       <span id="current_lap_time" class="hud">Time: <span id="current_lap_time_value" class="value">0.0</span></span>
@@ -735,6 +690,11 @@
     // Sync flash toggle checkbox with flashEnabled variable
     document.getElementById('flash-toggle').addEventListener('change', function() {
       toggleFlash();
+    });
+
+    // Sync flash image toggle checkbox with flashImageEnabled variable
+    document.getElementById('flash-image-toggle').addEventListener('change', function() {
+      toggleFlashImage();
     });
 
     // Update gamepad status display
@@ -822,6 +782,11 @@
       setupMicrophoneInput();
     });
 
+    // Mute Audio Input button
+    document.getElementById('mute-audio-btn').addEventListener('click', function() {
+      toggleAudioInputMute();
+    });
+
   </script>
 
   <script>
@@ -850,11 +815,28 @@
     var dualMonitorCanvas = null;                 // Canvas in secondary window
     var dualMonitorCtx = null;                    // Context for secondary canvas
     var isDualMonitorMode = false;                // Track if dual monitor is active
-    var introScreenElement = null;                // Reference to intro screen element
-    var introActive = false;                      // Track if intro is currently active
+
+    // Main screen intro/title support
+    var mainIntroScreen = null;                   // Main intro screen element
+    var mainIntroCanvas = null;                   // Main intro canvas
+    var mainIntroCtx = null;                      // Main intro canvas context
+    var mainTitleScreen = null;                   // Main title screen element
+    var mainTitleImage = null;                    // Main title image element
+    var mainIntroActive = true;                   // Track if main intro is active
+    var mainCurrentTitleFrame = 0;                // 0 = not shown, 1 = first frame, 2 = second frame
+    var mainIntroFrames = [];                     // Loaded intro frames
+    var mainIntroCurrentFrame = 0;                // Current frame index
+    var mainIntroLastFrameTime = 0;               // Last frame render time
+    var mainIntroAnimationId = null;              // Animation frame ID
     var sprites        = null;                    // our spritesheet (original)
     var horseSprites   = {};                      // our horse sprites (loaded separately)
     var resolution     = null;                    // scaling factor
+    var flashingImages = [];                      // array of flashing images
+    var flashingImageNames = [                    // names of flashing images to load
+      'Cavalli mongoli.png'
+      // Add more image filenames here as needed
+    ];
+    var currentFlashingImage = null;              // currently selected flashing image
 
     // Custom background layers
     var customBackgroundLayers = {
@@ -958,6 +940,7 @@
     var audioDataArray = null;
     var audioBufferLength = 0;
     var audioSource = null;
+    var audioInputMuted = false; // Mute audio input to prevent feedback
     var shakeIntensity = 50; // 0-100
     var zoomIntensity = 50; // 0-100
     var currentAudioLevel = 0; // Current audio level (0-1)
@@ -966,6 +949,7 @@
     var flashEnabled = false; // White flash on/off
     var isFlashing = false; // Currently flashing
     var flashEndTime = 0; // When current flash ends
+    var flashImageEnabled = false; // Flashing image on/off
 
     // BPM Detection
     var lastTapTime = 0;
@@ -1157,6 +1141,47 @@
     function restartRace() {
       isPaused = false;
       Dom.get('pause-menu').style.display = 'none';
+
+      // Reset game state
+      position = 0;
+      speed = 0;
+      playerX = 0;
+      currentLapTime = 0;
+      lastLapTime = null;
+
+      // Reset HUD
+      updateHud('speed', 0);
+      updateHud('current_lap_time', formatTime(0));
+      if (lastLapTime) {
+        updateHud('last_lap_time', formatTime(lastLapTime));
+      }
+
+      reset();
+    }
+
+    function goToMainMenu() {
+      // Hide pause menu
+      isPaused = false;
+      Dom.get('pause-menu').style.display = 'none';
+
+      // Reset game state
+      position = 0;
+      speed = 0;
+      playerX = 0;
+      currentLapTime = 0;
+      lastLapTime = null;
+
+      // Reset HUD
+      updateHud('speed', 0);
+      updateHud('current_lap_time', formatTime(0));
+
+      // Show first title screen
+      mainCurrentTitleFrame = 1;
+      mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
+      mainTitleScreen.style.display = 'flex';
+      mainTitleScreen.style.opacity = '1';
+      mainTitleScreen.style.transition = 'none';
+
       reset();
     }
 
@@ -1443,7 +1468,7 @@
     }
 
     function getAudioLevel() {
-      if (!audioAnalyser || !audioDataArray) {
+      if (!audioAnalyser || !audioDataArray || audioInputMuted) {
         return 0;
       }
 
@@ -1459,6 +1484,23 @@
 
       var average = sum / bassRange / 255; // Normalize to 0-1
       return average;
+    }
+
+    function toggleAudioInputMute() {
+      audioInputMuted = !audioInputMuted;
+      var muteBtn = Dom.get('mute-audio-btn');
+      if (muteBtn) {
+        if (audioInputMuted) {
+          muteBtn.innerHTML = '<span class="material-icons text-base">volume_off</span> Unmute Audio Input';
+          muteBtn.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+          muteBtn.classList.add('bg-red-500', 'text-white');
+        } else {
+          muteBtn.innerHTML = '<span class="material-icons text-base">volume_up</span> Mute Audio Input';
+          muteBtn.classList.remove('bg-red-500', 'text-white');
+          muteBtn.classList.add('bg-gray-200', 'dark:bg-gray-700');
+        }
+      }
+      console.log('Audio input muted:', audioInputMuted);
     }
 
     function updateCameraShake() {
@@ -1499,8 +1541,19 @@
       console.log('Flash enabled:', flashEnabled);
     }
 
+    function toggleFlashImage() {
+      flashImageEnabled = !flashImageEnabled;
+      console.log('Flash image enabled:', flashImageEnabled);
+    }
+
     function triggerFlash(duration) {
-      if (!flashEnabled) return;
+      if (!flashEnabled && !flashImageEnabled) return;
+
+      // Randomize flashing image if image flash is enabled
+      if (flashImageEnabled && flashingImages.length > 0) {
+        var randomIndex = Math.floor(Math.random() * flashingImages.length);
+        currentFlashingImage = flashingImages[randomIndex];
+      }
 
       isFlashing = true;
       flashEndTime = Date.now() + (duration || 100); // Default 100ms flash
@@ -1515,7 +1568,7 @@
       }
 
       // Auto-flash based on BPM if enabled and BPM is set
-      if (flashEnabled && currentBPM > 0 && bpmInterval > 0) {
+      if ((flashEnabled || flashImageEnabled) && currentBPM > 0 && bpmInterval > 0) {
         // Check if it's time for the next flash
         if (now >= nextFlashTime) {
           triggerFlash(100);
@@ -1629,7 +1682,27 @@
       var container = Dom.get('asset-categories-container');
       container.innerHTML = '';
 
-      // Create categories
+      // Create Background Layers category first
+      var bgCategoryDiv = document.createElement('div');
+      bgCategoryDiv.className = 'asset-category';
+
+      var bgTitle = document.createElement('h3');
+      bgTitle.textContent = '🌄 Background Layers';
+      bgCategoryDiv.appendChild(bgTitle);
+
+      var bgGridDiv = document.createElement('div');
+      bgGridDiv.className = 'asset-grid';
+
+      // Add background layer items
+      var bgLayers = ['sky', 'hills', 'trees'];
+      for (var i = 0; i < bgLayers.length; i++) {
+        bgGridDiv.appendChild(createBackgroundLayerItem(bgLayers[i]));
+      }
+
+      bgCategoryDiv.appendChild(bgGridDiv);
+      container.appendChild(bgCategoryDiv);
+
+      // Create sprite categories
       for (var categoryName in spriteCategories) {
         var categoryDiv = document.createElement('div');
         categoryDiv.className = 'asset-category';
@@ -1699,6 +1772,53 @@
       return itemDiv;
     }
 
+    function createBackgroundLayerItem(layerName) {
+      var itemDiv = document.createElement('div');
+      itemDiv.className = 'asset-item';
+      itemDiv.id = 'asset-item-bg-' + layerName;
+
+      var label = document.createElement('label');
+      label.textContent = layerName.charAt(0).toUpperCase() + layerName.slice(1);
+      itemDiv.appendChild(label);
+
+      var previewDiv = document.createElement('div');
+      previewDiv.className = 'asset-preview';
+      previewDiv.id = 'preview-bg-' + layerName;
+      itemDiv.appendChild(previewDiv);
+
+      var uploadBtn = document.createElement('button');
+      uploadBtn.className = 'asset-upload-btn';
+      uploadBtn.textContent = 'Upload';
+      uploadBtn.onclick = function() {
+        var input = document.getElementById('file-input-bg-' + layerName);
+        input.click();
+      };
+      itemDiv.appendChild(uploadBtn);
+
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.className = 'asset-file-input';
+      fileInput.id = 'file-input-bg-' + layerName;
+      fileInput.onchange = function(e) {
+        handleBackgroundUpload(layerName, e.target.files[0]);
+      };
+      itemDiv.appendChild(fileInput);
+
+      var resetBtn = document.createElement('button');
+      resetBtn.className = 'asset-reset-btn';
+      resetBtn.textContent = 'Reset';
+      resetBtn.onclick = function() {
+        resetBackgroundLayer(layerName);
+      };
+      itemDiv.appendChild(resetBtn);
+
+      // Initial preview
+      updateBackgroundPreview(layerName);
+
+      return itemDiv;
+    }
+
     function handleAssetUpload(spriteName, file) {
       if (!file) return;
 
@@ -1733,7 +1853,7 @@
         var img = document.createElement('img');
         img.src = customSprites[spriteName].src;
         previewDiv.appendChild(img);
-      } else if (sprites && SPRITES[spriteName]) {
+      } else if (sprites && typeof SPRITES !== 'undefined' && SPRITES[spriteName]) {
         // Show default sprite from spritesheet
         var canvas = document.createElement('canvas');
         var spriteData = SPRITES[spriteName];
@@ -1745,6 +1865,93 @@
         var img = document.createElement('img');
         img.src = canvas.toDataURL();
         previewDiv.appendChild(img);
+      } else {
+        // Sprites not loaded yet or sprite not found - show message
+        var loadingText = document.createElement('div');
+        if (!sprites) {
+          loadingText.textContent = 'Loading...';
+        } else if (typeof SPRITES === 'undefined') {
+          loadingText.textContent = 'SPRITES not loaded';
+        } else if (!SPRITES[spriteName]) {
+          loadingText.textContent = 'Sprite "' + spriteName + '" not found';
+          console.warn('Sprite not found:', spriteName, 'Available sprites:', Object.keys(SPRITES));
+        }
+        loadingText.style.color = '#aaa';
+        loadingText.style.textAlign = 'center';
+        loadingText.style.paddingTop = '40px';
+        loadingText.style.fontSize = '11px';
+        previewDiv.appendChild(loadingText);
+      }
+    }
+
+    function handleBackgroundUpload(layerName, file) {
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          customBackgroundLayers[layerName] = img;
+          currentBackgroundSelection[layerName] = 'custom';
+          updateBackgroundPreview(layerName);
+          saveBackgroundsToStorage(); // Auto-save to localStorage
+          console.log('Uploaded custom background layer:', layerName);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetBackgroundLayer(layerName) {
+      customBackgroundLayers[layerName] = null;
+      currentBackgroundSelection[layerName] = 'default';
+      updateBackgroundPreview(layerName);
+      saveBackgroundsToStorage(); // Auto-save to localStorage
+      console.log('Reset background layer:', layerName);
+    }
+
+    function updateBackgroundPreview(layerName) {
+      var previewDiv = document.getElementById('preview-bg-' + layerName);
+      if (!previewDiv) return;
+
+      previewDiv.innerHTML = '';
+
+      if (customBackgroundLayers[layerName]) {
+        // Show custom background layer
+        var img = document.createElement('img');
+        img.src = customBackgroundLayers[layerName].src;
+        previewDiv.appendChild(img);
+      } else if (background) {
+        // Show default background layer from spritesheet
+        var canvas = document.createElement('canvas');
+        var bgRect;
+
+        if (layerName === 'sky') {
+          bgRect = BACKGROUND.SKY;
+        } else if (layerName === 'hills') {
+          bgRect = BACKGROUND.HILLS;
+        } else if (layerName === 'trees') {
+          bgRect = BACKGROUND.TREES;
+        }
+
+        if (bgRect) {
+          canvas.width = bgRect.w;
+          canvas.height = bgRect.h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(background, bgRect.x, bgRect.y, bgRect.w, bgRect.h, 0, 0, bgRect.w, bgRect.h);
+
+          var img = document.createElement('img');
+          img.src = canvas.toDataURL();
+          previewDiv.appendChild(img);
+        }
+      } else {
+        // Background not loaded yet - show loading message
+        var loadingText = document.createElement('div');
+        loadingText.textContent = 'Loading...';
+        loadingText.style.color = '#aaa';
+        loadingText.style.textAlign = 'center';
+        loadingText.style.paddingTop = '40px';
+        previewDiv.appendChild(loadingText);
       }
     }
 
@@ -1752,6 +1959,30 @@
       var modal = Dom.get('asset-editor-modal');
       modal.style.display = 'block';
       initAssetEditor();
+
+      // If images are loaded, refresh all previews after a short delay
+      // to ensure DOM elements are created
+      if (sprites || background) {
+        setTimeout(function() {
+          refreshAllPreviews();
+        }, 100);
+      }
+    }
+
+    function refreshAllPreviews() {
+      // Refresh sprite previews
+      for (var categoryName in spriteCategories) {
+        var spriteNames = spriteCategories[categoryName];
+        for (var i = 0; i < spriteNames.length; i++) {
+          updateAssetPreview(spriteNames[i]);
+        }
+      }
+
+      // Refresh background layer previews
+      var bgLayers = ['sky', 'hills', 'trees'];
+      for (var i = 0; i < bgLayers.length; i++) {
+        updateBackgroundPreview(bgLayers[i]);
+      }
     }
 
     function closeAssetEditor() {
@@ -1970,6 +2201,7 @@
               image-rendering: pixelated;
               image-rendering: -moz-crisp-edges;
               image-rendering: crisp-edges;
+              background: #000;
             }
             #fullscreen-hint {
               position: fixed;
@@ -1991,232 +2223,19 @@
               100% { opacity: 0; }
             }
 
-            /* Intro Screen */
-            #intro-screen {
-              position: fixed;
-              top: 0;
-              left: 0;
-              width: 100%;
-              height: 100%;
-              background: #000;
-              z-index: 20000;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-            }
-            #intro-canvas {
-              max-width: 100%;
-              max-height: 80vh;
-              image-rendering: pixelated;
-            }
-            #intro-text {
-              color: #fff;
-              font-size: 32px;
-              margin-top: 30px;
-              text-align: center;
-              font-family: Arial, sans-serif;
-              animation: introPulse 2s ease-in-out infinite;
-            }
-            #intro-hint {
-              color: #888;
-              font-size: 18px;
-              margin-top: 15px;
-              text-align: center;
-              font-family: Arial, sans-serif;
-            }
-            @keyframes introPulse {
-              0%, 100% { opacity: 1; }
-              50% { opacity: 0.5; }
-            }
           </style>
         </head>
         <body>
-          <div id="intro-screen">
-            <canvas id="intro-canvas"></canvas>
-            <div id="intro-text" style="display: none;">Premi un tasto qualsiasi per iniziare</div>
-            <div id="intro-hint" style="display: none;">Premi F11 per attivare la modalità fullscreen</div>
-          </div>
-          <div id="title-screen" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 19999; justify-content: center; align-items: center;">
-            <img id="title-image" style="max-width: 100%; max-height: 100%; object-fit: contain;" />
-          </div>
           <canvas id="game-canvas"></canvas>
-          <div id="fullscreen-hint">Press F11 for true fullscreen • Press ESC to exit</div>
+          <div id="fullscreen-hint">Press F11 for fullscreen • Press ESC to exit</div>
         </body>
         </html>
       `);
       dualMonitorWindow.document.close();
 
-      // Setup intro animation in secondary window
-      introScreenElement = dualMonitorWindow.document.getElementById('intro-screen');
-      var introCanvas = dualMonitorWindow.document.getElementById('intro-canvas');
-      var introCtx = introCanvas.getContext('2d');
+      console.log('✅ Dual monitor window HTML created');
 
-      // Title screen elements
-      var titleScreenElement = dualMonitorWindow.document.getElementById('title-screen');
-      var titleImageElement = dualMonitorWindow.document.getElementById('title-image');
-      var currentTitleFrame = 0; // 0 = not shown, 1 = first frame, 2 = second frame
-
-      var INTRO_FRAMES = 61;
-      var FRAME_RATE = 30;
-      var FRAME_DURATION = 1000 / FRAME_RATE;
-      var introFrames = [];
-      var introCurrentFrame = 0;
-      var introLastFrameTime = 0;
-      var introAnimationId = null;
-      introActive = true;
-
-      // Load intro frames
-      var introLoadedCount = 0;
-      for (var i = 0; i < INTRO_FRAMES; i++) {
-        (function(index) {
-          var img = new Image();
-          var frameNumber = String(index).padStart(4, '0');
-          img.src = 'images/loop intro cavalli mongoli/loop iniziale' + frameNumber + '.png';
-
-          img.onload = function() {
-            introLoadedCount++;
-            if (introLoadedCount === 1) {
-              introCanvas.width = img.width;
-              introCanvas.height = img.height;
-            }
-            if (introLoadedCount === INTRO_FRAMES) {
-              // Start intro animation
-              function animateIntro(timestamp) {
-                if (!introActive) return;
-
-                if (timestamp - introLastFrameTime >= FRAME_DURATION) {
-                  if (introFrames[introCurrentFrame] && introFrames[introCurrentFrame].complete) {
-                    introCtx.clearRect(0, 0, introCanvas.width, introCanvas.height);
-                    introCtx.drawImage(introFrames[introCurrentFrame], 0, 0);
-                  }
-
-                  introCurrentFrame = (introCurrentFrame + 1) % INTRO_FRAMES;
-                  introLastFrameTime = timestamp;
-                }
-
-                introAnimationId = dualMonitorWindow.requestAnimationFrame(animateIntro);
-              }
-
-              introLastFrameTime = performance.now();
-              animateIntro(introLastFrameTime);
-            }
-          };
-
-          img.onerror = function() {
-            console.error('Failed to load intro frame ' + frameNumber);
-          };
-
-          introFrames[index] = img;
-        })(i);
-      }
-
-      // Hide intro and show title screen
-      function hideIntro() {
-        if (!introActive) return;
-
-        introActive = false;
-        if (introAnimationId) {
-          dualMonitorWindow.cancelAnimationFrame(introAnimationId);
-        }
-
-        // Try to request fullscreen when user interacts
-        var elem = dualMonitorWindow.document.documentElement;
-        if (!dualMonitorWindow.document.fullscreenElement) {
-          if (elem.requestFullscreen) {
-            elem.requestFullscreen().catch(function(err) {
-              console.log('Fullscreen request failed:', err);
-            });
-          } else if (elem.webkitRequestFullscreen) {
-            elem.webkitRequestFullscreen();
-          } else if (elem.mozRequestFullScreen) {
-            elem.mozRequestFullScreen();
-          } else if (elem.msRequestFullscreen) {
-            elem.msRequestFullscreen();
-          }
-        }
-
-        introScreenElement.style.transition = 'opacity 0.5s ease-out';
-        introScreenElement.style.opacity = '0';
-
-        setTimeout(function() {
-          introScreenElement.style.display = 'none';
-          // Show first title frame
-          showTitleScreen(1);
-        }, 500);
-      }
-
-      // Show title screen
-      function showTitleScreen(frameNumber) {
-        currentTitleFrame = frameNumber;
-
-        if (frameNumber === 1) {
-          titleImageElement.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
-        } else if (frameNumber === 2) {
-          titleImageElement.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg';
-        }
-
-        titleScreenElement.style.display = 'flex';
-        titleScreenElement.style.opacity = '0';
-        titleScreenElement.style.transition = 'opacity 0.5s ease-in';
-
-        setTimeout(function() {
-          titleScreenElement.style.opacity = '1';
-        }, 50);
-      }
-
-      // Hide title screen and start game
-      function hideTitleScreen() {
-        titleScreenElement.style.transition = 'opacity 0.5s ease-out';
-        titleScreenElement.style.opacity = '0';
-
-        setTimeout(function() {
-          titleScreenElement.style.display = 'none';
-          currentTitleFrame = 0;
-        }, 500);
-      }
-
-      dualMonitorWindow.document.addEventListener('keydown', function(e) {
-        if (e.key === 'F11') {
-          e.preventDefault();
-          var elem = dualMonitorWindow.document.documentElement;
-          if (dualMonitorWindow.document.fullscreenElement) {
-            if (dualMonitorWindow.document.exitFullscreen) {
-              dualMonitorWindow.document.exitFullscreen();
-            }
-          } else {
-            if (elem.requestFullscreen) {
-              elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-              elem.webkitRequestFullscreen();
-            } else if (elem.mozRequestFullScreen) {
-              elem.mozRequestFullScreen();
-            }
-          }
-          return;
-        }
-
-        // Handle key press based on current state
-        if (introActive) {
-          hideIntro(); // Go from intro to first title
-        } else if (currentTitleFrame === 1) {
-          showTitleScreen(2); // Go from first title to second title
-        } else if (currentTitleFrame === 2) {
-          hideTitleScreen(); // Go from second title to game
-        }
-      });
-
-      dualMonitorWindow.document.addEventListener('click', function() {
-        if (introActive) {
-          hideIntro();
-        } else if (currentTitleFrame === 1) {
-          showTitleScreen(2);
-        } else if (currentTitleFrame === 2) {
-          hideTitleScreen();
-        }
-      });
-
-      // Get canvas from secondary window
+      // Get canvas from secondary window (simple mirror, no intro/title)
       dualMonitorCanvas = dualMonitorWindow.document.getElementById('game-canvas');
       dualMonitorCtx = dualMonitorCanvas.getContext('2d');
 
@@ -2345,19 +2364,209 @@
       console.log('Dual monitor mode deactivated');
     }
 
-    function showIntroOnSecondScreen() {
-      if (!isDualMonitorMode || !introScreenElement) {
-        console.log('Cannot show intro: dual monitor not active or intro not available');
+    //=========================================================================
+    // MAIN SCREEN INTRO/TITLE FUNCTIONS
+    //=========================================================================
+
+    function initMainIntro() {
+      mainIntroScreen = document.getElementById('main-intro-screen');
+      mainIntroCanvas = document.getElementById('main-intro-canvas');
+      mainIntroCtx = mainIntroCanvas.getContext('2d');
+      mainTitleScreen = document.getElementById('main-title-screen');
+      mainTitleImage = document.getElementById('main-title-image');
+
+      // Set canvas to fill the screen
+      mainIntroCanvas.width = window.innerWidth;
+      mainIntroCanvas.height = window.innerHeight;
+
+      var INTRO_FRAMES = 61;
+      var FRAME_RATE = 30;
+      var FRAME_DURATION = 1000 / FRAME_RATE;
+      var firstImageLoaded = null;
+
+      // Load intro frames
+      var introLoadedCount = 0;
+      for (var i = 0; i < INTRO_FRAMES; i++) {
+        (function(index) {
+          var img = new Image();
+          var frameNumber = String(index).padStart(4, '0');
+          img.src = 'images/loop intro cavalli mongoli/loop iniziale' + frameNumber + '.png';
+
+          img.onload = function() {
+            introLoadedCount++;
+            if (introLoadedCount === 1) {
+              firstImageLoaded = img;
+            }
+            if (introLoadedCount === INTRO_FRAMES) {
+              // Start intro animation
+              function animateMainIntro(timestamp) {
+                if (!mainIntroActive) return;
+
+                if (timestamp - mainIntroLastFrameTime >= FRAME_DURATION) {
+                  if (mainIntroFrames[mainIntroCurrentFrame] && mainIntroFrames[mainIntroCurrentFrame].complete) {
+                    var currentImg = mainIntroFrames[mainIntroCurrentFrame];
+
+                    // Clear canvas
+                    mainIntroCtx.clearRect(0, 0, mainIntroCanvas.width, mainIntroCanvas.height);
+
+                    // Calculate dimensions to cover the screen while maintaining aspect ratio
+                    var imgAspect = currentImg.width / currentImg.height;
+                    var canvasAspect = mainIntroCanvas.width / mainIntroCanvas.height;
+                    var drawWidth, drawHeight, drawX, drawY;
+
+                    if (imgAspect > canvasAspect) {
+                      // Image is wider - fit to height
+                      drawHeight = mainIntroCanvas.height;
+                      drawWidth = drawHeight * imgAspect;
+                      drawX = (mainIntroCanvas.width - drawWidth) / 2;
+                      drawY = 0;
+                    } else {
+                      // Image is taller - fit to width
+                      drawWidth = mainIntroCanvas.width;
+                      drawHeight = drawWidth / imgAspect;
+                      drawX = 0;
+                      drawY = (mainIntroCanvas.height - drawHeight) / 2;
+                    }
+
+                    mainIntroCtx.drawImage(currentImg, drawX, drawY, drawWidth, drawHeight);
+                  }
+
+                  mainIntroCurrentFrame = (mainIntroCurrentFrame + 1) % INTRO_FRAMES;
+                  mainIntroLastFrameTime = timestamp;
+                }
+
+                mainIntroAnimationId = requestAnimationFrame(animateMainIntro);
+              }
+
+              mainIntroLastFrameTime = performance.now();
+              animateMainIntro(mainIntroLastFrameTime);
+            }
+          };
+
+          img.onerror = function() {
+            console.error('Failed to load main intro frame ' + frameNumber);
+          };
+
+          mainIntroFrames[index] = img;
+        })(i);
+      }
+
+      // Add click handler for main intro/title
+      mainIntroScreen.addEventListener('click', handleMainIntroClick);
+      mainTitleScreen.addEventListener('click', handleMainIntroClick);
+
+      // Add keyboard handler for any key
+      document.addEventListener('keydown', handleMainIntroKeyPress);
+
+      // Add window resize handler to update canvas size (main window only)
+      var resizeHandler = function() {
+        // Only resize if this is the main window (not the dual monitor popup)
+        if (mainIntroActive && mainIntroCanvas && window.name !== 'Horse Racing - Game View') {
+          mainIntroCanvas.width = window.innerWidth;
+          mainIntroCanvas.height = window.innerHeight;
+        }
+      };
+      window.addEventListener('resize', resizeHandler);
+
+      // Start checking for gamepad input during intro/title
+      checkIntroGamepadInput();
+    }
+
+    function handleMainIntroClick() {
+      if (mainIntroActive) {
+        hideMainIntro(); // Go from intro to first title
+      } else if (mainCurrentTitleFrame === 1) {
+        showMainTitleScreen(2); // Go from first title to second title
+      } else if (mainCurrentTitleFrame === 2) {
+        hideMainTitleScreen(); // Go from second title to game
+      }
+    }
+
+    function handleMainIntroKeyPress(ev) {
+      // Only handle keys during intro/title screens, not during gameplay
+      if (!mainIntroActive && mainCurrentTitleFrame === 0) return;
+
+      // Ignore if user is typing in a text field
+      if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA') return;
+
+      // Prevent default behavior
+      ev.preventDefault();
+
+      // Advance through intro/title sequence
+      handleMainIntroClick();
+    }
+
+    var lastIntroGamepadState = {};
+
+    function checkIntroGamepadInput() {
+      // Only check during intro/title screens
+      if (!mainIntroActive && mainCurrentTitleFrame === 0) {
+        // Not in intro/title, check again later
+        setTimeout(checkIntroGamepadInput, 100);
         return;
       }
 
-      // Reset and show intro screen
-      introActive = true;
-      introScreenElement.style.display = 'flex';
-      introScreenElement.style.opacity = '1';
-      introScreenElement.style.transition = 'none';
+      var gamepad = getGamepad();
+      if (gamepad) {
+        // Check all buttons
+        for (var i = 0; i < gamepad.buttons.length; i++) {
+          var pressed = gamepad.buttons[i].pressed;
+          var wasPressed = lastIntroGamepadState[i] || false;
 
-      console.log('Intro animation restarted on second screen');
+          // Detect button press (edge detection)
+          if (pressed && !wasPressed) {
+            handleMainIntroClick();
+            break;
+          }
+
+          lastIntroGamepadState[i] = pressed;
+        }
+      }
+
+      // Continue checking
+      setTimeout(checkIntroGamepadInput, 50);
+    }
+
+    function hideMainIntro() {
+      if (!mainIntroActive) return;
+
+      mainIntroActive = false;
+      if (mainIntroAnimationId) {
+        cancelAnimationFrame(mainIntroAnimationId);
+      }
+
+      // Instant transition: show title and hide intro immediately
+      mainCurrentTitleFrame = 1;
+      mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
+      mainTitleScreen.style.display = 'flex';
+      mainTitleScreen.style.opacity = '1';
+      mainTitleScreen.style.transition = 'none';
+
+      mainIntroScreen.style.display = 'none';
+    }
+
+    function showMainTitleScreen(frameNumber) {
+      mainCurrentTitleFrame = frameNumber;
+
+      if (frameNumber === 1) {
+        mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
+      } else if (frameNumber === 2) {
+        mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg';
+      }
+
+      // Instant change between title frames (no crossfade)
+      mainTitleScreen.style.display = 'flex';
+      mainTitleScreen.style.opacity = '1';
+    }
+
+    function hideMainTitleScreen() {
+      mainTitleScreen.style.transition = 'opacity 0.5s ease-out';
+      mainTitleScreen.style.opacity = '0';
+
+      setTimeout(function() {
+        mainTitleScreen.style.display = 'none';
+        mainCurrentTitleFrame = 0;
+      }, 500);
     }
 
     //=========================================================================
@@ -2657,9 +2866,14 @@
       // Render to main canvas
       renderToCanvas(ctx, width, height);
 
-      // Render to dual monitor canvas if active
+      // Copy main canvas to dual monitor canvas (identical mirror)
       if (isDualMonitorMode && dualMonitorCanvas && dualMonitorCtx) {
-        renderToCanvas(dualMonitorCtx, dualMonitorCanvas.width, dualMonitorCanvas.height);
+        // Clear the dual monitor canvas
+        dualMonitorCtx.fillStyle = '#000';
+        dualMonitorCtx.fillRect(0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+
+        // Draw the main canvas content scaled to fit the second screen
+        dualMonitorCtx.drawImage(canvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
       }
     }
 
@@ -2764,8 +2978,78 @@
 
       // Flash overlay
       if (isFlashing) {
-        context.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        context.fillRect(-cameraShakeX, -cameraShakeY, renderWidth, renderHeight);
+        // White flash
+        if (flashEnabled) {
+          context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          context.fillRect(-cameraShakeX, -cameraShakeY, renderWidth, renderHeight);
+        }
+
+        // Image flash (Cavalli Mongoli - randomized)
+        if (flashImageEnabled && currentFlashingImage && currentFlashingImage.complete) {
+          context.save();
+          context.globalAlpha = 0.9; // Slightly transparent
+
+          // Calculate dimensions to fit the screen while maintaining aspect ratio
+          var imgAspect = currentFlashingImage.width / currentFlashingImage.height;
+          var screenAspect = renderWidth / renderHeight;
+          var drawWidth, drawHeight, drawX, drawY;
+
+          if (imgAspect > screenAspect) {
+            // Image is wider than screen
+            drawWidth = renderWidth;
+            drawHeight = renderWidth / imgAspect;
+            drawX = -cameraShakeX;
+            drawY = -cameraShakeY + (renderHeight - drawHeight) / 2;
+          } else {
+            // Image is taller than screen
+            drawHeight = renderHeight;
+            drawWidth = renderHeight * imgAspect;
+            drawX = -cameraShakeX + (renderWidth - drawWidth) / 2;
+            drawY = -cameraShakeY;
+          }
+
+          context.drawImage(currentFlashingImage, drawX, drawY, drawWidth, drawHeight);
+          context.restore();
+        }
+      }
+
+      // Render intro/title overlays (so dual monitor sees them too)
+      if (mainIntroActive && mainIntroFrames[mainIntroCurrentFrame] && mainIntroFrames[mainIntroCurrentFrame].complete) {
+        var introImg = mainIntroFrames[mainIntroCurrentFrame];
+
+        // Calculate dimensions to cover the screen
+        var imgAspect = introImg.width / introImg.height;
+        var canvasAspect = renderWidth / renderHeight;
+        var drawWidth, drawHeight, drawX, drawY;
+
+        if (imgAspect > canvasAspect) {
+          drawHeight = renderHeight;
+          drawWidth = drawHeight * imgAspect;
+          drawX = -cameraShakeX + (renderWidth - drawWidth) / 2;
+          drawY = -cameraShakeY;
+        } else {
+          drawWidth = renderWidth;
+          drawHeight = drawWidth / imgAspect;
+          drawX = -cameraShakeX;
+          drawY = -cameraShakeY + (renderHeight - drawHeight) / 2;
+        }
+
+        context.drawImage(introImg, drawX, drawY, drawWidth, drawHeight);
+      } else if (mainCurrentTitleFrame > 0 && mainTitleImage && mainTitleImage.complete) {
+        // Render title smaller and at the top of screen
+        var imgAspect = mainTitleImage.naturalWidth / mainTitleImage.naturalHeight;
+
+        // Make title 85% of screen width
+        var titleWidthPercent = 0.85;
+        var drawWidth = renderWidth * titleWidthPercent;
+        var drawHeight = drawWidth / imgAspect;
+
+        // Position at top center with some padding
+        var topPadding = renderHeight * 0.05; // 5% from top
+        var drawX = -cameraShakeX + (renderWidth - drawWidth) / 2;
+        var drawY = -cameraShakeY + topPadding;
+
+        context.drawImage(mainTitleImage, drawX, drawY, drawWidth, drawHeight);
       }
 
       // Restore canvas state after camera shake
@@ -3089,6 +3373,29 @@
               reset();
               Dom.storage.fast_lap_time = Dom.storage.fast_lap_time || 180;
               updateHud('fast_lap_time', formatTime(Util.toFloat(Dom.storage.fast_lap_time)));
+
+              // Load all flashing images
+              var flashingImagesLoaded = 0;
+              flashingImageNames.forEach(function(imageName, index) {
+                var img = new Image();
+                img.src = 'images/flashing name/' + imageName;
+                img.onload = function() {
+                  flashingImagesLoaded++;
+                  console.log('Flashing image loaded:', imageName, '(' + flashingImagesLoaded + '/' + flashingImageNames.length + ')');
+                  if (flashingImagesLoaded === flashingImageNames.length) {
+                    console.log('All flashing images loaded!');
+                    // Select first image as default
+                    currentFlashingImage = flashingImages[0];
+                  }
+                };
+                img.onerror = function() {
+                  console.error('Failed to load flashing image:', imageName);
+                };
+                flashingImages.push(img);
+              });
+
+              // Initialize main screen intro
+              initMainIntro();
             }
           });
         });
@@ -3123,6 +3430,7 @@
     Dom.on('resolution', 'change', function(ev) {
       var w, h, ratio;
       switch(ev.target.options[ev.target.selectedIndex].value) {
+        case 'fullhd': w = 1920; h = 1080; ratio=w/width; break;
         case 'fine':   w = 1280; h = 960;  ratio=w/width; break;
         case 'high':   w = 1024; h = 768;  ratio=w/width; break;
         case 'medium': w = 640;  h = 480;  ratio=w/width; break;
@@ -3162,25 +3470,6 @@
       handleTap();
     });
 
-    // Background layer selection handlers
-    Dom.on('skySelect', 'change', function(ev) {
-      var value = ev.target.value;
-      changeBackgroundLayer('sky', value);
-      console.log('Sky changed to:', value);
-    });
-
-    Dom.on('hillsSelect', 'change', function(ev) {
-      var value = ev.target.value;
-      changeBackgroundLayer('hills', value);
-      console.log('Hills changed to:', value);
-    });
-
-    Dom.on('treesSelect', 'change', function(ev) {
-      var value = ev.target.value;
-      changeBackgroundLayer('trees', value);
-      console.log('Trees changed to:', value);
-    });
-
     // Asset Editor handlers
     Dom.on('open-asset-editor', 'click', function() {
       openAssetEditor();
@@ -3212,10 +3501,11 @@
           trees: 'default'
         };
 
-        // Reset UI
-        Dom.get('skySelect').value = 'default';
-        Dom.get('hillsSelect').value = 'default';
-        Dom.get('treesSelect').value = 'default';
+        // Refresh asset editor if it's open
+        var assetModal = Dom.get('asset-editor-modal');
+        if (assetModal && assetModal.style.display === 'block') {
+          initAssetEditor();
+        }
 
         // Show confirmation
         var statusDiv = Dom.get('storage-status');
@@ -3364,11 +3654,6 @@
     // Attach click handler to dual monitor button
     Dom.on('dual-monitor-btn', 'click', openDualMonitorMode);
 
-    // Attach click handler to show intro button
-    Dom.on('show-intro-btn', 'click', function() {
-      showIntroOnSecondScreen();
-    });
-
     // Alternative: Press F key for fullscreen
     document.addEventListener('keydown', function(ev) {
       if (ev.keyCode === 70 && !ev.ctrlKey && !ev.altKey) { // F key
@@ -3403,9 +3688,7 @@
     });
 
     Dom.on('main-menu-btn', 'click', function() {
-      // For now, just restart the race
-      // In a full game, this would go to a proper main menu
-      restartRace();
+      goToMainMenu();
     });
 
     //=========================================================================
