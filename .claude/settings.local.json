@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node check-dimensions.js:*)",
+      "Bash(node resize-sprites.js:*)",
+      "Bash(node setup-animation-sprites.js:*)",
+      "Bash(python -m http.server:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(start horse-racing.html)",
+      "Bash(git push:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

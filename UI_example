@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Horse Racing Visuals - Control Panel</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+<style>input[type=range]::-webkit-slider-runnable-track {
+      background: #E5E7EB;}
+    .dark input[type=range]::-webkit-slider-runnable-track {
+      background: #4B5563;}input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: #6366F1;width: 1.25rem;height: 1.25rem;border-radius: 9999px;margin-top: -6px;}
+  </style>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#6366F1", // Indigo 500
+            "background-light": "#F9FAFB", // Gray 50
+            "background-dark": "#111827", // Gray 900
+          },
+          fontFamily: {
+            display: ["Roboto", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem", // 8px
+          },
+        },
+      },
+    };
+  </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200 antialiased">
+<button class="fixed top-4 right-4 z-50 p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300" id="theme-toggle" type="button">
+<span class="material-icons dark:hidden">dark_mode</span>
+<span class="material-icons hidden dark:inline">light_mode</span>
+</button>
+<script>
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      document.documentElement.classList.toggle('dark');
+    });
+  </script>
+<div class="p-4 sm:p-6 lg:p-8 max-w-screen-2xl mx-auto">
+<header class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+<div>
+<h1 class="text-2xl font-bold text-gray-900 dark:text-white">Horse Racing Visuals</h1>
+<p class="text-sm text-gray-500 dark:text-gray-400">Control Panel for Live Performance</p>
+</div>
+</header>
+<div class="flex flex-col gap-6">
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md flex flex-col">
+<h2 class="text-lg font-bold mb-3 text-gray-900 dark:text-white">Game Preview</h2>
+<div class="relative aspect-video w-full bg-black rounded-md overflow-hidden">
+<img alt="Live preview of the horse racing game, showing a horse on a road with a psychedelic sky." class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvEnIpEq9qBg-YZrMzuKsBOs26KnAY49cP_ZExL2JwylB9nMw3OWlpOT3QHniBU77kMUgTT2XIyjjKcbLc0ZyFh6DSSgNlbWjgbXkZz4_dOYWteCu32s1cC9LMObWXmLjS6QLGIjrq6zc0weV-dFOqPe7cDWUyZEdiy5n0G-o6kH-7XJb_KDs66v4ECojEux7tLVwvYgj4TZ2JUsB2yxqUIGd2Sru5N1l_TMzsrdqcYdT-xnIcurixB_A-05iADtJKllXTgrrlHCE"/>
+<div class="absolute top-0 left-0 right-0 p-2 bg-black bg-opacity-50 text-white text-sm font-mono flex justify-between">
+<span>Time: 2:50.2</span>
+<span>Fastest Lap: 2.05.7</span>
+<span>0 km/h</span>
+</div>
+<div class="absolute top-10 left-2 p-1 bg-black bg-opacity-50 text-white text-xs font-mono rounded">
+              120 FPS (1-121)
+            </div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+<h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Game Settings</h3>
+<div class="space-y-4">
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="resolution">Resolution</label>
+<select class="col-span-2 w-full text-sm rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-primary focus:border-primary" id="resolution">
+<option>High (1024x768)</option>
+<option>Medium (800x600)</option>
+<option>Low (640x480)</option>
+</select>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="lanes">Lanes</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="lanes" max="5" min="1" type="range" value="3"/>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="track-width">Track Width</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="track-width" max="3000" min="1000" type="range" value="2000"/>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="camera-height">Cam Height</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="camera-height" max="1500" min="500" type="range" value="1000"/>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="draw-distance">Draw Dist</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="draw-distance" max="500" min="100" type="range" value="300"/>
+</div>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+<h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Audio Reactivity</h3>
+<div class="space-y-4">
+<div class="grid grid-cols-2 gap-2">
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+<span class="material-icons text-base">audio_file</span>
+                Use Audio File
+              </button>
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity">
+<span class="material-icons text-base">mic</span>
+                Use Mic
+              </button>
+</div>
+<div class="text-sm">
+<span class="font-medium">Audio Status:</span>
+<span class="text-gray-500 dark:text-gray-400 ml-2">No audio source selected</span>
+</div>
+<div class="relative w-full h-6 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+<div class="absolute h-full bg-primary" style="width: 30%;"></div>
+<span class="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">30%</span>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="shake-intensity">Shake</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="shake-intensity" max="100" min="0" type="range" value="50"/>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="zoom-intensity">Zoom</label>
+<input class="w-full col-span-2 h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer" id="zoom-intensity" max="100" min="0" type="range" value="25"/>
+</div>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+<h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Visual Effects</h3>
+<div class="space-y-4 text-center">
+<button class="w-full py-3 px-4 bg-primary text-white font-bold rounded hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+<span class="material-icons">touch_app</span>
+              TAP (T)
+            </button>
+<p class="text-sm text-gray-500 dark:text-gray-400">
+              Current BPM: <span class="font-bold text-lg text-primary">511</span>
+</p>
+<div class="flex items-center justify-center gap-4 text-sm">
+<span>White Flash Controls</span>
+<label class="relative inline-flex items-center cursor-pointer" for="flash-toggle">
+<input class="sr-only peer" id="flash-toggle" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 dark:peer-focus:ring-primary rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+<h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Asset Management</h3>
+<div class="space-y-4">
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+<span class="material-icons text-base">collections</span>
+              Open Asset Editor
+            </button>
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+<span class="material-icons text-base">casino</span>
+              Configure Randomization
+            </button>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="sky-layer">Sky Layer</label>
+<select class="col-span-2 w-full text-sm rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-primary focus:border-primary" id="sky-layer">
+<option>Sky 4</option>
+<option>Custom Sky</option>
+</select>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="hills-layer">Hills Layer</label>
+<select class="col-span-2 w-full text-sm rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-primary focus:border-primary" id="hills-layer">
+<option>Custom Hills</option>
+<option>Hills 1</option>
+</select>
+</div>
+<div class="grid grid-cols-3 items-center text-sm">
+<label class="col-span-1" for="trees-layer">Trees Layer</label>
+<select class="col-span-2 w-full text-sm rounded border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-primary focus:border-primary" id="trees-layer">
+<option>Custom Trees</option>
+<option>Trees 1</option>
+</select>
+</div>
+<button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600 transition-colors">
+<span class="material-icons text-base">delete_sweep</span>
+              Clear All Saved
+            </button>
+</div>
+</div>
+<div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+<h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Controller Info</h3>
+<div class="text-sm text-gray-600 dark:text-gray-300 space-y-2">
+<p>Use the <strong class="text-gray-800 dark:text-gray-100">arrow keys</strong> or <strong class="text-gray-800 dark:text-gray-100">Xbox controller</strong> to control your horse!</p>
+<p class="font-mono text-xs p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                Left Stick/D-Pad = Steer<br/>
+                RT/A = Accelerate | LT/B = Brake
+            </p>
+<div class="flex items-center gap-2 pt-2">
+<span class="material-icons text-green-500">gamepad</span>
+<span class="font-medium">Xbox Controller Connected</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>
