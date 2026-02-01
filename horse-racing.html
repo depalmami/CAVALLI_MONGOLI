@@ -324,9 +324,9 @@
             <div>
               <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Resolution</label>
               <select id="resolution" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                <option value='fullhd'>Full HD (1920x1080)</option>
+                <option selected value='fullhd'>Full HD (1920x1080)</option>
                 <option value='fine'>Fine (1280x960)</option>
-                <option selected value='high'>High (1024x768)</option>
+                <option value='high'>High (1024x768)</option>
                 <option value='medium'>Medium (640x480)</option>
                 <option value='low'>Low (480x360)</option>
               </select>
@@ -438,11 +438,19 @@
               </label>
             </div>
             <div class="flex items-center justify-between py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
-              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Image Flash (Cavalli Mongoli)</label>
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Image Flash</label>
               <label class="relative inline-flex items-center cursor-pointer">
                 <input id="flash-image-toggle" type="checkbox" class="sr-only peer">
                 <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
               </label>
+            </div>
+            <div class="py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Flash Image Mode</label>
+              <select id="flash-image-mode" class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                <option value="random" selected>Random</option>
+                <option value="sequential">Sequential</option>
+              </select>
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="flash-images-count">0 images loaded</div>
             </div>
           </div>
         </div>
@@ -523,9 +531,9 @@
       <th><label for="resolution">Resolution :</label></th>
       <td>
         <select id="resolution" style="width:100%">
-          <option value='fullhd'>Full HD (1920x1080)</option>
+          <option selected value='fullhd'>Full HD (1920x1080)</option>
           <option value='fine'>Fine (1280x960)</option>
-          <option selected value='high'>High (1024x768)</option>
+          <option value='high'>High (1024x768)</option>
           <option value='medium'>Medium (640x480)</option>
           <option value='low'>Low (480x360)</option>
         </select>
@@ -697,6 +705,13 @@
       toggleFlashImage();
     });
 
+    // Flash image mode selector
+    document.getElementById('flash-image-mode').addEventListener('change', function() {
+      flashImageMode = this.value;
+      flashingImageIndex = 0; // Reset index when changing mode
+      console.log('Flash image mode changed to:', flashImageMode);
+    });
+
     // Update gamepad status display
     function updateGamepadUIStatus() {
       var statusIcon = document.querySelector('#gamepad-status-display .material-icons');
@@ -793,8 +808,8 @@
 
     var fps            = 60;                      // how many 'update' frames per second
     var step           = 1/fps;                   // how long is each frame (in seconds)
-    var width          = 1024;                    // logical canvas width
-    var height         = 768;                     // logical canvas height
+    var width          = 1920;                    // logical canvas width
+    var height         = 1080;                    // logical canvas height
     var centrifugal    = 0.3;                     // centrifugal force multiplier when going around curves
     var offRoadDecel   = 0.99;                    // speed multiplier when off road
     var skySpeed       = 0.001;                   // background sky layer scroll speed
@@ -821,7 +836,8 @@
     var mainIntroCanvas = null;                   // Main intro canvas
     var mainIntroCtx = null;                      // Main intro canvas context
     var mainTitleScreen = null;                   // Main title screen element
-    var mainTitleImage = null;                    // Main title image element
+    var mainTitleImage = null;                    // Main title image element (for compatibility)
+    var mainTitleImages = [];                     // Preloaded title images [frame1, frame2]
     var mainIntroActive = true;                   // Track if main intro is active
     var mainCurrentTitleFrame = 0;                // 0 = not shown, 1 = first frame, 2 = second frame
     var mainIntroFrames = [];                     // Loaded intro frames
@@ -837,9 +853,16 @@
       // Add more image filenames here as needed
     ];
     var currentFlashingImage = null;              // currently selected flashing image
+    var flashingImageIndex = 0;                   // current index for sequential mode
+    var flashImageMode = 'random';                // 'random' or 'sequential'
 
     // Custom background layers
     var customBackgroundLayers = {
+      sky: null,
+      hills: null,
+      trees: null
+    };
+    var customBackgroundLayersDataURL = {
       sky: null,
       hills: null,
       trees: null
@@ -1175,12 +1198,15 @@
       updateHud('speed', 0);
       updateHud('current_lap_time', formatTime(0));
 
-      // Show first title screen
+      // Show first title screen (rendered on canvas using preloaded images)
       mainCurrentTitleFrame = 1;
-      mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
-      mainTitleScreen.style.display = 'flex';
-      mainTitleScreen.style.opacity = '1';
-      mainTitleScreen.style.transition = 'none';
+      mainTitleScreen.style.display = 'none';
+
+      // Hide HUD when returning to title
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'none';
+      }
 
       reset();
     }
@@ -1283,11 +1309,17 @@
         };
 
         console.log('Saving background selections:', currentBackgroundSelection);
+        console.log('Custom background layers:', Object.keys(customBackgroundLayers));
 
-        // NOTE: We don't save preset images as base64
-        // Preset images (sky_1, sky_2, etc.) are loaded from disk using the selection name
-        // We only save custom uploaded images as base64 (future feature)
+        // Save custom uploaded background layers using stored dataURLs
+        for (var layerName in customBackgroundLayersDataURL) {
+          if (customBackgroundLayersDataURL[layerName]) {
+            backgroundData.customLayers[layerName] = customBackgroundLayersDataURL[layerName];
+            console.log('Saving custom background layer:', layerName);
+          }
+        }
 
+        console.log('Total custom layers to save:', Object.keys(backgroundData.customLayers).length);
         localStorage.setItem(STORAGE_KEY_BACKGROUNDS, JSON.stringify(backgroundData));
         console.log('✅ Background settings saved to localStorage');
         updateStorageStatus(); // Update status after saving
@@ -1310,49 +1342,99 @@
         var backgroundData = JSON.parse(data);
         console.log('loadBackgroundsFromStorage: Parsed data:', backgroundData);
 
-        // Restore selections
-        if (backgroundData.selections) {
-          console.log('loadBackgroundsFromStorage: Restoring selections:', backgroundData.selections);
-          currentBackgroundSelection = backgroundData.selections;
+        // Restore custom uploaded background layers first
+        if (backgroundData.customLayers) {
+          var layersToLoad = Object.keys(backgroundData.customLayers);
+          var loadedLayers = 0;
 
-          // Update UI selects
-          if (Dom.get('skySelect')) {
-            Dom.get('skySelect').value = currentBackgroundSelection.sky;
-          }
-          if (Dom.get('hillsSelect')) {
-            Dom.get('hillsSelect').value = currentBackgroundSelection.hills;
-          }
-          if (Dom.get('treesSelect')) {
-            Dom.get('treesSelect').value = currentBackgroundSelection.trees;
-          }
-
-          // Apply preset selections by loading the corresponding images
-          console.log('Applying background presets:', currentBackgroundSelection);
-          for (var layer in currentBackgroundSelection) {
-            var selection = currentBackgroundSelection[layer];
-            console.log('Processing layer:', layer, 'selection:', selection);
-            if (selection !== 'default') {
-              var filename = '';
-              if (layer === 'sky') {
-                filename = selection + '.png'; // sky_1.png, sky_2.png, etc.
-              } else if (layer === 'hills') {
-                filename = 'hills.png';
-              } else if (layer === 'trees') {
-                filename = 'trees.png';
-              }
-              if (filename) {
-                console.log('Loading background:', layer, 'from file:', filename);
-                loadCustomBackground(layer, filename);
-              }
+          if (layersToLoad.length > 0) {
+            console.log('Loading', layersToLoad.length, 'custom background layers from localStorage...');
+            for (var layerName in backgroundData.customLayers) {
+              (function(name, dataUrl) {
+                var img = new Image();
+                img.onload = function() {
+                  customBackgroundLayers[name] = img;
+                  customBackgroundLayersDataURL[name] = dataUrl; // Store the dataURL for future saves
+                  console.log('Loaded custom background layer:', name, 'size:', img.width + 'x' + img.height);
+                  // Mark this layer as custom so it won't be overwritten by preset loading
+                  if (!backgroundData.selections) {
+                    backgroundData.selections = {};
+                  }
+                  if (!backgroundData.selections[name] || backgroundData.selections[name] === 'default') {
+                    currentBackgroundSelection[name] = 'custom';
+                    console.log('Set', name, 'to custom in currentBackgroundSelection');
+                  } else {
+                    console.log('Keeping', name, 'selection as:', backgroundData.selections[name]);
+                  }
+                  loadedLayers++;
+                  if (loadedLayers === layersToLoad.length) {
+                    console.log('✅ Loaded', layersToLoad.length, 'custom background layers');
+                    console.log('customBackgroundLayers after loading:', Object.keys(customBackgroundLayers));
+                    continueLoading();
+                  }
+                };
+                img.onerror = function() {
+                  console.error('Failed to load custom background layer:', name);
+                  loadedLayers++;
+                  if (loadedLayers === layersToLoad.length) {
+                    continueLoading();
+                  }
+                };
+                img.src = dataUrl;
+              })(layerName, backgroundData.customLayers[layerName]);
             }
+          } else {
+            continueLoading();
           }
-
-          console.log('✅ Restored background preset selections:', currentBackgroundSelection);
+        } else {
+          continueLoading();
         }
 
-        // Update status and complete
-        updateStorageStatus();
-        if (callback) callback();
+        function continueLoading() {
+          // Restore selections
+          if (backgroundData.selections) {
+            console.log('loadBackgroundsFromStorage: Restoring selections:', backgroundData.selections);
+            currentBackgroundSelection = backgroundData.selections;
+
+            // Update UI selects
+            if (Dom.get('skySelect')) {
+              Dom.get('skySelect').value = currentBackgroundSelection.sky;
+            }
+            if (Dom.get('hillsSelect')) {
+              Dom.get('hillsSelect').value = currentBackgroundSelection.hills;
+            }
+            if (Dom.get('treesSelect')) {
+              Dom.get('treesSelect').value = currentBackgroundSelection.trees;
+            }
+
+            // Apply preset selections by loading the corresponding images
+            console.log('Applying background presets:', currentBackgroundSelection);
+            for (var layer in currentBackgroundSelection) {
+              var selection = currentBackgroundSelection[layer];
+              console.log('Processing layer:', layer, 'selection:', selection);
+              if (selection !== 'default' && selection !== 'custom') {
+                var filename = '';
+                if (layer === 'sky') {
+                  filename = selection + '.png'; // sky_1.png, sky_2.png, etc.
+                } else if (layer === 'hills') {
+                  filename = 'hills.png';
+                } else if (layer === 'trees') {
+                  filename = 'trees.png';
+                }
+                if (filename) {
+                  console.log('Loading background:', layer, 'from file:', filename);
+                  loadCustomBackground(layer, filename);
+                }
+              }
+            }
+
+            console.log('✅ Restored background preset selections:', currentBackgroundSelection);
+          }
+
+          // Update status and complete
+          updateStorageStatus();
+          if (callback) callback();
+        }
       } catch (e) {
         console.error('Failed to load backgrounds from localStorage:', e);
         if (callback) callback();
@@ -1549,10 +1631,15 @@
     function triggerFlash(duration) {
       if (!flashEnabled && !flashImageEnabled) return;
 
-      // Randomize flashing image if image flash is enabled
+      // Select flashing image based on mode
       if (flashImageEnabled && flashingImages.length > 0) {
-        var randomIndex = Math.floor(Math.random() * flashingImages.length);
-        currentFlashingImage = flashingImages[randomIndex];
+        if (flashImageMode === 'random') {
+          var randomIndex = Math.floor(Math.random() * flashingImages.length);
+          currentFlashingImage = flashingImages[randomIndex];
+        } else if (flashImageMode === 'sequential') {
+          currentFlashingImage = flashingImages[flashingImageIndex];
+          flashingImageIndex = (flashingImageIndex + 1) % flashingImages.length;
+        }
       }
 
       isFlashing = true;
@@ -1849,30 +1936,55 @@
 
       previewDiv.innerHTML = '';
 
+      console.log('Updating preview for', spriteName, '- custom:', !!customSprites[spriteName], 'horseSprites:', !!horseSprites[spriteName], 'sprites:', !!sprites, 'sprites.complete:', sprites ? sprites.complete : 'N/A', 'SPRITES defined:', typeof SPRITES !== 'undefined', 'in SPRITES:', SPRITES && SPRITES[spriteName] ? true : false);
+
       if (customSprites[spriteName]) {
+        // Show custom sprite
         var img = document.createElement('img');
         img.src = customSprites[spriteName].src;
         previewDiv.appendChild(img);
-      } else if (sprites && typeof SPRITES !== 'undefined' && SPRITES[spriteName]) {
-        // Show default sprite from spritesheet
-        var canvas = document.createElement('canvas');
-        var spriteData = SPRITES[spriteName];
-        canvas.width = spriteData.w;
-        canvas.height = spriteData.h;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(sprites, spriteData.x, spriteData.y, spriteData.w, spriteData.h, 0, 0, spriteData.w, spriteData.h);
-
+      } else if (horseSprites[spriteName] && horseSprites[spriteName].complete) {
+        // Show horse sprite (loaded separately)
         var img = document.createElement('img');
-        img.src = canvas.toDataURL();
+        img.src = horseSprites[spriteName].src;
         previewDiv.appendChild(img);
+      } else if (sprites && sprites.complete && sprites.naturalWidth > 0 && typeof SPRITES !== 'undefined' && SPRITES[spriteName]) {
+        // Show default sprite from spritesheet
+        try {
+          var canvas = document.createElement('canvas');
+          var spriteData = SPRITES[spriteName];
+
+          // Verify dimensions are within image bounds
+          if (spriteData.x + spriteData.w > sprites.naturalWidth || spriteData.y + spriteData.h > sprites.naturalHeight) {
+            throw new Error('Sprite rect out of bounds for ' + spriteName + ' (image: ' + sprites.naturalWidth + 'x' + sprites.naturalHeight + ', rect needs: ' + (spriteData.x + spriteData.w) + 'x' + (spriteData.y + spriteData.h) + ')');
+          }
+
+          canvas.width = spriteData.w;
+          canvas.height = spriteData.h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(sprites, spriteData.x, spriteData.y, spriteData.w, spriteData.h, 0, 0, spriteData.w, spriteData.h);
+
+          var img = document.createElement('img');
+          img.src = canvas.toDataURL();
+          previewDiv.appendChild(img);
+        } catch (e) {
+          console.error('Failed to render sprite preview for', spriteName, e);
+          var errorText = document.createElement('div');
+          errorText.textContent = 'Out of bounds';
+          errorText.style.color = '#f00';
+          errorText.style.textAlign = 'center';
+          errorText.style.paddingTop = '40px';
+          errorText.style.fontSize = '9px';
+          previewDiv.appendChild(errorText);
+        }
       } else {
         // Sprites not loaded yet or sprite not found - show message
         var loadingText = document.createElement('div');
-        if (!sprites) {
+        if (!sprites && Object.keys(horseSprites).length === 0) {
           loadingText.textContent = 'Loading...';
         } else if (typeof SPRITES === 'undefined') {
           loadingText.textContent = 'SPRITES not loaded';
-        } else if (!SPRITES[spriteName]) {
+        } else {
           loadingText.textContent = 'Sprite "' + spriteName + '" not found';
           console.warn('Sprite not found:', spriteName, 'Available sprites:', Object.keys(SPRITES));
         }
@@ -1889,21 +2001,38 @@
 
       var reader = new FileReader();
       reader.onload = function(e) {
+        var dataUrl = e.target.result;
         var img = new Image();
         img.onload = function() {
           customBackgroundLayers[layerName] = img;
+
+          // Compress image for storage (max 640px width to save space while preserving transparency)
+          var canvas = document.createElement('canvas');
+          var maxWidth = 640; // Smaller size to fit in localStorage
+          var scale = Math.min(1, maxWidth / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Store compressed version as PNG to preserve transparency
+          var compressedDataUrl = canvas.toDataURL('image/png');
+          customBackgroundLayersDataURL[layerName] = compressedDataUrl;
+          console.log('Original size:', (dataUrl.length / 1024 / 1024).toFixed(2), 'MB, Compressed:', (compressedDataUrl.length / 1024 / 1024).toFixed(2), 'MB');
+
           currentBackgroundSelection[layerName] = 'custom';
           updateBackgroundPreview(layerName);
           saveBackgroundsToStorage(); // Auto-save to localStorage
           console.log('Uploaded custom background layer:', layerName);
         };
-        img.src = e.target.result;
+        img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     }
 
     function resetBackgroundLayer(layerName) {
       customBackgroundLayers[layerName] = null;
+      customBackgroundLayersDataURL[layerName] = null;
       currentBackgroundSelection[layerName] = 'default';
       updateBackgroundPreview(layerName);
       saveBackgroundsToStorage(); // Auto-save to localStorage
@@ -1921,28 +2050,44 @@
         var img = document.createElement('img');
         img.src = customBackgroundLayers[layerName].src;
         previewDiv.appendChild(img);
-      } else if (background) {
+      } else if (background && background.complete && background.naturalWidth > 0) {
         // Show default background layer from spritesheet
-        var canvas = document.createElement('canvas');
-        var bgRect;
+        try {
+          var canvas = document.createElement('canvas');
+          var bgRect;
 
-        if (layerName === 'sky') {
-          bgRect = BACKGROUND.SKY;
-        } else if (layerName === 'hills') {
-          bgRect = BACKGROUND.HILLS;
-        } else if (layerName === 'trees') {
-          bgRect = BACKGROUND.TREES;
-        }
+          if (layerName === 'sky') {
+            bgRect = BACKGROUND.SKY;
+          } else if (layerName === 'hills') {
+            bgRect = BACKGROUND.HILLS;
+          } else if (layerName === 'trees') {
+            bgRect = BACKGROUND.TREES;
+          }
 
-        if (bgRect) {
-          canvas.width = bgRect.w;
-          canvas.height = bgRect.h;
-          var ctx = canvas.getContext('2d');
-          ctx.drawImage(background, bgRect.x, bgRect.y, bgRect.w, bgRect.h, 0, 0, bgRect.w, bgRect.h);
+          if (bgRect) {
+            // Verify dimensions are within image bounds
+            if (bgRect.x + bgRect.w > background.naturalWidth || bgRect.y + bgRect.h > background.naturalHeight) {
+              throw new Error('Background rect out of bounds for ' + layerName + ' (image: ' + background.naturalWidth + 'x' + background.naturalHeight + ', rect needs: ' + (bgRect.x + bgRect.w) + 'x' + (bgRect.y + bgRect.h) + ')');
+            }
 
-          var img = document.createElement('img');
-          img.src = canvas.toDataURL();
-          previewDiv.appendChild(img);
+            canvas.width = bgRect.w;
+            canvas.height = bgRect.h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(background, bgRect.x, bgRect.y, bgRect.w, bgRect.h, 0, 0, bgRect.w, bgRect.h);
+
+            var img = document.createElement('img');
+            img.src = canvas.toDataURL();
+            previewDiv.appendChild(img);
+          }
+        } catch (e) {
+          console.error('Failed to render background preview for', layerName, e);
+          var errorText = document.createElement('div');
+          errorText.textContent = 'Out of bounds';
+          errorText.style.color = '#f00';
+          errorText.style.textAlign = 'center';
+          errorText.style.paddingTop = '40px';
+          errorText.style.fontSize = '9px';
+          previewDiv.appendChild(errorText);
         }
       } else {
         // Background not loaded yet - show loading message
@@ -1951,6 +2096,7 @@
         loadingText.style.color = '#aaa';
         loadingText.style.textAlign = 'center';
         loadingText.style.paddingTop = '40px';
+        loadingText.style.fontSize = '11px';
         previewDiv.appendChild(loadingText);
       }
     }
@@ -2029,6 +2175,10 @@
     // DUAL MONITOR FUNCTIONS
     //=========================================================================
 
+    // Store screen details for reuse
+    var cachedScreenDetails = null;
+    var targetSecondScreen = null;
+
     function openDualMonitorMode() {
       if (isDualMonitorMode) {
         closeDualMonitorMode();
@@ -2042,8 +2192,9 @@
       if (window.getScreenDetails) {
         console.log('Requesting screen details...');
         window.getScreenDetails().then(function(screenDetails) {
+          cachedScreenDetails = screenDetails;
           var screens = screenDetails.screens;
-          console.log('✅ Detected', screens.length, 'screen(s)');
+          console.log('Detected', screens.length, 'screen(s)');
 
           // Log all screens
           for (var i = 0; i < screens.length; i++) {
@@ -2062,63 +2213,79 @@
             });
           }
 
-          // Find a screen that's not the current one
+          // Find a screen that's not the current one (prefer non-primary)
           var currentScreen = screenDetails.currentScreen;
           console.log('Current screen index:', screens.indexOf(currentScreen));
-          var secondScreen = null;
+          targetSecondScreen = null;
 
           for (var i = 0; i < screens.length; i++) {
             if (screens[i] !== currentScreen) {
-              secondScreen = screens[i];
-              console.log('✅ Found second screen at index:', i);
+              targetSecondScreen = screens[i];
+              console.log('Found second screen at index:', i);
               break;
             }
           }
 
-          if (secondScreen) {
-            console.log('Opening on second screen:');
-            console.log('  Resolution:', secondScreen.width + 'x' + secondScreen.height);
-            console.log('  Available:', secondScreen.availWidth + 'x' + secondScreen.availHeight);
-            console.log('  Position:', secondScreen.availLeft + ',' + secondScreen.availTop);
-            openOnScreen(secondScreen);
+          if (targetSecondScreen) {
+            console.log('Opening fullscreen on second screen:');
+            console.log('  Resolution:', targetSecondScreen.width + 'x' + targetSecondScreen.height);
+            console.log('  Position:', targetSecondScreen.left + ',' + targetSecondScreen.top);
+            openFullscreenOnSecondScreen(targetSecondScreen);
           } else {
-            console.log('⚠️ No second screen found, using fallback');
+            console.log('No second screen found, using fallback popup');
             openWithFallback();
           }
         }).catch(function(err) {
-          console.log('❌ Window Management API error:', err);
+          console.log('Window Management API error:', err);
           openWithFallback();
         });
       } else {
-        console.log('⚠️ Window Management API not supported, using fallback');
+        console.log('Window Management API not supported, using fallback');
         openWithFallback();
       }
     }
 
-    function openOnScreen(screen) {
-      console.log('openOnScreen: Creating fullscreen window');
-      // Open window with exact screen dimensions and position
-      // Using fullscreen=yes and all chrome removed for true fullscreen experience
+    function openFullscreenOnSecondScreen(screen) {
+      console.log('openFullscreenOnSecondScreen: Opening popup on second screen');
+
+      // Open popup window positioned on the second screen
       var windowFeatures =
         'left=' + screen.availLeft +
         ',top=' + screen.availTop +
-        ',width=' + screen.width +
-        ',height=' + screen.height +
-        ',fullscreen=yes' +
-        ',menubar=no,toolbar=no,location=no,status=no,titlebar=no,scrollbars=no,resizable=no';
+        ',width=' + screen.availWidth +
+        ',height=' + screen.availHeight +
+        ',menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes';
 
-      console.log('  Window features:', windowFeatures);
+      console.log('Opening window at:', screen.availLeft + ',' + screen.availTop);
+      console.log('Window size:', screen.availWidth + 'x' + screen.availHeight);
 
-      dualMonitorWindow = window.open('', 'Horse Racing - Game View', windowFeatures);
+      dualMonitorWindow = window.open('', 'HorseRacingGameView', windowFeatures);
 
       if (!dualMonitorWindow) {
-        console.log('❌ Failed to open window - popup blocked?');
-        alert('Please allow popups for dual monitor mode!');
+        console.log('Failed to open window - popup blocked?');
+        alert('Consenti i popup per la modalità dual monitor!');
         return;
       }
 
-      console.log('✅ Window opened successfully');
+      // Setup the window content
       setupDualMonitorWindow(screen.width, screen.height, screen);
+    }
+
+    function updateDualMonitorUI(active) {
+      Dom.get('dual-monitor-status').style.display = active ? 'block' : 'none';
+      var btn = Dom.get('dual-monitor-btn');
+      if (active) {
+        btn.innerHTML = '<span class="material-icons text-base">close</span> Close Dual Monitor';
+        btn.style.background = '#f44336';
+      } else {
+        btn.innerHTML = '<span class="material-icons text-base">desktop_windows</span> Dual Monitor Mode';
+        btn.style.background = '';
+      }
+    }
+
+    function openOnScreen(screen) {
+      // Redirect to the main function
+      openFullscreenOnSecondScreen(screen);
     }
 
     function openWithFallback() {
@@ -2143,19 +2310,19 @@
       dualMonitorWindow = window.open('', 'Horse Racing - Game View', windowFeatures);
 
       if (!dualMonitorWindow) {
-        console.log('❌ Failed to open window - popup blocked?');
+        console.log('Failed to open window - popup blocked?');
         alert('Please allow popups for dual monitor mode!');
         return;
       }
 
-      console.log('✅ Window opened successfully');
+      console.log('Window opened successfully');
       setupDualMonitorWindow(screenWidth, screenHeight, null);
     }
 
     function setupDualMonitorWindow(targetWidth, targetHeight, screen) {
       console.log('setupDualMonitorWindow: Setting up with target resolution:', targetWidth + 'x' + targetHeight);
 
-      // Move and resize window to exact position (try to force fullscreen)
+      // Move and resize window to exact position
       if (screen) {
         try {
           dualMonitorWindow.moveTo(screen.left, screen.top);
@@ -2166,7 +2333,7 @@
         }
       }
 
-      // Create HTML for secondary window
+      // Create HTML for secondary window with auto-fullscreen script
       dualMonitorWindow.document.write(`
         <!DOCTYPE html>
         <html>
@@ -2187,6 +2354,7 @@
               position: fixed;
               top: 0;
               left: 0;
+              cursor: none;
             }
             body {
               display: flex;
@@ -2203,132 +2371,140 @@
               image-rendering: crisp-edges;
               background: #000;
             }
-            #fullscreen-hint {
+            #fullscreen-overlay {
               position: fixed;
-              bottom: 20px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: rgba(0,0,0,0.8);
-              color: white;
-              padding: 10px 20px;
-              border-radius: 5px;
-              font-family: Arial, sans-serif;
-              font-size: 14px;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0,0,0,0.95);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
               z-index: 10000;
-              pointer-events: none;
-              animation: fadeOut 3s forwards;
+              cursor: pointer;
+              color: white;
+              font-family: Arial, sans-serif;
             }
-            @keyframes fadeOut {
-              0%, 80% { opacity: 1; }
-              100% { opacity: 0; }
+            #fullscreen-overlay h1 {
+              font-size: 48px;
+              margin-bottom: 20px;
             }
-
+            #fullscreen-overlay p {
+              font-size: 24px;
+              opacity: 0.8;
+            }
+            #fullscreen-overlay .click-icon {
+              font-size: 80px;
+              margin-bottom: 30px;
+              animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+              0%, 100% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.1); opacity: 0.7; }
+            }
           </style>
         </head>
         <body>
           <canvas id="game-canvas"></canvas>
-          <div id="fullscreen-hint">Press F11 for fullscreen • Press ESC to exit</div>
+          <div id="fullscreen-overlay">
+            <div class="click-icon">🖱️</div>
+            <h1>Click to Start Fullscreen</h1>
+            <p>Il gioco apparirà a schermo intero</p>
+          </div>
+          <script>
+            var overlay = document.getElementById('fullscreen-overlay');
+            var canvas = document.getElementById('game-canvas');
+
+            function enterFullscreen() {
+              var elem = document.documentElement;
+              var promise = null;
+
+              if (elem.requestFullscreen) {
+                promise = elem.requestFullscreen();
+              } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+              } else if (elem.mozRequestFullScreen) {
+                elem.mozRequestFullScreen();
+              } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+              }
+
+              if (promise) {
+                promise.then(function() {
+                  overlay.style.display = 'none';
+                  document.body.style.cursor = 'none';
+                  // Update canvas size
+                  canvas.width = window.innerWidth;
+                  canvas.height = window.innerHeight;
+                }).catch(function(err) {
+                  console.log('Fullscreen failed:', err);
+                  // Hide overlay anyway, window is already maximized
+                  overlay.style.display = 'none';
+                });
+              } else {
+                overlay.style.display = 'none';
+              }
+            }
+
+            // Click anywhere to go fullscreen
+            overlay.addEventListener('click', enterFullscreen);
+
+            // Also support keyboard
+            document.addEventListener('keydown', function(e) {
+              if (overlay.style.display !== 'none') {
+                enterFullscreen();
+              } else if (e.key === 'Escape') {
+                // Allow ESC to exit fullscreen
+              } else if (e.key === 'f' || e.key === 'F') {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen();
+                } else {
+                  enterFullscreen();
+                }
+              }
+            });
+
+            // Handle fullscreen changes
+            document.addEventListener('fullscreenchange', function() {
+              if (document.fullscreenElement) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+              }
+            });
+
+            // Handle resize
+            window.addEventListener('resize', function() {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+            });
+          <\/script>
         </body>
         </html>
       `);
       dualMonitorWindow.document.close();
 
-      console.log('✅ Dual monitor window HTML created');
+      console.log('Dual monitor window HTML created');
 
-      // Get canvas from secondary window (simple mirror, no intro/title)
+      // Get canvas from secondary window
       dualMonitorCanvas = dualMonitorWindow.document.getElementById('game-canvas');
       dualMonitorCtx = dualMonitorCanvas.getContext('2d');
 
-      console.log('✅ Canvas element retrieved');
+      console.log('Canvas element retrieved');
       console.log('  Window inner size:', dualMonitorWindow.innerWidth + 'x' + dualMonitorWindow.innerHeight);
 
-      // Set canvas size to match target resolution
-      dualMonitorCanvas.width = targetWidth;
-      dualMonitorCanvas.height = targetHeight;
+      // Set initial canvas size
+      dualMonitorCanvas.width = dualMonitorWindow.innerWidth || targetWidth;
+      dualMonitorCanvas.height = dualMonitorWindow.innerHeight || targetHeight;
 
-      console.log('✅ Canvas resolution set to:', targetWidth + 'x' + targetHeight);
-
-      // Listen for fullscreen changes
-      dualMonitorWindow.document.addEventListener('fullscreenchange', function() {
-        var isFullscreen = !!dualMonitorWindow.document.fullscreenElement;
-        console.log('Fullscreen changed:', isFullscreen);
-        if (isFullscreen) {
-          console.log('  Screen now:', dualMonitorWindow.screen.width + 'x' + dualMonitorWindow.screen.height);
-          console.log('  Window now:', dualMonitorWindow.innerWidth + 'x' + dualMonitorWindow.innerHeight);
-        }
-      });
-
-      // Add keyboard shortcut to toggle fullscreen with F11 or F
-      dualMonitorWindow.document.addEventListener('keydown', function(e) {
-        if (e.key === 'F11' || (e.key === 'f' && !e.ctrlKey && !e.altKey)) {
-          e.preventDefault();
-          var elem = dualMonitorWindow.document.documentElement;
-          if (dualMonitorWindow.document.fullscreenElement) {
-            if (dualMonitorWindow.document.exitFullscreen) {
-              dualMonitorWindow.document.exitFullscreen();
-            }
-          } else {
-            if (elem.requestFullscreen) {
-              elem.requestFullscreen();
-            } else if (elem.webkitRequestFullscreen) {
-              elem.webkitRequestFullscreen();
-            } else if (elem.mozRequestFullScreen) {
-              elem.mozRequestFullScreen();
-            }
-          }
-        }
-      });
-
-      // Request fullscreen immediately
-      setTimeout(function() {
-        console.log('Requesting fullscreen...');
-        var elem = dualMonitorWindow.document.documentElement;
-
-        // Try multiple approaches
-        var fullscreenAttempt = null;
-        if (elem.requestFullscreen) {
-          fullscreenAttempt = elem.requestFullscreen();
-        } else if (elem.webkitRequestFullscreen) {
-          elem.webkitRequestFullscreen();
-        } else if (elem.mozRequestFullScreen) {
-          elem.mozRequestFullScreen();
-        } else if (elem.msRequestFullscreen) {
-          elem.msRequestFullscreen();
-        }
-
-        if (fullscreenAttempt) {
-          fullscreenAttempt.then(function() {
-            console.log('✅ Fullscreen activated via API');
-            var hint = dualMonitorWindow.document.getElementById('fullscreen-hint');
-            if (hint) hint.style.display = 'none';
-          }).catch(function(err) {
-            console.log('⚠️ Fullscreen API failed:', err.message);
-            console.log('💡 User can press F11 for fullscreen');
-          });
-        }
-
-        // Also listen for fullscreen change to update canvas size
-        dualMonitorWindow.addEventListener('resize', function() {
-          var oldWidth = dualMonitorCanvas.width;
-          var oldHeight = dualMonitorCanvas.height;
-          dualMonitorCanvas.width = dualMonitorWindow.innerWidth;
-          dualMonitorCanvas.height = dualMonitorWindow.innerHeight;
-          console.log('Window resized - Canvas:', oldWidth + 'x' + oldHeight, '→', dualMonitorCanvas.width + 'x' + dualMonitorCanvas.height);
-        });
-      }, 300);
+      console.log('Canvas resolution set to:', dualMonitorCanvas.width + 'x' + dualMonitorCanvas.height);
 
       isDualMonitorMode = true;
-      console.log('✅ Dual monitor mode activated');
+      console.log('Dual monitor mode activated');
 
       // Update UI
-      Dom.get('dual-monitor-status').style.display = 'block';
-      var btn = Dom.get('dual-monitor-btn');
-      btn.textContent = '❌ Close Dual Monitor';
-      btn.style.background = '#f44336';
-
-      // Make main canvas smaller for preview
-      canvas.style.width = '400px';
-      canvas.style.height = '300px';
+      updateDualMonitorUI(true);
 
       // Handle window close
       var checkWindowClosed = setInterval(function() {
@@ -2338,10 +2514,12 @@
         }
       }, 1000);
 
-      console.log('Dual monitor mode activated');
+      // Focus the new window so user can click to go fullscreen
+      dualMonitorWindow.focus();
     }
 
     function closeDualMonitorMode() {
+      // Close popup window if open
       if (dualMonitorWindow && !dualMonitorWindow.closed) {
         dualMonitorWindow.close();
       }
@@ -2351,15 +2529,8 @@
       dualMonitorCtx = null;
       isDualMonitorMode = false;
 
-      // Restore main canvas size
-      canvas.style.width = '640px';
-      canvas.style.height = '480px';
-
       // Update UI
-      Dom.get('dual-monitor-status').style.display = 'none';
-      var btn = Dom.get('dual-monitor-btn');
-      btn.textContent = '🖥️🖥️ Dual Monitor Mode';
-      btn.style.background = '#2196F3';
+      updateDualMonitorUI(false);
 
       console.log('Dual monitor mode deactivated');
     }
@@ -2374,6 +2545,23 @@
       mainIntroCtx = mainIntroCanvas.getContext('2d');
       mainTitleScreen = document.getElementById('main-title-screen');
       mainTitleImage = document.getElementById('main-title-image');
+
+      // Preload title images to avoid flicker between frames
+      var titleImagePaths = [
+        'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg',
+        'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg'
+      ];
+      titleImagePaths.forEach(function(path, index) {
+        var img = new Image();
+        img.src = path;
+        mainTitleImages[index] = img;
+      });
+
+      // Hide HUD during intro
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'none';
+      }
 
       // Set canvas to fill the screen
       mainIntroCanvas.width = window.innerWidth;
@@ -2536,37 +2724,29 @@
       }
 
       // Instant transition: show title and hide intro immediately
+      // Title is rendered directly on canvas using preloaded images
       mainCurrentTitleFrame = 1;
-      mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
-      mainTitleScreen.style.display = 'flex';
-      mainTitleScreen.style.opacity = '1';
-      mainTitleScreen.style.transition = 'none';
-
+      mainTitleScreen.style.display = 'none';
       mainIntroScreen.style.display = 'none';
     }
 
     function showMainTitleScreen(frameNumber) {
+      // Just set the frame number - images are already preloaded in mainTitleImages
       mainCurrentTitleFrame = frameNumber;
-
-      if (frameNumber === 1) {
-        mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg';
-      } else if (frameNumber === 2) {
-        mainTitleImage.src = 'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg';
-      }
-
-      // Instant change between title frames (no crossfade)
-      mainTitleScreen.style.display = 'flex';
-      mainTitleScreen.style.opacity = '1';
+      mainTitleScreen.style.display = 'none';
     }
 
     function hideMainTitleScreen() {
-      mainTitleScreen.style.transition = 'opacity 0.5s ease-out';
-      mainTitleScreen.style.opacity = '0';
+      // Title is rendered on canvas, just reset the frame counter
+      // The canvas will stop showing the title when mainCurrentTitleFrame is 0
+      mainCurrentTitleFrame = 0;
+      mainTitleScreen.style.display = 'none';
 
-      setTimeout(function() {
-        mainTitleScreen.style.display = 'none';
-        mainCurrentTitleFrame = 0;
-      }, 500);
+      // Show HUD when game starts
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'block';
+      }
     }
 
     //=========================================================================
@@ -2848,6 +3028,57 @@
     }
 
     //=========================================================================
+    // RENDER HUD ON DUAL MONITOR
+    //=========================================================================
+
+    function renderHudOnDualMonitor() {
+      if (!dualMonitorCtx) return;
+
+      // Don't show HUD during intro or title screens
+      if (mainIntroActive || mainCurrentTitleFrame > 0) return;
+
+      var ctx = dualMonitorCtx;
+      var canvasWidth = dualMonitorCanvas.width;
+      var canvasHeight = dualMonitorCanvas.height;
+
+      // HUD styling
+      var fontSize = Math.floor(canvasHeight / 25); // Responsive font size
+      var padding = Math.floor(canvasHeight / 40);
+      var hudHeight = fontSize + padding * 2;
+
+      // Background bar
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, canvasWidth, hudHeight);
+
+      // Border
+      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+      ctx.fillRect(0, hudHeight, canvasWidth, 2);
+
+      // Text styling
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.font = fontSize + 'px Verdana, Geneva, sans-serif';
+      ctx.textBaseline = 'middle';
+
+      var textY = hudHeight / 2;
+
+      // Speed (right)
+      var speedText = (hud.speed.value || 0) + ' km/h';
+      var speedWidth = ctx.measureText(speedText).width;
+      ctx.fillText(speedText, canvasWidth - speedWidth - padding, textY);
+
+      // Current lap time (left)
+      var currentTimeText = 'Time: ' + (hud.current_lap_time.value || '0.0');
+      ctx.fillText(currentTimeText, padding, textY);
+
+      // Fast lap time (center)
+      if (hud.fast_lap_time.value) {
+        var fastTimeText = 'Fastest Lap: ' + hud.fast_lap_time.value;
+        var fastTimeWidth = ctx.measureText(fastTimeText).width;
+        ctx.fillText(fastTimeText, (canvasWidth - fastTimeWidth) / 2, textY);
+      }
+    }
+
+    //=========================================================================
     // RENDER THE GAME WORLD
     //=========================================================================
 
@@ -2874,6 +3105,9 @@
 
         // Draw the main canvas content scaled to fit the second screen
         dualMonitorCtx.drawImage(canvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+
+        // Draw HUD on dual monitor
+        renderHudOnDualMonitor();
       }
     }
 
@@ -3035,21 +3269,31 @@
         }
 
         context.drawImage(introImg, drawX, drawY, drawWidth, drawHeight);
-      } else if (mainCurrentTitleFrame > 0 && mainTitleImage && mainTitleImage.complete) {
-        // Render title smaller and at the top of screen
-        var imgAspect = mainTitleImage.naturalWidth / mainTitleImage.naturalHeight;
+      } else if (mainCurrentTitleFrame > 0) {
+        // Use preloaded title images (index 0 = frame 1, index 1 = frame 2)
+        var titleImg = mainTitleImages[mainCurrentTitleFrame - 1];
+        if (titleImg && titleImg.complete && titleImg.naturalWidth > 0) {
+          // Render title fullscreen (cover mode, same as intro video)
+          var imgAspect = titleImg.naturalWidth / titleImg.naturalHeight;
+          var canvasAspect = renderWidth / renderHeight;
+          var drawWidth, drawHeight, drawX, drawY;
 
-        // Make title 85% of screen width
-        var titleWidthPercent = 0.85;
-        var drawWidth = renderWidth * titleWidthPercent;
-        var drawHeight = drawWidth / imgAspect;
+          if (imgAspect > canvasAspect) {
+            // Image is wider than canvas - fit height, center horizontally
+            drawHeight = renderHeight;
+            drawWidth = drawHeight * imgAspect;
+            drawX = -cameraShakeX + (renderWidth - drawWidth) / 2;
+            drawY = -cameraShakeY;
+          } else {
+            // Image is taller than canvas - fit width, center vertically
+            drawWidth = renderWidth;
+            drawHeight = drawWidth / imgAspect;
+            drawX = -cameraShakeX;
+            drawY = -cameraShakeY + (renderHeight - drawHeight) / 2;
+          }
 
-        // Position at top center with some padding
-        var topPadding = renderHeight * 0.05; // 5% from top
-        var drawX = -cameraShakeX + (renderWidth - drawWidth) / 2;
-        var drawY = -cameraShakeY + topPadding;
-
-        context.drawImage(mainTitleImage, drawX, drawY, drawWidth, drawHeight);
+          context.drawImage(titleImg, drawX, drawY, drawWidth, drawHeight);
+        }
       }
 
       // Restore canvas state after camera shake
@@ -3382,6 +3626,13 @@
                 img.onload = function() {
                   flashingImagesLoaded++;
                   console.log('Flashing image loaded:', imageName, '(' + flashingImagesLoaded + '/' + flashingImageNames.length + ')');
+
+                  // Update UI counter
+                  var countDisplay = document.getElementById('flash-images-count');
+                  if (countDisplay) {
+                    countDisplay.textContent = flashingImagesLoaded + ' image' + (flashingImagesLoaded !== 1 ? 's' : '') + ' loaded';
+                  }
+
                   if (flashingImagesLoaded === flashingImageNames.length) {
                     console.log('All flashing images loaded!');
                     // Select first image as default
@@ -3624,9 +3875,9 @@
         // Exited fullscreen
         console.log('Exited fullscreen, resizing to normal...');
         setTimeout(function() {
-          // Restore original dimensions
-          canvas.width = 1024;
-          canvas.height = 768;
+          // Restore original dimensions (Full HD)
+          canvas.width = 1920;
+          canvas.height = 1080;
 
           // Restore CSS display size
           canvas.style.width = '640px';
