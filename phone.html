@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Level 7 Camera</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0d0010;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      gap: 16px;
+    }
+    h1 { font-size: 1.4rem; color: #FF1493; letter-spacing: 2px; }
+    video {
+      width: 100%;
+      max-width: 420px;
+      border-radius: 10px;
+      border: 2px solid #FF1493;
+      background: #000;
+    }
+    #status {
+      font-size: 0.85rem;
+      opacity: 0.65;
+      text-align: center;
+    }
+    #status.connected { opacity: 1; color: #00BFFF; }
+    #status.error { opacity: 1; color: #ff4444; }
+    button {
+      padding: 14px 32px;
+      background: #FF1493;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    #dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #444;
+      display: inline-block;
+      margin-right: 6px;
+    }
+    #dot.live { background: #00ff88; box-shadow: 0 0 6px #00ff88; }
+  </style>
+</head>
+<body>
+  <h1>DIGGIEI — Level 7</h1>
+  <video id="preview" autoplay muted playsinline></video>
+  <div id="status"><span id="dot"></span>In attesa del PC...</div>
+  <button id="btn" onclick="startCamera()">Avvia Camera</button>
+
+  <script>
+    const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const socket = io();
+    let pc = null;
+
+    function setStatus(msg, cls) {
+      document.getElementById('status').innerHTML = '<span id="dot" class="' + (cls || '') + '"></span>' + msg;
+    }
+
+    socket.on('connect', () => {
+      socket.emit('join', 'phone');
+      setStatus('Connesso al server, in attesa del PC...');
+    });
+
+    socket.on('peer-joined', (role) => {
+      if (role === 'pc') setStatus('PC connesso! Avvia la camera.', 'live');
+    });
+
+    socket.on('peer-disconnected', (role) => {
+      if (role === 'pc') setStatus('PC disconnesso.', 'error');
+    });
+
+    socket.on('answer', async (answer) => {
+      if (!pc) return;
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      setStatus('Stream attivo!', 'live');
+      document.getElementById('dot').className = 'live';
+    });
+
+    socket.on('ice-candidate', async (candidate) => {
+      if (pc && candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+      }
+    });
+
+    async function startCamera() {
+      const btn = document.getElementById('btn');
+      btn.disabled = true;
+      setStatus('Accesso alla camera...');
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        document.getElementById('preview').srcObject = stream;
+
+        pc = new RTCPeerConnection(RTC_CONFIG);
+        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+        pc.onicecandidate = ({ candidate }) => {
+          if (candidate) socket.emit('ice-candidate', candidate);
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === 'connected') setStatus('Stream P2P attivo!', 'live');
+          if (pc.connectionState === 'failed') setStatus('Connessione fallita.', 'error');
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', offer);
+        setStatus('Offer inviata, in attesa del PC...');
+      } catch(e) {
+        setStatus('Errore camera: ' + e.message, 'error');
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+﻿â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+â•‘  LIVELLO 7 â€” "DIGGIEI"
+â•‘  Asset pronti da modificare e sostituire
+â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+ISTRUZIONI
+----------
+Modifica i file nelle sottocartelle qui sotto, poi esegui lo
+script sync_levels_to_game.ps1 (nella cartella principale) e
+ricarica il gioco nel browser (F5).
+
+I file NON si chiamano come nell'editor: lo script li rinomina
+automaticamente nel formato corretto (MAIUSCOLO) per il gioco.
+
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  elementi_pista\billboard_cartelloni\   (cartelloni ai bordi pista)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  billboard01.png   300 Ã— 170 px    â†’ nel gioco: BILLBOARD01.png
+  billboard02.png   215 Ã— 220 px    â†’ nel gioco: BILLBOARD02.png
+  billboard03.png   230 Ã— 220 px    â†’ nel gioco: BILLBOARD03.png
+  billboard04.png   268 Ã— 170 px    â†’ nel gioco: BILLBOARD04.png
+  billboard05.png   298 Ã— 190 px    â†’ nel gioco: BILLBOARD05.png
+  billboard06.png   298 Ã— 190 px    â†’ nel gioco: BILLBOARD06.png
+  billboard07.png   298 Ã— 190 px    â†’ nel gioco: BILLBOARD07.png
+  billboard08.png   385 Ã— 265 px    â†’ nel gioco: BILLBOARD08.png
+  billboard09.png   328 Ã— 282 px    â†’ nel gioco: BILLBOARD09.png
+
+  Sfondo trasparente. Il gioco scala in prospettiva automaticamente.
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  elementi_pista\vegetazione\   (elementi ai bordi pista)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  tree1.png         360 Ã— 360 px    â†’ nel gioco: TREE1.png
+  tree2.png         282 Ã— 295 px    â†’ nel gioco: TREE2.png
+  dead_tree1.png    135 Ã— 332 px    â†’ nel gioco: DEAD_TREE1.png
+  dead_tree2.png    150 Ã— 260 px    â†’ nel gioco: DEAD_TREE2.png
+  palm_tree.png     215 Ã— 540 px    â†’ nel gioco: PALM_TREE.png
+  bush1.png         240 Ã— 155 px    â†’ nel gioco: BUSH1.png
+  bush2.png         232 Ã— 152 px    â†’ nel gioco: BUSH2.png
+  cactus.png        235 Ã— 118 px    â†’ nel gioco: CACTUS.png
+  stump.png         195 Ã— 140 px    â†’ nel gioco: STUMP.png
+
+  Sfondo trasparente OBBLIGATORIO.
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  elementi_pista\ostacoli\   (ostacoli sulla pista)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  boulder1.png      168 Ã— 248 px    â†’ nel gioco: BOULDER1.png
+  boulder2.png      298 Ã— 140 px    â†’ nel gioco: BOULDER2.png
+  boulder3.png      320 Ã— 220 px    â†’ nel gioco: BOULDER3.png
+  column.png        200 Ã— 315 px    â†’ nel gioco: COLUMN.png
+
+  Sfondo trasparente OBBLIGATORIO.
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  background\   (sfondo â€” al momento solo come riferimento)
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  background\layer_cielo\sky.png          1280 Ã— 480 px
+  background\layer_cielo\sky_1..6.png    1280 Ã— 480 px
+  background\layer_colline\hills.png      1280 Ã— 480 px
+  background\layer_alberi\trees.png       1280 Ã— 480 px
+
+  NOTA: il caricamento automatico del background per livello
+  non Ã¨ ancora integrato nel gioco. I colori del cielo sono
+  definiti nel codice per ogni livello. Modifica i file per
+  preparare gli asset ma segnala quando sono pronti.
+
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+REGOLE D'ORO
+â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  âœ“ Stesso nome file (minuscolo, come indicato sopra)
+  âœ“ Stesse dimensioni in pixel
+  âœ“ Formato PNG
+  âœ“ Sfondo trasparente per sprites e vegetazione
+  âœ“ Dopo ogni modifica â†’ esegui sync_levels_to_game.ps1
+  âœ— Non aggiungere cartelle extra
+  âœ— Non rinominare i file

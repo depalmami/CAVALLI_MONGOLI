@@ -1,0 +1,57 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║   COME FUNZIONA: DALLA CARTELLA GRAFICO → AL GIOCO                  ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+Il gioco NON legge direttamente da questa cartella (ASSETS_PER_GRAFICO).
+C'è uno step di sincronizzazione da eseguire dopo ogni consegna di asset.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FLUSSO DI LAVORO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Il GRAFICO modifica i file dentro:
+     ASSETS_PER_GRAFICO\07_LIVELLI\04-cantiere\elementi_pista\...
+     ASSETS_PER_GRAFICO\07_LIVELLI\04-cantiere\background\...
+
+2. Si esegue lo script di sincronizzazione:
+     → doppio clic su: sync_levels_to_game.ps1
+     (oppure da PowerShell: .\sync_levels_to_game.ps1)
+
+3. Lo script copia i file nella cartella corretta del gioco
+   rinominandoli in MAIUSCOLO come richiesto dal codice:
+     ASSETS_PER_GRAFICO/.../billboard01.png → javascript-racer/images/levels/4-cantiere/BILLBOARD01.png
+     ASSETS_PER_GRAFICO/.../tree1.png       → javascript-racer/images/levels/4-cantiere/TREE1.png
+     ecc.
+
+4. Si ricarica il gioco nel browser (F5).
+   Gli sprite aggiornati compaiono nel livello corrispondente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOTA SUL BACKGROUND (sky / hills / trees)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Il background (cielo, colline, alberi all'orizzonte) NON viene
+caricato automaticamente per livello. Il sistema attuale usa colori
+solidi per il cielo e lo sfondo.
+
+I file sky.png / hills.png / trees.png dentro la cartella livello
+sono copiati come riferimento, ma richiedono integrazione nel codice
+per essere attivati. Per ora → modificare solo sprites e billboard.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+COSA CARICA IL GIOCO DA OGNI CARTELLA LIVELLO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  javascript-racer/images/levels/4-cantiere/
+    BILLBOARD01.png … BILLBOARD09.png   ← cartelloni
+    TREE1.png, TREE2.png               ← alberi
+    DEAD_TREE1.png, DEAD_TREE2.png     ← alberi secchi
+    PALM_TREE.png                      ← palma
+    BUSH1.png, BUSH2.png               ← cespugli
+    CACTUS.png                         ← cactus
+    STUMP.png                          ← ceppo
+    BOULDER1.png, BOULDER2.png,
+    BOULDER3.png                       ← massi
+    COLUMN.png                         ← colonna
+
+Se un file manca → il gioco usa lo sprite di default (nessun errore).
