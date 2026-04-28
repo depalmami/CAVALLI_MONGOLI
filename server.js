@@ -8,7 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'javascript-racer')));
+app.use(express.static(path.join(__dirname, 'javascript-racer'), { index: false }));
 
 app.get('/phone', (req, res) => {
   res.sendFile(path.join(__dirname, 'phone.html'));
