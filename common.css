@@ -1,0 +1,94 @@
+
+/****************************************/
+/* common styles used for v1 through v4 */
+/****************************************/
+
+body          { font-family: Arial, Helvetica, sans-serif; }
+#stats        { border: 2px solid black; }
+#controls     { width: 28em; float: left; padding: 1em; font-size: 0.7em; }
+#controls th  { text-align: right; vertical-align: middle; }
+#instructions { clear: left; float: left; width: 17em; padding: 1em; border: 1px solid black; box-shadow: 0 0 5px black; }
+#racer        { position: relative; z-index: 0; width: 640px; height: 480px; margin-left: 20em; border: 2px solid black; }
+#canvas       { position: absolute; z-index: 0; width: 640px; height: 480px; z-index: 0; background-color: #000; }
+#mute         { background-position:   0px 0px; width: 32px; height: 32px; background: url(images/mute.png); display: inline-block; cursor: pointer; position: absolute; margin-left: 20em; }
+#mute.on      { background-position: -32px 0px; }
+
+/**************************************************/
+/* rudimentary heads up display (only used in v4) */
+/**************************************************/
+
+#hud                   { position: absolute; z-index: 1; width: 100%; max-width: 640px; padding: 5px 0; font-family: Verdana, Geneva, sans-serif; font-size: 0.8em; background-color: rgba(255,0,0,0.4); color: black; border-bottom: 2px solid black; box-sizing: border-box; -moz-box-sizing: border-box; -webkit-box-sizing: border-box; }
+#hud .hud              { background-color: rgba(255,255,255,0.6); padding: 5px; border: 1px solid black; margin: 0 5px; transition-property: background-color; transition-duration: 2s; -webkit-transition-property: background-color; -webkit-transition-duration: 2s; }
+#hud #speed            { float: right; }
+#hud #current_lap_time { float: left;  }
+#hud #last_lap_time    { float: left; display: none;  }
+#hud #fast_lap_time    { display: block; width: 12em;  margin: 0 auto; text-align: center; transition-property: background-color; transition-duration: 2s; -webkit-transition-property: background-color; -webkit-transition-duration: 2s; }
+#hud .value            { color: black; font-weight: bold; }
+#hud .fastest          { background-color: rgba(255,215,0,0.5); }
+
+/**************************************************/
+/* fullscreen mode styles                         */
+/**************************************************/
+
+#racer:fullscreen,
+#racer:-webkit-full-screen,
+#racer:-moz-full-screen,
+#racer:-ms-fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: black;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+}
+
+#racer:fullscreen #canvas,
+#racer:-webkit-full-screen #canvas,
+#racer:-moz-full-screen #canvas,
+#racer:-ms-fullscreen #canvas {
+  width: 100vw !important;
+  height: 100vh !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  object-fit: fill !important;
+  image-rendering: auto !important;
+}
+
+#racer:fullscreen #hud,
+#racer:-webkit-full-screen #hud,
+#racer:-moz-full-screen #hud,
+#racer:-ms-fullscreen #hud {
+  width: 100vw !important;
+  max-width: none !important;
+  font-size: 1.5em;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 10 !important;
+  padding: 10px 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+#fullscreen-btn {
+  background: linear-gradient(to bottom, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  transition: all 0.3s;
+}
+
+#fullscreen-btn:hover {
+  background: linear-gradient(to bottom, #45a049, #3d8b40);
+  transform: scale(1.05);
+}
+
+#fullscreen-btn:active {
+  transform: scale(0.98);
+}
+

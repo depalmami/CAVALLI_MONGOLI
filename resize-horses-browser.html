@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Resize Horse Images</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #222;
+      color: #fff;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    button.disabled {
+      background: #666;
+      cursor: not-allowed;
+    }
+    #log {
+      background: #333;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success { color: #4CAF50; }
+    .error { color: #f44336; }
+    .info { color: #2196F3; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🐴 Resize Horse Images</h1>
+    <p>This tool will resize all PLAYER_STRAIGHT images to match the size of Cavallone DX/SX (384x1126)</p>
+
+    <button id="resizeBtn" onclick="resizeAllImages()">Start Resizing</button>
+
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const TARGET_WIDTH = 384;
+    const TARGET_HEIGHT = 1126;
+
+    const files = [
+      'PLAYER_STRAIGHT_1.png',
+      'PLAYER_STRAIGHT_2.png',
+      'PLAYER_STRAIGHT_3.png',
+      'PLAYER_STRAIGHT_4.png',
+      'PLAYER_STRAIGHT_5.png',
+      'PLAYER_STRAIGHT_6.png',
+      'PLAYER_STRAIGHT_7.png',
+      'PLAYER_STRAIGHT_8.png',
+      'PLAYER_UPHILL_STRAIGHT_1.png',
+      'PLAYER_UPHILL_STRAIGHT_2.png',
+      'PLAYER_UPHILL_STRAIGHT_3.png',
+      'PLAYER_UPHILL_STRAIGHT_4.png',
+      'PLAYER_UPHILL_STRAIGHT_5.png',
+      'PLAYER_UPHILL_STRAIGHT_6.png',
+      'PLAYER_UPHILL_STRAIGHT_7.png',
+      'PLAYER_UPHILL_STRAIGHT_8.png'
+    ];
+
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = message;
+      logDiv.appendChild(line);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function resizeImage(imagePath) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.width = TARGET_WIDTH;
+          canvas.height = TARGET_HEIGHT;
+          const ctx = canvas.getContext('2d');
+
+          // Use high quality image smoothing
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+
+          // Draw resized image
+          ctx.drawImage(img, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+
+          // Convert to blob
+          canvas.toBlob(function(blob) {
+            resolve(blob);
+          }, 'image/png');
+        };
+
+        img.onerror = function() {
+          reject(new Error('Failed to load image: ' + imagePath));
+        };
+
+        img.src = 'images/horses/' + imagePath;
+      });
+    }
+
+    async function resizeAllImages() {
+      const btn = document.getElementById('resizeBtn');
+      btn.disabled = true;
+      btn.className = 'disabled';
+
+      log('Starting resize process...', 'info');
+      log(`Target size: ${TARGET_WIDTH}x${TARGET_HEIGHT}`, 'info');
+      log(`Found ${files.length} images to process\n`, 'info');
+
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const file of files) {
+        try {
+          log(`Processing: ${file}...`);
+          const blob = await resizeImage(file);
+
+          // Create download link
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = file;
+          a.click();
+          URL.revokeObjectURL(url);
+
+          log(`✓ Resized and downloaded: ${file}`, 'success');
+          successCount++;
+
+          // Small delay between downloads
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (err) {
+          log(`✗ Error processing ${file}: ${err.message}`, 'error');
+          errorCount++;
+        }
+      }
+
+      log(`\n=== COMPLETED ===`, 'info');
+      log(`Success: ${successCount}`, 'success');
+      if (errorCount > 0) {
+        log(`Errors: ${errorCount}`, 'error');
+      }
+      log('\nNow manually replace the original files in images/horses/ with the downloaded resized versions.', 'info');
+
+      btn.disabled = false;
+      btn.className = '';
+    }
+  </script>
+</body>
+</html>

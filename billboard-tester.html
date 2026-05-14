@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Billboard Image Tester</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a1a;
+      color: #fff;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 {
+      color: #4CAF50;
+      text-align: center;
+    }
+    .billboard-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 30px;
+    }
+    .billboard-item {
+      background: #2a2a2a;
+      padding: 15px;
+      border-radius: 10px;
+      border: 2px solid #444;
+    }
+    .billboard-item h3 {
+      color: #4CAF50;
+      margin-top: 0;
+    }
+    .billboard-preview {
+      background: #333;
+      border: 2px dashed #666;
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 10px 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .billboard-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .billboard-info {
+      font-size: 12px;
+      color: #888;
+      margin-top: 10px;
+    }
+    input[type="file"] {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      background: #333;
+      border: 1px solid #555;
+      border-radius: 5px;
+      color: #fff;
+      cursor: pointer;
+      width: 100%;
+    }
+    .aspect-ratio {
+      color: #4CAF50;
+      font-weight: bold;
+    }
+    .instructions {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px solid #4CAF50;
+      margin-bottom: 30px;
+    }
+    .instructions h2 {
+      color: #4CAF50;
+      margin-top: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎨 Billboard Image Tester</h1>
+
+  <div class="instructions">
+    <h2>Come Usare Questo Tool</h2>
+    <p>Questo strumento ti permette di testare come le tue immagini appariranno sui billboard del gioco.</p>
+    <ol>
+      <li>Seleziona un'immagine per ogni billboard che vuoi testare</li>
+      <li>Vedrai un'anteprima di come l'immagine verrà adattata</li>
+      <li>Le dimensioni originali e l'aspect ratio sono mostrate sotto ogni preview</li>
+      <li>Una volta soddisfatto, usa l'Asset Editor nel gioco per caricare le immagini</li>
+    </ol>
+  </div>
+
+  <div class="billboard-container" id="billboard-container"></div>
+
+  <script>
+    const billboards = {
+      'BILLBOARD01': { w: 300, h: 170 },
+      'BILLBOARD02': { w: 215, h: 220 },
+      'BILLBOARD03': { w: 230, h: 220 },
+      'BILLBOARD04': { w: 268, h: 170 },
+      'BILLBOARD05': { w: 298, h: 190 },
+      'BILLBOARD06': { w: 298, h: 190 },
+      'BILLBOARD07': { w: 298, h: 190 },
+      'BILLBOARD08': { w: 385, h: 265 },
+      'BILLBOARD09': { w: 328, h: 282 }
+    };
+
+    function createBillboardItem(name, dims) {
+      const container = document.getElementById('billboard-container');
+
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'billboard-item';
+
+      const title = document.createElement('h3');
+      title.textContent = name;
+      itemDiv.appendChild(title);
+
+      const preview = document.createElement('div');
+      preview.className = 'billboard-preview';
+      preview.id = 'preview-' + name;
+      preview.innerHTML = '<span style="color: #666;">No image selected</span>';
+      preview.style.aspectRatio = (dims.w / dims.h).toFixed(2);
+      itemDiv.appendChild(preview);
+
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.onchange = function(e) {
+        handleImageUpload(e, name, preview);
+      };
+      itemDiv.appendChild(fileInput);
+
+      const info = document.createElement('div');
+      info.className = 'billboard-info';
+      info.innerHTML = `
+        <strong>Dimensioni originali:</strong> ${dims.w} x ${dims.h} px<br>
+        <strong>Aspect Ratio:</strong> <span class="aspect-ratio">${(dims.w / dims.h).toFixed(2)}:1</span><br>
+        <span id="info-${name}"></span>
+      `;
+      itemDiv.appendChild(info);
+
+      container.appendChild(itemDiv);
+    }
+
+    function handleImageUpload(event, billboardName, previewDiv) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          // Clear preview
+          previewDiv.innerHTML = '';
+
+          // Create image element
+          const displayImg = document.createElement('img');
+          displayImg.src = e.target.result;
+          previewDiv.appendChild(displayImg);
+
+          // Update info
+          const infoSpan = document.getElementById('info-' + billboardName);
+          const imgAspectRatio = (img.width / img.height).toFixed(2);
+          const billboardAspectRatio = (billboards[billboardName].w / billboards[billboardName].h).toFixed(2);
+
+          let warningText = '';
+          if (Math.abs(imgAspectRatio - billboardAspectRatio) > 0.2) {
+            warningText = '<br><span style="color: #ff9800;">⚠️ Warning: Aspect ratio differs significantly. Image may be distorted.</span>';
+          } else {
+            warningText = '<br><span style="color: #4CAF50;">✓ Good aspect ratio match!</span>';
+          }
+
+          infoSpan.innerHTML = `
+            <strong>Your image:</strong> ${img.width} x ${img.height} px<br>
+            <strong>Your aspect ratio:</strong> <span class="aspect-ratio">${imgAspectRatio}:1</span>
+            ${warningText}
+          `;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Initialize all billboards
+    Object.keys(billboards).forEach(name => {
+      createBillboardItem(name, billboards[name]);
+    });
+  </script>
+</body>
+</html>

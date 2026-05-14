@@ -1,0 +1,4955 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>Horse Racing Game - Mongolian Horses</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link href="common.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#6366F1",
+            "background-light": "#F9FAFB",
+            "background-dark": "#111827",
+          },
+          fontFamily: {
+            display: ["Roboto", "sans-serif"],
+          },
+          borderRadius: {
+            DEFAULT: "0.5rem",
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Tailwind Range Slider Styles */
+    input[type=range]::-webkit-slider-runnable-track {
+      background: #E5E7EB;
+    }
+    .dark input[type=range]::-webkit-slider-runnable-track {
+      background: #4B5563;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      background-color: #6366F1;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 9999px;
+      margin-top: -6px;
+    }
+
+    /* Override common.css fixed dimensions for responsive canvas */
+    #racer {
+      width: 100% !important;
+      height: auto !important;
+      margin-left: 0 !important;
+      border: none !important;
+      position: relative !important;
+    }
+    #canvas-wrapper {
+      position: relative;
+      display: block;
+      width: 100%;
+    }
+    #canvas {
+      position: relative !important;
+      width: 100% !important;
+      height: auto !important;
+      display: block;
+    }
+    #title-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #hud {
+      max-width: 100% !important;
+    }
+
+    /* Intro screen animation */
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    /* Asset Editor Modal Styles */
+    #asset-editor-modal {
+      display: none;
+      position: fixed;
+      z-index: 10000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+      overflow: auto;
+    }
+
+    #asset-editor-content {
+      background-color: #222;
+      margin: 2% auto;
+      padding: 20px;
+      border: 2px solid #888;
+      width: 90%;
+      max-width: 1200px;
+      border-radius: 10px;
+      color: #fff;
+    }
+
+    .asset-editor-close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      line-height: 20px;
+    }
+
+    .asset-editor-close:hover,
+    .asset-editor-close:focus {
+      color: #fff;
+    }
+
+    .asset-category {
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #333;
+      border-radius: 5px;
+    }
+
+    .asset-category h3 {
+      margin-top: 0;
+      color: #4CAF50;
+      border-bottom: 2px solid #4CAF50;
+      padding-bottom: 10px;
+    }
+
+    .asset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+      margin-top: 15px;
+    }
+
+    .asset-item {
+      background-color: #444;
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    .asset-item label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 5px;
+      color: #aaa;
+    }
+
+    .asset-preview {
+      width: 100%;
+      height: 100px;
+      background-color: #555;
+      border: 1px solid #666;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .asset-preview img {
+      max-width: 100%;
+      max-height: 100%;
+      image-rendering: pixelated;
+    }
+
+    .asset-upload-btn {
+      background-color: #4CAF50;
+      color: white;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      width: 100%;
+    }
+
+    .asset-upload-btn:hover {
+      background-color: #45a049;
+    }
+
+    .asset-reset-btn {
+      background-color: #f44336;
+      color: white;
+      padding: 5px 10px;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      width: 100%;
+      margin-top: 5px;
+    }
+
+    .asset-reset-btn:hover {
+      background-color: #da190b;
+    }
+
+    input[type="file"].asset-file-input {
+      display: none;
+    }
+
+    /* Pause Menu Styles */
+    #pause-menu {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(5px);
+    }
+
+    #pause-menu-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: #1a1a1a;
+      padding: 40px;
+      border: 3px solid #4CAF50;
+      border-radius: 15px;
+      text-align: center;
+      min-width: 400px;
+      box-shadow: 0 0 30px rgba(76, 175, 80, 0.5);
+    }
+
+    #pause-menu h2 {
+      color: #4CAF50;
+      margin-top: 0;
+      font-size: 36px;
+      text-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+    }
+
+    #pause-menu-buttons {
+      margin-top: 30px;
+    }
+
+    .pause-btn {
+      display: block;
+      width: 100%;
+      padding: 15px 30px;
+      margin: 10px 0;
+      font-size: 18px;
+      cursor: pointer;
+      border: 2px solid #4CAF50;
+      background-color: #2a2a2a;
+      color: #fff;
+      border-radius: 5px;
+      transition: all 0.3s;
+    }
+
+    .pause-btn:hover {
+      background-color: #4CAF50;
+      transform: scale(1.05);
+      box-shadow: 0 0 15px rgba(76, 175, 80, 0.7);
+    }
+
+    .pause-btn.primary {
+      background-color: #4CAF50;
+      font-weight: bold;
+    }
+
+    .pause-btn.primary:hover {
+      background-color: #45a049;
+    }
+
+    .pause-controls {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #444;
+      color: #aaa;
+      font-size: 14px;
+      text-align: left;
+    }
+
+    .pause-controls h4 {
+      color: #4CAF50;
+      margin-bottom: 10px;
+    }
+
+    .pause-controls p {
+      margin: 5px 0;
+    }
+
+    /* Level Selector Buttons */
+    .level-btn {
+      background-color: #374151;
+      color: #9CA3AF;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .level-btn:hover {
+      background-color: #4B5563;
+      color: #E5E7EB;
+      transform: scale(1.05);
+    }
+    .level-btn-active {
+      background-color: #6366F1 !important;
+      color: #FFFFFF !important;
+      border-color: #818CF8 !important;
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+    }
+    .level-btn-active.level-modified {
+      box-shadow: 0 0 12px rgba(234, 179, 8, 0.5);
+      border-color: #EAB308 !important;
+    }
+    .level-btn.transitioning {
+      animation: levelPulse 0.5s infinite;
+    }
+    @keyframes levelPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+  </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark font-display">
+
+  <!-- Modern Control Panel -->
+  <div class="min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Horse Racing Visuals</h1>
+          <p class="text-gray-600 dark:text-gray-400">Control Panel for Live Performance</p>
+        </div>
+        <button id="theme-toggle" class="p-2 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+          <span class="material-icons text-gray-700 dark:text-gray-200">dark_mode</span>
+        </button>
+      </div>
+
+      <!-- Game Preview Card -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6">
+        <h2 class="text-lg font-bold mb-3 text-gray-900 dark:text-white">Game Preview</h2>
+        <div id="racer-container" class="aspect-video bg-black rounded overflow-hidden">
+          <!-- Canvas will be moved here -->
+        </div>
+      </div>
+
+      <!-- Song Level Selector -->
+      <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md mb-6">
+        <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">
+          <span class="material-icons text-base align-middle mr-1">music_note</span>
+          Song Level
+        </h3>
+        <div class="grid grid-cols-7 gap-2" id="level-buttons-container">
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="1" id="level-btn-1" onclick="applyLevel(1)">
+            <span class="text-lg font-bold">1</span>
+            <span class="mt-1">BULLONCINO</span>
+            <span class="text-[10px] opacity-60">Industrial</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="2" id="level-btn-2" onclick="applyLevel(2)">
+            <span class="text-lg font-bold">2</span>
+            <span class="mt-1">HANNO FALLITO</span>
+            <span class="text-[10px] opacity-60">Glitch</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="3" id="level-btn-3" onclick="applyLevel(3)">
+            <span class="text-lg font-bold">3</span>
+            <span class="mt-1">ODORE DEL BUONGIORNO</span>
+            <span class="text-[10px] opacity-60">Swamp</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="4" id="level-btn-4" onclick="applyLevel(4)">
+            <span class="text-lg font-bold">4</span>
+            <span class="mt-1">CANTIERE</span>
+            <span class="text-[10px] opacity-60">Construction</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="5" id="level-btn-5" onclick="applyLevel(5)">
+            <span class="text-lg font-bold">5</span>
+            <span class="mt-1">SEGRETO DEL RAP</span>
+            <span class="text-[10px] opacity-60">Neon Street</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="6" id="level-btn-6" onclick="applyLevel(6)">
+            <span class="text-lg font-bold">6</span>
+            <span class="mt-1">COME TU DICI</span>
+            <span class="text-[10px] opacity-60">Aquatic</span>
+          </button>
+          <button class="level-btn flex flex-col items-center py-3 px-2 rounded text-xs font-medium" data-level="7" id="level-btn-7" onclick="applyLevel(7)">
+            <span class="text-lg font-bold">7</span>
+            <span class="mt-1">DIGGIEI</span>
+            <span class="text-[10px] opacity-60">Club</span>
+          </button>
+        </div>
+        <!-- Level 7 Camera Source panel -->
+        <div id="webcam-panel" class="mt-3 p-2 rounded bg-purple-50 dark:bg-purple-950 border border-purple-300 dark:border-purple-700">
+          <div class="text-xs font-semibold text-purple-700 dark:text-purple-300 mb-2">Level 7 — Camera Source</div>
+          <div class="flex flex-wrap gap-2 items-center">
+            <button id="webcam-local-btn" onclick="startLocalWebcam()"
+              class="px-3 py-1 text-xs rounded bg-purple-600 hover:bg-purple-700 text-white font-medium">
+              PC / USB Webcam
+            </button>
+            <button id="webcam-phone-btn" onclick="initWebcamWebRTC()"
+              class="px-3 py-1 text-xs rounded bg-pink-600 hover:bg-pink-700 text-white font-medium">
+              Phone (WebRTC)
+            </button>
+            <button id="webcam-stop-btn" onclick="stopWebcam()"
+              class="px-3 py-1 text-xs rounded bg-gray-500 hover:bg-gray-600 text-white font-medium hidden">
+              Stop Camera
+            </button>
+            <span id="webcam-status" class="text-xs text-gray-500 dark:text-gray-400">Off</span>
+          </div>
+        </div>
+
+        <div class="mt-3 flex items-center justify-between">
+          <div id="level-status" class="text-xs text-gray-500 dark:text-gray-400">
+            Current: <span id="level-current-name" class="font-medium text-indigo-500">None</span>
+          </div>
+          <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500 dark:text-gray-400">Transition:</label>
+              <select id="level-transition-speed" class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-900 dark:text-white">
+                <option value="500">Fast (0.5s)</option>
+                <option value="2000" selected>Normal (2s)</option>
+                <option value="4000">Slow (4s)</option>
+              </select>
+            </div>
+            <span class="text-[10px] text-gray-400 dark:text-gray-500">Keys 1-7 for quick switch</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Control Panels Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <!-- Game Settings Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Game Settings</h3>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Resolution</label>
+              <select id="resolution" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                <option selected value='fullhd'>Full HD (1920x1080)</option>
+                <option value='fine'>Fine (1280x960)</option>
+                <option value='high'>High (1024x768)</option>
+                <option value='medium'>Medium (640x480)</option>
+                <option value='low'>Low (480x360)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Lanes</label>
+              <input id="lanes" type="range" min="1" max="4" value="3" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>1</span>
+                <span id="lanes-value" class="font-medium">3</span>
+                <span>4</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Track Width</label>
+              <input id="roadWidth" type="range" min="500" max="3000" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="roadWidth-value">1500</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Cam Height</label>
+              <input id="cameraHeight" type="range" min="500" max="5000" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="cameraHeight-value">1000</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Draw Dist</label>
+              <input id="drawDistance" type="range" min="100" max="500" class="w-full">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+                <span id="drawDistance-value">300</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Audio Reactivity Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Audio Reactivity</h3>
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-2">
+              <button id="audio-file-btn" class="flex flex-col items-center justify-center gap-2 py-3 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                <span class="material-icons text-base">audiotrack</span>
+                <span class="text-xs">Use Audio File</span>
+              </button>
+              <button id="use-mic-btn" class="flex flex-col items-center justify-center gap-2 py-3 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity">
+                <span class="material-icons text-base">mic</span>
+                <span class="text-xs">Use IN</span>
+              </button>
+            </div>
+            <button id="mute-audio-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">volume_up</span>
+              Mute Audio Input
+            </button>
+            <input id="audioFile" type="file" accept="audio/*" class="hidden">
+            <div id="audio-status" class="text-xs text-center text-gray-500 dark:text-gray-400 py-2 bg-gray-100 dark:bg-gray-700 rounded">
+              No audio source selected
+            </div>
+            <audio id="audioPlayer" controls class="w-full hidden"></audio>
+            <!-- Audio Level Meter -->
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Audio Level</label>
+              <div class="w-full h-8 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden relative">
+                <div id="audio-meter-bar" class="h-full bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 transition-all duration-75" style="width: 0%"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <span id="audio-meter-value" class="text-xs font-bold text-gray-700 dark:text-gray-200">0%</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Shake</label>
+              <input id="shakeIntensity" type="range" min="0" max="200" value="50" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>0%</span>
+                <span id="shake-value">50%</span>
+                <span>200%</span>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Zoom</label>
+              <input id="zoomIntensity" type="range" min="0" max="200" value="50" class="w-full">
+              <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span>0%</span>
+                <span id="zoom-value">50%</span>
+                <span>200%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visual Effects Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Visual Effects</h3>
+          <div class="space-y-4">
+            <button id="tap-btn" class="w-full flex items-center justify-center gap-2 py-3 px-3 bg-primary text-white text-lg font-medium rounded hover:opacity-90 transition-opacity">
+              <span class="material-icons">touch_app</span>
+              TAP (T)
+            </button>
+            <div class="text-center">
+              <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Current BPM:</div>
+              <div id="bpm-display" class="text-2xl font-bold text-primary">511</div>
+            </div>
+            <div class="flex items-center justify-between py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">White Flash Controls</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="flash-toggle" type="checkbox" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+              </label>
+            </div>
+            <div class="flex items-center justify-between py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Image Flash</label>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="flash-image-toggle" type="checkbox" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary/20 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
+              </label>
+            </div>
+            <div class="py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Flash Image Mode</label>
+              <select id="flash-image-mode" class="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
+                <option value="random" selected>Random</option>
+                <option value="sequential">Sequential</option>
+              </select>
+              <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="flash-images-count">0 images loaded</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Asset Management Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Asset Management</h3>
+          <div class="space-y-3">
+            <button id="open-asset-editor" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">collections</span>
+              Open Asset Editor
+            </button>
+            <button id="open-sprite-selector" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+              <span class="material-icons text-base">casino</span>
+              Configure Randomization
+            </button>
+            <button id="clear-storage-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600 transition-colors">
+              <span class="material-icons text-base">delete_sweep</span>
+              Clear All Saved
+            </button>
+            <div id="storage-status" class="text-xs text-center text-gray-500 dark:text-gray-400"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Display Mode & Controller Info Row -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+
+        <!-- Display Mode Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Display Mode</h3>
+          <div class="space-y-3">
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="fullscreen-btn">
+              <span class="material-icons text-base">fullscreen</span>
+              Fullscreen Mode
+            </button>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="dual-monitor-btn">
+              <span class="material-icons text-base">desktop_windows</span>
+              Dual Monitor Mode
+            </button>
+            <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
+          </div>
+        </div>
+
+        <!-- Controller Info Card -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Controller Info</h3>
+          <div class="space-y-3">
+            <div class="text-sm text-gray-700 dark:text-gray-300">
+              <p class="mb-2">Use the <strong>arrow keys</strong> or <strong>Xbox controller</strong> to control your horse!</p>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                Left Stick/D-Pad = Steer | RT/A = Accelerate | LT/B = Brake
+              </p>
+            </div>
+            <div id="gamepad-status-display" class="flex items-center gap-2 py-2 px-3 bg-gray-100 dark:bg-gray-700 rounded">
+              <span class="material-icons text-gray-400">sports_esports</span>
+              <span id="gamepad-status-text" class="text-sm font-medium text-gray-500 dark:text-gray-400">No controller connected</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden elements for compatibility -->
+  <div style="display: none;">
+    <table id="controls">
+    <tr>
+      <td colspan="2">
+        <a href='v4.final.html'>car version</a> |
+        <a href='horse-racing.html'><strong>horse racing</strong></a>
+      </td>
+    </tr>
+    <tr><td id="fps" colspan="2" align="right"></td></tr>
+    <tr>
+      <th><label for="resolution">Resolution :</label></th>
+      <td>
+        <select id="resolution" style="width:100%">
+          <option selected value='fullhd'>Full HD (1920x1080)</option>
+          <option value='fine'>Fine (1280x960)</option>
+          <option value='high'>High (1024x768)</option>
+          <option value='medium'>Medium (640x480)</option>
+          <option value='low'>Low (480x360)</option>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <th><label for="lanes">Lanes :</label></th>
+      <td>
+        <select id="lanes">
+          <option>1</option>
+          <option>2</option>
+          <option selected>3</option>
+          <option>4</option>
+        </select>
+      </td>
+    </tr>
+    <tr>
+      <th><label for="roadWidth">Track Width (<span id="currentRoadWidth"></span>) :</label></th>
+      <td><input id="roadWidth" type='range' min='500' max='3000' title="integer (500-3000)"></td>
+    </tr>
+    <tr>
+      <th><label for="cameraHeight">CameraHeight (<span id="currentCameraHeight"></span>) :</label></th>
+      <td><input id="cameraHeight" type='range' min='500' max='5000' title="integer (500-5000)"></td>
+    </tr>
+    <tr>
+      <th><label for="drawDistance">Draw Distance (<span id="currentDrawDistance"></span>) :</label></th>
+      <td><input id="drawDistance" type='range' min='100' max='500' title="integer (100-500)"></td>
+    </tr>
+    <tr>
+      <th><label for="fieldOfView">Field of View (<span id="currentFieldOfView"></span>) :</label></th>
+      <td><input id="fieldOfView" type='range' min='80' max='140' title="integer (80-140)"></td>
+    </tr>
+    <tr>
+      <th><label for="fogDensity">Fog Density (<span id="currentFogDensity"></span>) :</label></th>
+      <td><input id="fogDensity" type='range' min='0' max='50' title="integer (0-50)"></td>
+    </tr>
+    <tr>
+      <th colspan="2" style="padding-top: 20px; border-top: 2px solid #333;">Audio Reactivity</th>
+    </tr>
+    <tr>
+      <th><label for="audioFile">Audio File :</label></th>
+      <td><input id="audioFile" type='file' accept="audio/*" style="width:100%"></td>
+    </tr>
+    <tr>
+      <th><label for="audioPlayer">Player :</label></th>
+      <td>
+        <audio id="audioPlayer" controls style="width:100%; display:none;"></audio>
+        <div id="audioStatus" style="text-align:center; color:#666;">No audio loaded</div>
+      </td>
+    </tr>
+    <tr>
+      <th><label for="shakeIntensity">Shake Intensity (<span id="currentShakeIntensity"></span>) :</label></th>
+      <td><input id="shakeIntensity" type='range' min='0' max='100' value='50' title="integer (0-100)"></td>
+    </tr>
+    <tr>
+      <th colspan="2" style="padding-top: 20px; border-top: 2px solid #333;">
+        Asset Management
+        <button id="open-asset-editor" style="float: right; padding: 5px 15px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 3px;">
+          🎨 Open Asset Editor
+        </button>
+      </th>
+    </tr>
+    <tr>
+      <th colspan="2" style="padding-top: 10px; text-align: center;">
+        <button id="clear-storage-btn" style="padding: 8px 20px; cursor: pointer; background: #f44336; color: white; border: none; border-radius: 3px; font-weight: bold;">
+          🗑️ Clear All Saved Customizations
+        </button>
+        <div id="storage-status" style="font-size: 11px; color: #666; margin-top: 5px;"></div>
+      </th>
+    </tr>
+  </table>
+  <div id="gamepad-status" style="display:none;"></div>
+  <div id='instructions' style="display:none;"></div>
+  </div>
+
+  <div id="racer">
+    <!-- Intro Screen (hidden - now rendered on canvas) -->
+    <div id="main-intro-screen" style="display: none;">
+      <canvas id="main-intro-canvas"></canvas>
+    </div>
+    <!-- Title Screen (hidden - now rendered on canvas) -->
+    <div id="main-title-screen" style="display: none;">
+      <img id="main-title-image" style="width: 100%; height: 100%; object-fit: cover;" />
+    </div>
+    <div id="hud">
+      <span id="speed"            class="hud"><span id="speed_value" class="value">0</span> km/h</span>
+      <span id="current_lap_time" class="hud">Time: <span id="current_lap_time_value" class="value">0.0</span></span>
+      <span id="last_lap_time"    class="hud">Last Lap: <span id="last_lap_time_value" class="value">0.0</span></span>
+      <span id="fast_lap_time"    class="hud">Fastest Lap: <span id="fast_lap_time_value" class="value">0.0</span></span>
+    </div>
+    <div id="canvas-wrapper">
+      <canvas id="canvas">
+        Sorry, this example cannot be run because your browser does not support the &lt;canvas&gt; element
+      </canvas>
+      <canvas id="title-canvas"></canvas>
+    </div>
+    <div id="loading">Loading horse sprites...</div>
+  </div>
+
+  <!-- Asset Editor Modal -->
+  <div id="asset-editor-modal">
+    <div id="asset-editor-content">
+      <span class="asset-editor-close">&times;</span>
+      <h2>🎨 Asset Editor</h2>
+      <p style="color: #aaa; font-size: 14px;">Customize game sprites by uploading your own images. Click "Upload" to replace any sprite, or "Reset" to restore defaults.</p>
+      <p style="color: #4CAF50; font-size: 14px; font-weight: bold;">📋 Billboard Tip: Your uploaded images will be stretched to fit the billboard frame. For best results, use images with similar aspect ratios to the original billboard.</p>
+
+      <div id="asset-categories-container">
+        <!-- Categories will be generated dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="pause-menu">
+    <div id="pause-menu-content">
+      <h2>⏸️ PAUSED</h2>
+      <div id="pause-menu-buttons">
+        <button class="pause-btn primary" id="resume-btn">▶️ Resume Game</button>
+        <button class="pause-btn" id="restart-btn">🔄 Restart Race</button>
+        <button class="pause-btn" id="main-menu-btn">🏠 Main Menu</button>
+      </div>
+      <div class="pause-controls">
+        <h4>Controls:</h4>
+        <p><strong>Keyboard:</strong> Arrow Keys / WASD</p>
+        <p><strong>Gamepad:</strong> Left Stick / D-Pad + RT/A</p>
+        <p><strong>Pause:</strong> ESC / P / Start Button</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="stats.js"></script>
+  <script src="common.js"></script>
+  <!-- socket.io: available only when served via server.js; fails silently otherwise -->
+  <script src="/socket.io/socket.io.js" onerror="console.info('socket.io not available — webcam disabled')"></script>
+
+  <!-- Dark Mode Toggle Script -->
+  <script>
+    document.getElementById('theme-toggle').addEventListener('click', function() {
+      document.documentElement.classList.toggle('dark');
+      // Save preference to localStorage
+      if (document.documentElement.classList.contains('dark')) {
+        localStorage.setItem('theme', 'dark');
+      } else {
+        localStorage.setItem('theme', 'light');
+      }
+    });
+
+    // Load saved theme preference and move racer div
+    window.addEventListener('DOMContentLoaded', function() {
+      var savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+
+      // Move #racer div into the game preview container
+      var racerDiv = document.getElementById('racer');
+      var racerContainer = document.getElementById('racer-container');
+      if (racerDiv && racerContainer) {
+        racerContainer.appendChild(racerDiv);
+        // Remove the aspect-video class and styles since racer has its own sizing
+        racerContainer.classList.remove('aspect-video');
+        racerContainer.style.height = 'auto';
+      }
+    });
+
+    // Sync flash toggle checkbox with flashEnabled variable
+    document.getElementById('flash-toggle').addEventListener('change', function() {
+      toggleFlash();
+    });
+
+    // Sync flash image toggle checkbox with flashImageEnabled variable
+    document.getElementById('flash-image-toggle').addEventListener('change', function() {
+      toggleFlashImage();
+    });
+
+    // Flash image mode selector
+    document.getElementById('flash-image-mode').addEventListener('change', function() {
+      flashImageMode = this.value;
+      flashingImageIndex = 0; // Reset index when changing mode
+      console.log('Flash image mode changed to:', flashImageMode);
+    });
+
+    // Update gamepad status display
+    function updateGamepadUIStatus() {
+      var statusIcon = document.querySelector('#gamepad-status-display .material-icons');
+      var statusText = document.getElementById('gamepad-status-text');
+      if (gamepadConnected) {
+        statusIcon.className = 'material-icons text-green-500';
+        statusText.className = 'font-medium text-green-600 dark:text-green-400';
+        statusText.textContent = 'Xbox Controller Connected';
+      } else {
+        statusIcon.className = 'material-icons text-gray-400';
+        statusText.className = 'font-medium text-gray-500 dark:text-gray-400';
+        statusText.textContent = 'No controller connected';
+      }
+    }
+
+    // Update slider values
+    function updateSliderValues() {
+      // Lanes
+      var lanesSlider = document.getElementById('lanes');
+      var lanesValue = document.getElementById('lanes-value');
+      if (lanesSlider && lanesValue) {
+        lanesSlider.addEventListener('input', function() {
+          lanesValue.textContent = this.value;
+        });
+      }
+
+      // Track Width
+      var roadWidthSlider = document.getElementById('roadWidth');
+      var roadWidthValue = document.getElementById('roadWidth-value');
+      if (roadWidthSlider && roadWidthValue) {
+        roadWidthSlider.addEventListener('input', function() {
+          roadWidthValue.textContent = this.value;
+        });
+      }
+
+      // Camera Height
+      var cameraHeightSlider = document.getElementById('cameraHeight');
+      var cameraHeightValue = document.getElementById('cameraHeight-value');
+      if (cameraHeightSlider && cameraHeightValue) {
+        cameraHeightSlider.addEventListener('input', function() {
+          cameraHeightValue.textContent = this.value;
+        });
+      }
+
+      // Draw Distance
+      var drawDistanceSlider = document.getElementById('drawDistance');
+      var drawDistanceValue = document.getElementById('drawDistance-value');
+      if (drawDistanceSlider && drawDistanceValue) {
+        drawDistanceSlider.addEventListener('input', function() {
+          drawDistanceValue.textContent = this.value;
+        });
+      }
+
+      // Shake
+      var shakeSlider = document.getElementById('shakeIntensity');
+      var shakeValue = document.getElementById('shake-value');
+      if (shakeSlider && shakeValue) {
+        shakeSlider.addEventListener('input', function() {
+          shakeValue.textContent = this.value + '%';
+        });
+      }
+
+      // Zoom
+      var zoomSlider = document.getElementById('zoomIntensity');
+      var zoomValue = document.getElementById('zoom-value');
+      if (zoomSlider && zoomValue) {
+        zoomSlider.addEventListener('input', function() {
+          zoomValue.textContent = this.value + '%';
+        });
+      }
+    }
+
+    // Initialize slider values on load
+    window.addEventListener('DOMContentLoaded', updateSliderValues);
+
+    // Audio File button
+    document.getElementById('audio-file-btn').addEventListener('click', function() {
+      document.getElementById('audioFile').click();
+    });
+
+    // Use IN (Microphone) button
+    document.getElementById('use-mic-btn').addEventListener('click', function() {
+      setupMicrophoneInput();
+    });
+
+    // Mute Audio Input button
+    document.getElementById('mute-audio-btn').addEventListener('click', function() {
+      toggleAudioInputMute();
+    });
+
+  </script>
+
+  <script>
+
+    var fps            = 60;                      // how many 'update' frames per second
+    var step           = 1/fps;                   // how long is each frame (in seconds)
+    var width          = 1920;                    // logical canvas width
+    var height         = 1080;                    // logical canvas height
+    var centrifugal    = 0.3;                     // centrifugal force multiplier when going around curves
+    var offRoadDecel   = 0.99;                    // speed multiplier when off road
+    var skySpeed       = 0.001;                   // background sky layer scroll speed
+    var hillSpeed      = 0.002;                   // background hill layer scroll speed
+    var treeSpeed      = 0.003;                   // background tree layer scroll speed
+    var skyOffset      = 0;                       // current sky scroll offset
+    var hillOffset     = 0;                       // current hill scroll offset
+    var treeOffset     = 0;                       // current tree scroll offset
+    var segments       = [];                      // array of road segments
+    var cars           = [];                      // array of horses on the track
+    var stats          = Game.stats('fps');       // mr.doobs FPS counter
+    var canvas         = Dom.get('canvas');       // our canvas...
+    var ctx            = canvas.getContext('2d'); // ...and its drawing context
+    var titleCanvas    = Dom.get('title-canvas'); // overlay canvas for titles (no level filter)
+    var titleCtx       = titleCanvas.getContext('2d');
+    var background     = null;                    // our background image
+
+    // Dual monitor support
+    var dualMonitorWindow = null;                 // Secondary window reference
+    var dualMonitorCanvas = null;                 // Canvas in secondary window
+    var dualMonitorCtx = null;                    // Context for secondary canvas
+    var isDualMonitorMode = false;                // Track if dual monitor is active
+
+    // Main screen intro/title support
+    var mainIntroScreen = null;                   // Main intro screen element
+    var mainIntroCanvas = null;                   // Main intro canvas
+    var mainIntroCtx = null;                      // Main intro canvas context
+    var mainTitleScreen = null;                   // Main title screen element
+    var mainTitleImage = null;                    // Main title image element (for compatibility)
+    var mainTitleImages = [];                     // Preloaded title images [frame1, frame2]
+    var mainIntroActive = true;                   // Track if main intro is active
+    var mainCurrentTitleFrame = 0;                // 0 = not shown, 1 = first frame, 2 = second frame
+    var mainIntroFrames = [];                     // Loaded intro frames
+    var mainIntroCurrentFrame = 0;                // Current frame index
+    var mainIntroLastFrameTime = 0;               // Last frame render time
+    var mainIntroAnimationId = null;              // Animation frame ID
+    var sprites        = null;                    // our spritesheet (original)
+    var horseSprites   = {};                      // our horse sprites (loaded separately)
+    var resolution     = null;                    // scaling factor
+    var flashStyles = [];                         // array of text style variants for flash
+    var currentFlashStyle = null;                 // currently selected text style
+    var flashingImageIndex = 0;                   // current index for sequential mode
+    var flashImageMode = 'random';                // 'random' or 'sequential'
+
+    // Custom background layers
+    var customBackgroundLayers = {
+      sky: null,
+      hills: null,
+      trees: null
+    };
+    var customBackgroundLayersDataURL = {
+      sky: null,
+      hills: null,
+      trees: null
+    };
+    var currentBackgroundSelection = {
+      sky: 'default',
+      hills: 'default',
+      trees: 'default'
+    };
+
+    // Custom sprite replacements
+    var customSprites = {};
+    var spriteCategories = {
+      'Environment': ['PALM_TREE', 'TREE1', 'TREE2', 'DEAD_TREE1', 'DEAD_TREE2', 'BUSH1', 'BUSH2', 'CACTUS', 'STUMP'],
+      'Obstacles': ['BOULDER1', 'BOULDER2', 'BOULDER3', 'COLUMN'],
+      'Billboards': ['BILLBOARD01', 'BILLBOARD02', 'BILLBOARD03', 'BILLBOARD04', 'BILLBOARD05', 'BILLBOARD06', 'BILLBOARD07', 'BILLBOARD08', 'BILLBOARD09'],
+      'Vehicles': ['SEMI', 'TRUCK', 'CAR01', 'CAR02', 'CAR03', 'CAR04']
+    };
+    //=========================================================================
+    // LEVEL SYSTEM - Thematic levels for live performance
+    //=========================================================================
+
+    // WebRTC webcam (level 7)
+    var webcamVideo  = null;   // <video> element fed by phone WebRTC stream
+    var webcamActive = false;  // true once stream is playing
+    var webcamPc     = null;   // RTCPeerConnection (PC side)
+    var webcamSocket = null;   // Socket.io connection
+
+    var currentLevel           = 0;              // 0 = default, 1-7 = song levels
+    var levelTransitionActive  = false;          // true during smooth transitions
+    var levelTransitionStart   = 0;              // timestamp when transition started
+    var levelTransitionDuration = 2000;          // ms for transition
+    var levelTransitionFrom    = null;           // snapshot of state at transition start
+    var levelTransitionTo      = null;           // target level preset
+    var STORAGE_KEY_LEVEL      = 'horseRacing_currentLevel';
+
+    // Default colors snapshot (to restore when no level is selected)
+    var DEFAULT_COLORS = {
+      SKY:   '#72D7EE',
+      TREE:  '#005108',
+      FOG:   '#005108',
+      LIGHT: { road: '#B8956A', grass: '#8B9456', rumble: '#6B5D3F', lane: '#D4C4A8' },
+      DARK:  { road: '#A67C52', grass: '#7A8B4F', rumble: '#8B7355' },
+      START: { road: 'white',   grass: 'white',   rumble: 'white' },
+      FINISH:{ road: 'black',   grass: 'black',   rumble: 'black' }
+    };
+
+    // Sprite names that can be overridden per level (environment + obstacles + billboards, NOT vehicles)
+    var LEVEL_SPRITE_OVERRIDES = [
+      'PALM_TREE', 'TREE1', 'TREE2', 'DEAD_TREE1', 'DEAD_TREE2',
+      'BUSH1', 'BUSH2', 'CACTUS', 'STUMP',
+      'BOULDER1', 'BOULDER2', 'BOULDER3', 'COLUMN',
+      'BILLBOARD01', 'BILLBOARD02', 'BILLBOARD03', 'BILLBOARD04',
+      'BILLBOARD05', 'BILLBOARD06', 'BILLBOARD07', 'BILLBOARD08', 'BILLBOARD09'
+    ];
+
+    // Per-level sprite image cache: { 1: { TREE1: Image, ... }, 2: { ... }, ... }
+    var levelSprites = {};
+    var levelSpritesLoaded = {};
+
+    // Per-level background image cache: { 1: { sky: Image, hills: Image, trees: Image }, ... }
+    var levelBackgrounds = {};
+
+    // Per-level animated sky frames: { 1: [Image, Image, ...], ... }  (empty array = no animation)
+    var levelSkyFrames = {};
+
+    // Sky animation state (active level)
+    var skyAnim = {
+      frames:       [],   // array of Image objects for current level
+      currentFrame: 0,    // index into frames[]
+      fps:          8,    // frames per second
+      lastTime:     0     // timestamp of last frame advance (ms)
+    };
+
+    var LEVEL_PRESETS = {
+      1: {
+        name: 'BULLONCINO',
+        subtitle: 'Industrial',
+        spriteFolder: '1-bulloncino',
+        colors: {
+          SKY:   '#8A8A8A',
+          TREE:  '#3D3D3D',
+          FOG:   '#5C5C5C',
+          LIGHT: { road: '#7A7A7A', grass: '#5A5A50', rumble: '#C87820', lane: '#AAAAAA' },
+          DARK:  { road: '#606060', grass: '#4A4A42', rumble: '#B06818' },
+          START: { road: 'white',   grass: 'white',   rumble: 'white' },
+          FINISH:{ road: 'black',   grass: 'black',   rumble: 'black' }
+        },
+        fogDensity: 8,
+        shakeIntensity: 70,
+        zoomIntensity: 30,
+        cameraHeight: 1000,
+        canvasFilter: 'saturate(0.4) contrast(1.2) brightness(0.9)',
+        drawDistance: 300,
+        trackRecipe: [
+          { fn: 'addStraight', args: [50] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addStraight', args: [30] },
+          { fn: 'addCurve', args: [50, 2, 0] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addStraight', args: [50] },
+          { fn: 'addCurve', args: [50, -2, 0] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addStraight', args: [100] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      2: {
+        name: 'HANNO FALLITO',
+        subtitle: 'Glitch',
+        spriteFolder: '2-hanno-fallito',
+        colors: {
+          SKY:   '#1A0A0A',
+          TREE:  '#2A0000',
+          FOG:   '#1A0505',
+          LIGHT: { road: '#3A1515', grass: '#1A1A0A', rumble: '#8B0000', lane: '#551111' },
+          DARK:  { road: '#2A0A0A', grass: '#151508', rumble: '#660000' },
+          START: { road: '#FF0000', grass: '#FF0000', rumble: '#FF0000' },
+          FINISH:{ road: 'black',   grass: 'black',   rumble: 'black' }
+        },
+        fogDensity: 12,
+        shakeIntensity: 120,
+        zoomIntensity: 80,
+        cameraHeight: 1200,
+        canvasFilter: 'contrast(1.6) saturate(1.4) brightness(0.7)',
+        drawDistance: 200,
+        trackRecipe: [
+          { fn: 'addStraight', args: [25] },
+          { fn: 'addCurve', args: [30, 6, 20] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addCurve', args: [30, -6, -20] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addCurve', args: [50, -4, 40] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addHill', args: [50, 60] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      3: {
+        name: 'ODORE DEL BUONGIORNO',
+        subtitle: 'Swamp',
+        spriteFolder: '3-odore-del-buongiorno',
+        colors: {
+          SKY:   '#2A3A10',
+          TREE:  '#1A2A00',
+          FOG:   '#3A4A20',
+          LIGHT: { road: '#5A4A2A', grass: '#4A5A1A', rumble: '#3A3A0A', lane: '#6A6A3A' },
+          DARK:  { road: '#4A3A1A', grass: '#3A4A10', rumble: '#2A2A00' },
+          START: { road: '#AAAA00', grass: '#AAAA00', rumble: '#AAAA00' },
+          FINISH:{ road: '#1A1A00', grass: '#1A1A00', rumble: '#1A1A00' }
+        },
+        fogDensity: 15,
+        shakeIntensity: 40,
+        zoomIntensity: 20,
+        cameraHeight: 800,
+        canvasFilter: 'saturate(0.8) contrast(0.9) brightness(0.8) sepia(0.3)',
+        drawDistance: 180,
+        trackRecipe: [
+          { fn: 'addStraight', args: [30] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [40, 2, 10] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [40, -2, -10] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addStraight', args: [50] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      4: {
+        name: 'CANTIERE',
+        subtitle: 'Construction',
+        spriteFolder: '4-cantiere',
+        colors: {
+          SKY:   '#9EAAB8',
+          TREE:  '#4A4A4A',
+          FOG:   '#B8A898',
+          LIGHT: { road: '#A0A0A0', grass: '#8A8A70', rumble: '#FF6600', lane: '#FFFFFF' },
+          DARK:  { road: '#888888', grass: '#787860', rumble: '#CC5500' },
+          START: { road: 'white',   grass: 'white',   rumble: 'white' },
+          FINISH:{ road: 'black',   grass: 'black',   rumble: 'black' }
+        },
+        fogDensity: 7,
+        shakeIntensity: 60,
+        zoomIntensity: 25,
+        cameraHeight: 1000,
+        canvasFilter: 'saturate(0.5) contrast(1.1) brightness(1.0)',
+        drawDistance: 300,
+        trackRecipe: [
+          { fn: 'addStraight', args: [40] },
+          { fn: 'addCurve', args: [50, 4, 20] },
+          { fn: 'addStraight', args: [30] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addCurve', args: [50, -4, -20] },
+          { fn: 'addStraight', args: [40] },
+          { fn: 'addHill', args: [50, 40] },
+          { fn: 'addBumps', args: [] },
+          { fn: 'addStraight', args: [50] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      5: {
+        name: 'IL SEGRETO DEL RAP',
+        subtitle: 'Neon Street',
+        spriteFolder: '5-segreto-del-rap',
+        colors: {
+          SKY:   '#0A0A1A',
+          TREE:  '#1A0A2A',
+          FOG:   '#0A0A15',
+          LIGHT: { road: '#1A1A2A', grass: '#0A0A15', rumble: '#FF00FF', lane: '#00FFFF' },
+          DARK:  { road: '#101020', grass: '#08080F', rumble: '#CC00CC' },
+          START: { road: '#FFFF00', grass: '#FFFF00', rumble: '#FFFF00' },
+          FINISH:{ road: '#FF00FF', grass: '#FF00FF', rumble: '#FF00FF' }
+        },
+        fogDensity: 3,
+        shakeIntensity: 90,
+        zoomIntensity: 100,
+        cameraHeight: 900,
+        canvasFilter: 'contrast(1.4) saturate(1.6) brightness(1.1)',
+        drawDistance: 250,
+        trackRecipe: [
+          { fn: 'addStraight', args: [25] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addCurve', args: [30, 6, 0] },
+          { fn: 'addStraight', args: [15] },
+          { fn: 'addCurve', args: [30, -6, 0] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addCurve', args: [40, 4, 20] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addStraight', args: [40] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      6: {
+        name: 'COME TU DICI',
+        subtitle: 'Aquatic',
+        spriteFolder: '6-come-tu-dici',
+        colors: {
+          SKY:   '#0A2A4A',
+          TREE:  '#0A3A3A',
+          FOG:   '#1A3A5A',
+          LIGHT: { road: '#2A5A7A', grass: '#1A4A5A', rumble: '#4A8AAA', lane: '#6ACAEA' },
+          DARK:  { road: '#1A4A6A', grass: '#0A3A4A', rumble: '#3A7A9A' },
+          START: { road: '#AAEEFF', grass: '#AAEEFF', rumble: '#AAEEFF' },
+          FINISH:{ road: '#0A1A2A', grass: '#0A1A2A', rumble: '#0A1A2A' }
+        },
+        fogDensity: 6,
+        shakeIntensity: 30,
+        zoomIntensity: 40,
+        cameraHeight: 1100,
+        canvasFilter: 'saturate(1.2) contrast(1.0) brightness(0.95)',
+        drawDistance: 350,
+        trackRecipe: [
+          { fn: 'addStraight', args: [30] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [60, 3, 20] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [60, -3, -15] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [40, 2, 10] },
+          { fn: 'addStraight', args: [40] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      },
+      7: {
+        name: 'DIGGIEI',
+        subtitle: 'Club',
+        spriteFolder: '7-diggiei',
+        colors: {
+          SKY:   '#1A0A2A',
+          TREE:  '#2A0A3A',
+          FOG:   '#2A1A3A',
+          LIGHT: { road: '#3A1A4A', grass: '#2A0A3A', rumble: '#FF1493', lane: '#00BFFF' },
+          DARK:  { road: '#2A0A3A', grass: '#1A0A2A', rumble: '#FF69B4' },
+          START: { road: '#FFD700', grass: '#FFD700', rumble: '#FFD700' },
+          FINISH:{ road: '#FF1493', grass: '#FF1493', rumble: '#FF1493' }
+        },
+        fogDensity: 4,
+        shakeIntensity: 80,
+        zoomIntensity: 90,
+        cameraHeight: 950,
+        canvasFilter: 'contrast(1.3) saturate(1.8) brightness(1.15)',
+        drawDistance: 280,
+        trackRecipe: [
+          { fn: 'addStraight', args: [20] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addCurve', args: [40, 4, 20] },
+          { fn: 'addLowRollingHills', args: [] },
+          { fn: 'addCurve', args: [40, -4, -20] },
+          { fn: 'addSCurves', args: [] },
+          { fn: 'addStraight', args: [40] },
+          { fn: 'addDownhillToEnd', args: [] }
+        ]
+      }
+    };
+
+    var roadWidth      = 2000;                    // track width
+    var segmentLength  = 200;                     // length of a single segment
+    var rumbleLength   = 3;                       // number of segments per red/white rumble strip
+    var trackLength    = null;                    // z length of entire track
+    var lanes          = 3;                       // number of lanes
+    var fieldOfView    = 100;                     // angle (degrees) for field of view
+    var cameraHeight   = 1000;                    // z height of camera
+    var cameraDepth    = null;                    // z distance camera is from screen
+    var drawDistance   = 300;                     // number of segments to draw
+    var playerX        = 0;                       // player x offset from center
+    var playerZ        = null;                    // player relative z distance from camera
+    var fogDensity     = 5;                       // exponential fog density
+    var position       = 0;                       // current camera Z position
+    var speed          = 0;                       // current speed
+    var maxSpeed       = segmentLength/step;      // top speed
+    var accel          =  maxSpeed/5;             // acceleration rate
+    var breaking       = -maxSpeed;               // deceleration rate when braking
+    var decel          = -maxSpeed/5;             // natural deceleration
+    var offRoadDecel   = -maxSpeed/2;             // off road deceleration
+    var offRoadLimit   =  maxSpeed/4;             // minimum speed off road
+    var totalCars      = 200;                     // total number of horses on track
+    var currentLapTime = 0;                       // current lap time
+    var lastLapTime    = null;                    // last lap time
+
+    var keyLeft        = false;
+    var keyRight       = false;
+    var keyFaster      = false;
+    var keySlower      = false;
+
+    //=========================================================================
+    // GAMEPAD SUPPORT (Xbox Series X)
+    //=========================================================================
+
+    var gamepadConnected = false;
+    var gamepadIndex = null;
+    var gamepadDeadzone = 0.15; // Deadzone for analog sticks
+    var lastGamepadState = { left: false, right: false, faster: false, slower: false }; // Track last gamepad input
+
+    //=========================================================================
+    // PAUSE MENU
+    //=========================================================================
+
+    var isPaused = false;
+    var lastStartButtonState = false; // Track gamepad Start button state
+
+    // Xbox Series X button mapping (standard mapping)
+    var XBOX_BUTTONS = {
+      A: 0,           // Bottom button (A)
+      B: 1,           // Right button (B)
+      X: 2,           // Left button (X)
+      Y: 3,           // Top button (Y)
+      LB: 4,          // Left bumper
+      RB: 5,          // Right bumper
+      LT: 6,          // Left trigger
+      RT: 7,          // Right trigger
+      BACK: 8,        // Back/View button
+      START: 9,       // Start/Menu button
+      LS: 10,         // Left stick button
+      RS: 11,         // Right stick button
+      DPAD_UP: 12,    // D-pad up
+      DPAD_DOWN: 13,  // D-pad down
+      DPAD_LEFT: 14,  // D-pad left
+      DPAD_RIGHT: 15  // D-pad right
+    };
+
+    // Xbox Series X axes mapping
+    var XBOX_AXES = {
+      LEFT_STICK_X: 0,   // Left stick horizontal (-1 left, +1 right)
+      LEFT_STICK_Y: 1,   // Left stick vertical (-1 up, +1 down)
+      RIGHT_STICK_X: 2,  // Right stick horizontal
+      RIGHT_STICK_Y: 3   // Right stick vertical
+    };
+
+    //=========================================================================
+    // AUDIO REACTIVITY
+    //=========================================================================
+
+    var audioContext = null;
+    var audioAnalyser = null;
+    var audioDataArray = null;
+    var audioBufferLength = 0;
+    var audioSource = null;
+    var audioInputMuted = false; // Mute audio input to prevent feedback
+    var shakeIntensity = 50; // 0-100
+    var zoomIntensity = 50; // 0-100
+    var currentAudioLevel = 0; // Current audio level (0-1)
+    var cameraShakeX = 0; // Camera shake offset X
+    var cameraShakeY = 0; // Camera shake offset Y
+    var flashEnabled = false; // White flash on/off
+    var isFlashing = false; // Currently flashing
+    var flashEndTime = 0; // When current flash ends
+    var flashImageEnabled = false; // Flashing image on/off
+
+    // BPM Detection
+    var lastTapTime = 0;
+    var tapTimes = [];
+    var currentBPM = 0;
+    var bpmInterval = 0; // Interval in ms between beats
+    var lastAutoFlashTime = 0; // Last time auto-flash triggered
+    var nextFlashTime = 0; // When next auto-flash should trigger
+
+    var hud = {
+      speed:            { value: null, dom: Dom.get('speed_value')            },
+      current_lap_time: { value: null, dom: Dom.get('current_lap_time_value') },
+      last_lap_time:    { value: null, dom: Dom.get('last_lap_time_value')    },
+      fast_lap_time:    { value: null, dom: Dom.get('fast_lap_time_value')    }
+    }
+
+    //=========================================================================
+    // GAMEPAD FUNCTIONS
+    //=========================================================================
+
+    function onGamepadConnected(e) {
+      gamepadConnected = true;
+      gamepadIndex = e.gamepad.index;
+      console.log('Gamepad connected:', e.gamepad.id, 'at index', e.gamepad.index);
+      updateGamepadStatus();
+    }
+
+    function onGamepadDisconnected(e) {
+      console.log('Gamepad disconnected:', e.gamepad.id);
+      gamepadConnected = false;
+      gamepadIndex = null;
+      updateGamepadStatus();
+    }
+
+    function getGamepad() {
+      var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      // Try known index first
+      if (gamepadIndex !== null && gamepads[gamepadIndex]) {
+        return gamepads[gamepadIndex];
+      }
+      // Fallback scan: handles iOS Safari where gamepadconnected may not fire
+      for (var i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) {
+          if (!gamepadConnected) {
+            gamepadConnected = true;
+            gamepadIndex = i;
+            updateGamepadStatus();
+          }
+          return gamepads[i];
+        }
+      }
+      return null;
+    }
+
+    function applyDeadzone(value) {
+      if (Math.abs(value) < gamepadDeadzone) {
+        return 0;
+      }
+      // Remap value outside deadzone to full range
+      var sign = value > 0 ? 1 : -1;
+      return sign * ((Math.abs(value) - gamepadDeadzone) / (1 - gamepadDeadzone));
+    }
+
+    function updateGamepadInput() {
+      var gamepad = getGamepad();
+      if (!gamepad) {
+        // Reset gamepad state tracking if no gamepad
+        lastGamepadState = { left: false, right: false, faster: false, slower: false };
+        return;
+      }
+
+      // Read current gamepad state
+      var currentGamepadState = {
+        left: false,
+        right: false,
+        faster: false,
+        slower: false
+      };
+
+      // Left stick horizontal axis for steering
+      var leftStickX = applyDeadzone(gamepad.axes[XBOX_AXES.LEFT_STICK_X]);
+      if (leftStickX < -0.1) {
+        currentGamepadState.left = true;
+      } else if (leftStickX > 0.1) {
+        currentGamepadState.right = true;
+      }
+
+      // D-pad for steering (alternative)
+      if (gamepad.buttons[XBOX_BUTTONS.DPAD_LEFT] && gamepad.buttons[XBOX_BUTTONS.DPAD_LEFT].pressed) {
+        currentGamepadState.left = true;
+      }
+      if (gamepad.buttons[XBOX_BUTTONS.DPAD_RIGHT] && gamepad.buttons[XBOX_BUTTONS.DPAD_RIGHT].pressed) {
+        currentGamepadState.right = true;
+      }
+
+      // Right trigger (RT) for acceleration
+      var rightTrigger = gamepad.buttons[XBOX_BUTTONS.RT];
+      if (rightTrigger && (rightTrigger.pressed || rightTrigger.value > 0.1)) {
+        currentGamepadState.faster = true;
+      }
+
+      // A button for acceleration (alternative)
+      if (gamepad.buttons[XBOX_BUTTONS.A] && gamepad.buttons[XBOX_BUTTONS.A].pressed) {
+        currentGamepadState.faster = true;
+      }
+
+      // Left trigger (LT) or B button for braking
+      var leftTrigger = gamepad.buttons[XBOX_BUTTONS.LT];
+      if (leftTrigger && (leftTrigger.pressed || leftTrigger.value > 0.1)) {
+        currentGamepadState.slower = true;
+      }
+
+      if (gamepad.buttons[XBOX_BUTTONS.B] && gamepad.buttons[XBOX_BUTTONS.B].pressed) {
+        currentGamepadState.slower = true;
+      }
+
+      // Reset the keys that were set by gamepad in previous frame but are not active now
+      if (lastGamepadState.left && !currentGamepadState.left) {
+        keyLeft = false;
+      }
+      if (lastGamepadState.right && !currentGamepadState.right) {
+        keyRight = false;
+      }
+      if (lastGamepadState.faster && !currentGamepadState.faster) {
+        keyFaster = false;
+      }
+      if (lastGamepadState.slower && !currentGamepadState.slower) {
+        keySlower = false;
+      }
+
+      // Apply current gamepad state to keys
+      if (currentGamepadState.left) {
+        keyLeft = true;
+      }
+      if (currentGamepadState.right) {
+        keyRight = true;
+      }
+      if (currentGamepadState.faster) {
+        keyFaster = true;
+      }
+      if (currentGamepadState.slower) {
+        keySlower = true;
+      }
+
+      // Save current state for next frame
+      lastGamepadState = currentGamepadState;
+    }
+
+    function updateGamepadStatus() {
+      var statusElement = Dom.get('gamepad-status');
+      if (statusElement) {
+        if (gamepadConnected) {
+          var gamepad = getGamepad();
+          statusElement.innerHTML = '🎮 Controller: ' + (gamepad ? gamepad.id.substring(0, 30) : 'Connected');
+          statusElement.style.color = '#00ff00';
+        } else {
+          statusElement.innerHTML = '🎮 No controller';
+          statusElement.style.color = '#666';
+        }
+      }
+    }
+
+    //=========================================================================
+    // PAUSE MENU FUNCTIONS
+    //=========================================================================
+
+    function togglePause() {
+      if (isPaused) {
+        resumeGame();
+      } else {
+        pauseGame();
+      }
+    }
+
+    function pauseGame() {
+      if (isPaused) return; // Already paused
+      isPaused = true;
+      Dom.get('pause-menu').style.display = 'flex';
+
+      // Pause audio if playing
+      var audioPlayer = Dom.get('audio-player');
+      if (audioPlayer && !audioPlayer.paused) {
+        audioPlayer.pause();
+      }
+    }
+
+    function resumeGame() {
+      if (!isPaused) return; // Not paused
+      isPaused = false;
+      Dom.get('pause-menu').style.display = 'none';
+
+      // Resume audio if it was playing
+      var audioPlayer = Dom.get('audio-player');
+      if (audioPlayer && audioContext) {
+        audioPlayer.play().catch(function(err) {
+          console.log('Audio resume failed:', err);
+        });
+      }
+    }
+
+    function restartRace() {
+      isPaused = false;
+      Dom.get('pause-menu').style.display = 'none';
+
+      // Reset game state
+      position = 0;
+      speed = 0;
+      playerX = 0;
+      currentLapTime = 0;
+      lastLapTime = null;
+
+      // Reset HUD
+      updateHud('speed', 0);
+      updateHud('current_lap_time', formatTime(0));
+      if (lastLapTime) {
+        updateHud('last_lap_time', formatTime(lastLapTime));
+      }
+
+      reset();
+    }
+
+    function goToMainMenu() {
+      // Hide pause menu
+      isPaused = false;
+      Dom.get('pause-menu').style.display = 'none';
+
+      // Reset game state
+      position = 0;
+      speed = 0;
+      playerX = 0;
+      currentLapTime = 0;
+      lastLapTime = null;
+
+      // Reset HUD
+      updateHud('speed', 0);
+      updateHud('current_lap_time', formatTime(0));
+
+      // Show first title screen (rendered on canvas using preloaded images)
+      mainCurrentTitleFrame = 1;
+      mainTitleScreen.style.display = 'none';
+
+      // Hide HUD when returning to title
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'none';
+      }
+
+      reset();
+    }
+
+    function checkPauseInput() {
+      // Check gamepad Start button
+      var gamepad = getGamepad();
+      if (gamepad) {
+        var startPressed = gamepad.buttons[XBOX_BUTTONS.START].pressed;
+
+        // Detect button press (edge detection)
+        if (startPressed && !lastStartButtonState) {
+          togglePause();
+        }
+
+        lastStartButtonState = startPressed;
+      }
+    }
+
+    //=========================================================================
+    // LOCAL STORAGE PERSISTENCE
+    //=========================================================================
+
+    var STORAGE_KEY_SPRITES = 'horseRacing_customSprites';
+    var STORAGE_KEY_BACKGROUNDS = 'horseRacing_backgrounds';
+
+    function saveSpritesToStorage() {
+      try {
+        var spritesData = {};
+        for (var spriteName in customSprites) {
+          if (customSprites[spriteName]) {
+            // Convert image to base64 data URL for storage
+            var canvas = document.createElement('canvas');
+            var img = customSprites[spriteName];
+            canvas.width = img.width;
+            canvas.height = img.height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            spritesData[spriteName] = canvas.toDataURL('image/png');
+          }
+        }
+        localStorage.setItem(STORAGE_KEY_SPRITES, JSON.stringify(spritesData));
+        console.log('Custom sprites saved to localStorage');
+      } catch (e) {
+        console.error('Failed to save sprites to localStorage:', e);
+      }
+    }
+
+    function loadSpritesFromStorage(callback) {
+      try {
+        var data = localStorage.getItem(STORAGE_KEY_SPRITES);
+        if (!data) {
+          if (callback) callback();
+          return;
+        }
+
+        var spritesData = JSON.parse(data);
+        var loadCount = 0;
+        var totalCount = Object.keys(spritesData).length;
+
+        if (totalCount === 0) {
+          if (callback) callback();
+          return;
+        }
+
+        console.log('Loading', totalCount, 'custom sprites from localStorage...');
+
+        for (var spriteName in spritesData) {
+          (function(name, dataUrl) {
+            var img = new Image();
+            img.onload = function() {
+              customSprites[name] = img;
+              loadCount++;
+              if (loadCount === totalCount) {
+                console.log('✅ Loaded', totalCount, 'custom sprites from localStorage');
+                updateStorageStatus();
+                if (callback) callback();
+              }
+            };
+            img.onerror = function() {
+              loadCount++;
+              if (loadCount === totalCount) {
+                if (callback) callback();
+              }
+            };
+            img.src = dataUrl;
+          })(spriteName, spritesData[spriteName]);
+        }
+      } catch (e) {
+        console.error('Failed to load sprites from localStorage:', e);
+        if (callback) callback();
+      }
+    }
+
+    function saveBackgroundsToStorage() {
+      try {
+        var backgroundData = {
+          selections: currentBackgroundSelection,
+          customLayers: {}
+        };
+
+        console.log('Saving background selections:', currentBackgroundSelection);
+        console.log('Custom background layers:', Object.keys(customBackgroundLayers));
+
+        // Save custom uploaded background layers using stored dataURLs
+        for (var layerName in customBackgroundLayersDataURL) {
+          if (customBackgroundLayersDataURL[layerName]) {
+            backgroundData.customLayers[layerName] = customBackgroundLayersDataURL[layerName];
+            console.log('Saving custom background layer:', layerName);
+          }
+        }
+
+        console.log('Total custom layers to save:', Object.keys(backgroundData.customLayers).length);
+        localStorage.setItem(STORAGE_KEY_BACKGROUNDS, JSON.stringify(backgroundData));
+        console.log('✅ Background settings saved to localStorage');
+        updateStorageStatus(); // Update status after saving
+      } catch (e) {
+        console.error('Failed to save backgrounds to localStorage:', e);
+      }
+    }
+
+    function loadBackgroundsFromStorage(callback) {
+      try {
+        console.log('loadBackgroundsFromStorage: Starting...');
+        var data = localStorage.getItem(STORAGE_KEY_BACKGROUNDS);
+        if (!data) {
+          console.log('loadBackgroundsFromStorage: No data in localStorage');
+          if (callback) callback();
+          return;
+        }
+
+        console.log('loadBackgroundsFromStorage: Found data, parsing...');
+        var backgroundData = JSON.parse(data);
+        console.log('loadBackgroundsFromStorage: Parsed data:', backgroundData);
+
+        // Restore custom uploaded background layers first
+        if (backgroundData.customLayers) {
+          var layersToLoad = Object.keys(backgroundData.customLayers);
+          var loadedLayers = 0;
+
+          if (layersToLoad.length > 0) {
+            console.log('Loading', layersToLoad.length, 'custom background layers from localStorage...');
+            for (var layerName in backgroundData.customLayers) {
+              (function(name, dataUrl) {
+                var img = new Image();
+                img.onload = function() {
+                  customBackgroundLayers[name] = img;
+                  customBackgroundLayersDataURL[name] = dataUrl; // Store the dataURL for future saves
+                  console.log('Loaded custom background layer:', name, 'size:', img.width + 'x' + img.height);
+                  // Mark this layer as custom so it won't be overwritten by preset loading
+                  if (!backgroundData.selections) {
+                    backgroundData.selections = {};
+                  }
+                  if (!backgroundData.selections[name] || backgroundData.selections[name] === 'default') {
+                    currentBackgroundSelection[name] = 'custom';
+                    console.log('Set', name, 'to custom in currentBackgroundSelection');
+                  } else {
+                    console.log('Keeping', name, 'selection as:', backgroundData.selections[name]);
+                  }
+                  loadedLayers++;
+                  if (loadedLayers === layersToLoad.length) {
+                    console.log('✅ Loaded', layersToLoad.length, 'custom background layers');
+                    console.log('customBackgroundLayers after loading:', Object.keys(customBackgroundLayers));
+                    continueLoading();
+                  }
+                };
+                img.onerror = function() {
+                  console.error('Failed to load custom background layer:', name);
+                  loadedLayers++;
+                  if (loadedLayers === layersToLoad.length) {
+                    continueLoading();
+                  }
+                };
+                img.src = dataUrl;
+              })(layerName, backgroundData.customLayers[layerName]);
+            }
+          } else {
+            continueLoading();
+          }
+        } else {
+          continueLoading();
+        }
+
+        function continueLoading() {
+          // Restore selections
+          if (backgroundData.selections) {
+            console.log('loadBackgroundsFromStorage: Restoring selections:', backgroundData.selections);
+            currentBackgroundSelection = backgroundData.selections;
+
+            // Update UI selects
+            if (Dom.get('skySelect')) {
+              Dom.get('skySelect').value = currentBackgroundSelection.sky;
+            }
+            if (Dom.get('hillsSelect')) {
+              Dom.get('hillsSelect').value = currentBackgroundSelection.hills;
+            }
+            if (Dom.get('treesSelect')) {
+              Dom.get('treesSelect').value = currentBackgroundSelection.trees;
+            }
+
+            // Apply preset selections by loading the corresponding images
+            console.log('Applying background presets:', currentBackgroundSelection);
+            for (var layer in currentBackgroundSelection) {
+              var selection = currentBackgroundSelection[layer];
+              console.log('Processing layer:', layer, 'selection:', selection);
+              if (selection !== 'default' && selection !== 'custom') {
+                var filename = '';
+                if (layer === 'sky') {
+                  filename = selection + '.png'; // sky_1.png, sky_2.png, etc.
+                } else if (layer === 'hills') {
+                  filename = 'hills.png';
+                } else if (layer === 'trees') {
+                  filename = 'trees.png';
+                }
+                if (filename) {
+                  console.log('Loading background:', layer, 'from file:', filename);
+                  loadCustomBackground(layer, filename);
+                }
+              }
+            }
+
+            console.log('✅ Restored background preset selections:', currentBackgroundSelection);
+          }
+
+          // Update status and complete
+          updateStorageStatus();
+          if (callback) callback();
+        }
+      } catch (e) {
+        console.error('Failed to load backgrounds from localStorage:', e);
+        if (callback) callback();
+      }
+    }
+
+    function clearAllStoredData() {
+      try {
+        localStorage.removeItem(STORAGE_KEY_SPRITES);
+        localStorage.removeItem(STORAGE_KEY_BACKGROUNDS);
+        console.log('Cleared all stored customizations');
+      } catch (e) {
+        console.error('Failed to clear storage:', e);
+      }
+    }
+
+    function updateStorageStatus() {
+      var statusDiv = Dom.get('storage-status');
+      if (!statusDiv) return;
+
+      var spriteCount = Object.keys(customSprites).length;
+      var bgCount = 0;
+      if (currentBackgroundSelection.sky !== 'default') bgCount++;
+      if (currentBackgroundSelection.hills !== 'default') bgCount++;
+      if (currentBackgroundSelection.trees !== 'default') bgCount++;
+
+      if (spriteCount > 0 || bgCount > 0) {
+        var parts = [];
+        if (spriteCount > 0) parts.push(spriteCount + ' custom sprite' + (spriteCount !== 1 ? 's' : ''));
+        if (bgCount > 0) parts.push(bgCount + ' background layer' + (bgCount !== 1 ? 's' : ''));
+        statusDiv.innerHTML = '💾 Saved: ' + parts.join(', ');
+        statusDiv.style.color = '#4CAF50';
+      } else {
+        statusDiv.innerHTML = '';
+      }
+    }
+
+    //=========================================================================
+    // AUDIO REACTIVITY FUNCTIONS
+    //=========================================================================
+
+    function initAudioContext() {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        audioAnalyser = audioContext.createAnalyser();
+        audioAnalyser.fftSize = 256;
+        audioBufferLength = audioAnalyser.frequencyBinCount;
+        audioDataArray = new Uint8Array(audioBufferLength);
+        audioAnalyser.connect(audioContext.destination);
+      }
+    }
+
+    function setupAudioFile(file) {
+      initAudioContext();
+
+      var audioPlayer = Dom.get('audioPlayer');
+      var audioStatus = Dom.get('audioStatus');
+
+      var url = URL.createObjectURL(file);
+      audioPlayer.src = url;
+
+      // Show player
+      audioPlayer.style.display = 'block';
+      audioStatus.style.display = 'none';
+
+      // Disconnect old source if exists
+      if (audioSource) {
+        audioSource.disconnect();
+      }
+
+      // Create new audio source from audio element
+      audioSource = audioContext.createMediaElementSource(audioPlayer);
+      audioSource.connect(audioAnalyser);
+
+      console.log('Audio file loaded:', file.name);
+    }
+
+    function setupMicrophoneInput() {
+      initAudioContext();
+
+      var audioStatus = Dom.get('audio-status');
+      var audioPlayer = Dom.get('audioPlayer');
+
+      // Hide audio player if showing
+      audioPlayer.style.display = 'none';
+      audioStatus.style.display = 'block';
+      audioStatus.textContent = 'Requesting microphone access...';
+
+      // Request microphone access
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+          // Disconnect old source if exists
+          if (audioSource) {
+            audioSource.disconnect();
+          }
+
+          // Create audio source from microphone stream
+          audioSource = audioContext.createMediaStreamSource(stream);
+          audioSource.connect(audioAnalyser);
+
+          audioStatus.textContent = 'Microphone active';
+          audioStatus.classList.add('text-green-600', 'dark:text-green-400');
+          audioStatus.classList.remove('text-gray-500', 'dark:text-gray-400');
+
+          console.log('Microphone input active');
+        })
+        .catch(function(err) {
+          console.error('Error accessing microphone:', err);
+          audioStatus.textContent = 'Microphone access denied';
+          audioStatus.classList.add('text-red-600', 'dark:text-red-400');
+          audioStatus.classList.remove('text-gray-500', 'dark:text-gray-400');
+        });
+    }
+
+    function getAudioLevel() {
+      if (!audioAnalyser || !audioDataArray || audioInputMuted) {
+        return 0;
+      }
+
+      audioAnalyser.getByteFrequencyData(audioDataArray);
+
+      // Calculate average frequency level (bass + mid range for better reactivity)
+      var sum = 0;
+      var bassRange = Math.floor(audioBufferLength * 0.3); // Focus on lower frequencies
+
+      for (var i = 0; i < bassRange; i++) {
+        sum += audioDataArray[i];
+      }
+
+      var average = sum / bassRange / 255; // Normalize to 0-1
+      return average;
+    }
+
+    function toggleAudioInputMute() {
+      audioInputMuted = !audioInputMuted;
+      var muteBtn = Dom.get('mute-audio-btn');
+      if (muteBtn) {
+        if (audioInputMuted) {
+          muteBtn.innerHTML = '<span class="material-icons text-base">volume_off</span> Unmute Audio Input';
+          muteBtn.classList.remove('bg-gray-200', 'dark:bg-gray-700');
+          muteBtn.classList.add('bg-red-500', 'text-white');
+        } else {
+          muteBtn.innerHTML = '<span class="material-icons text-base">volume_up</span> Mute Audio Input';
+          muteBtn.classList.remove('bg-red-500', 'text-white');
+          muteBtn.classList.add('bg-gray-200', 'dark:bg-gray-700');
+        }
+      }
+      console.log('Audio input muted:', audioInputMuted);
+    }
+
+    function updateCameraShake() {
+      currentAudioLevel = getAudioLevel();
+
+      // Apply shake based on audio level and intensity setting
+      var shakeAmount = currentAudioLevel * (shakeIntensity / 100) * 30;
+
+      // Randomize shake direction for more natural effect
+      cameraShakeX = (Math.random() - 0.5) * shakeAmount;
+      cameraShakeY = (Math.random() - 0.5) * shakeAmount;
+
+      // Smooth out the shake (damping)
+      cameraShakeX *= 0.8;
+      cameraShakeY *= 0.8;
+
+      // Update audio meter UI
+      updateAudioMeter();
+    }
+
+    function updateAudioMeter() {
+      var meterBar = document.getElementById('audio-meter-bar');
+      var meterValue = document.getElementById('audio-meter-value');
+
+      if (meterBar && meterValue) {
+        var percentage = Math.round(currentAudioLevel * 100);
+        meterBar.style.width = percentage + '%';
+        meterValue.textContent = percentage + '%';
+      }
+    }
+
+    //=========================================================================
+    // FLASH & BPM FUNCTIONS
+    //=========================================================================
+
+    function toggleFlash() {
+      flashEnabled = !flashEnabled;
+      console.log('Flash enabled:', flashEnabled);
+    }
+
+    function toggleFlashImage() {
+      flashImageEnabled = !flashImageEnabled;
+      console.log('Flash image enabled:', flashImageEnabled);
+    }
+
+    function triggerFlash(duration) {
+      if (!flashEnabled && !flashImageEnabled) return;
+
+      // Select flashing image based on mode
+      if (flashImageEnabled && flashStyles.length > 0) {
+        if (flashImageMode === 'random') {
+          var randomIndex = Math.floor(Math.random() * flashStyles.length);
+          currentFlashStyle = flashStyles[randomIndex];
+        } else if (flashImageMode === 'sequential') {
+          currentFlashStyle = flashStyles[flashingImageIndex];
+          flashingImageIndex = (flashingImageIndex + 1) % flashStyles.length;
+        }
+      }
+
+      isFlashing = true;
+      flashEndTime = Date.now() + (duration || 100); // Default 100ms flash
+    }
+
+    function updateFlash() {
+      var now = Date.now();
+
+      // End current flash if time expired
+      if (isFlashing && now > flashEndTime) {
+        isFlashing = false;
+      }
+
+      // Auto-flash based on BPM if enabled and BPM is set
+      if ((flashEnabled || flashImageEnabled) && currentBPM > 0 && bpmInterval > 0) {
+        // Check if it's time for the next flash
+        if (now >= nextFlashTime) {
+          triggerFlash(100);
+          nextFlashTime = now + bpmInterval;
+        }
+      }
+    }
+
+    function handleTap() {
+      var now = Date.now();
+
+      // Add this tap to our history
+      tapTimes.push(now);
+
+      // Keep only last 8 taps (for BPM calculation)
+      if (tapTimes.length > 8) {
+        tapTimes.shift();
+      }
+
+      // Calculate BPM if we have at least 2 taps
+      if (tapTimes.length >= 2) {
+        var intervals = [];
+        for (var i = 1; i < tapTimes.length; i++) {
+          intervals.push(tapTimes[i] - tapTimes[i-1]);
+        }
+
+        // Average interval in milliseconds
+        var avgInterval = intervals.reduce(function(a, b) { return a + b; }) / intervals.length;
+
+        // Store interval for auto-flash
+        bpmInterval = avgInterval;
+
+        // Convert to BPM (60000 ms per minute)
+        currentBPM = Math.round(60000 / avgInterval);
+
+        // Update UI
+        var bpmDisplay = document.getElementById('bpm-display');
+        if (bpmDisplay) {
+          bpmDisplay.textContent = currentBPM;
+        }
+
+        // Sync next flash time to current tap
+        nextFlashTime = now + bpmInterval;
+      }
+
+      // Trigger flash immediately for this tap
+      triggerFlash(100);
+
+      lastTapTime = now;
+    }
+
+    //=========================================================================
+    // CUSTOM BACKGROUND FUNCTIONS
+    //=========================================================================
+
+    function loadCustomBackground(layer, filename, callback) {
+      var img = new Image();
+      img.onload = function() {
+        customBackgroundLayers[layer] = img;
+        console.log('Loaded custom', layer, ':', filename);
+        if (callback) callback();
+      };
+      img.onerror = function() {
+        console.error('Failed to load custom', layer, ':', filename);
+        if (callback) callback();
+      };
+      img.src = 'images/background/' + filename;
+    }
+
+    function changeBackgroundLayer(layer, value) {
+      currentBackgroundSelection[layer] = value;
+
+      if (value === 'default') {
+        // Use default background from spritesheet
+        customBackgroundLayers[layer] = null;
+        saveBackgroundsToStorage(); // Auto-save to localStorage
+      } else {
+        // Load custom background
+        var filename = '';
+        if (layer === 'sky') {
+          filename = value + '.png'; // sky_1.png, sky_2.png, etc.
+        } else if (layer === 'hills') {
+          filename = 'hills.png';
+        } else if (layer === 'trees') {
+          filename = 'trees.png';
+        }
+
+        loadCustomBackground(layer, filename, function() {
+          saveBackgroundsToStorage(); // Auto-save after loading
+        });
+      }
+    }
+
+    function renderBackgroundLayer(ctx, bg, width, height, layer, offset, rotation) {
+      var sourceImage = customBackgroundLayers[layer.name] || bg;
+      var sourceRect = layer;
+
+      // If using custom background, adjust source rect to full image
+      if (customBackgroundLayers[layer.name]) {
+        sourceRect = { x: 0, y: 0, w: sourceImage.width, h: sourceImage.height };
+      }
+
+      Render.background(ctx, sourceImage, width, height, sourceRect, offset, rotation);
+    }
+
+    //=========================================================================
+    // ASSET EDITOR FUNCTIONS
+    //=========================================================================
+
+    function initAssetEditor() {
+      var container = Dom.get('asset-categories-container');
+      container.innerHTML = '';
+
+      // Create Background Layers category first
+      var bgCategoryDiv = document.createElement('div');
+      bgCategoryDiv.className = 'asset-category';
+
+      var bgTitle = document.createElement('h3');
+      bgTitle.textContent = '🌄 Background Layers';
+      bgCategoryDiv.appendChild(bgTitle);
+
+      var bgGridDiv = document.createElement('div');
+      bgGridDiv.className = 'asset-grid';
+
+      // Add background layer items
+      var bgLayers = ['sky', 'hills', 'trees'];
+      for (var i = 0; i < bgLayers.length; i++) {
+        bgGridDiv.appendChild(createBackgroundLayerItem(bgLayers[i]));
+      }
+
+      bgCategoryDiv.appendChild(bgGridDiv);
+      container.appendChild(bgCategoryDiv);
+
+      // Create sprite categories
+      for (var categoryName in spriteCategories) {
+        var categoryDiv = document.createElement('div');
+        categoryDiv.className = 'asset-category';
+
+        var categoryTitle = document.createElement('h3');
+        categoryTitle.textContent = categoryName;
+        categoryDiv.appendChild(categoryTitle);
+
+        var gridDiv = document.createElement('div');
+        gridDiv.className = 'asset-grid';
+
+        var spriteNames = spriteCategories[categoryName];
+        for (var i = 0; i < spriteNames.length; i++) {
+          var spriteName = spriteNames[i];
+          gridDiv.appendChild(createAssetItem(spriteName));
+        }
+
+        categoryDiv.appendChild(gridDiv);
+        container.appendChild(categoryDiv);
+      }
+    }
+
+    function createAssetItem(spriteName) {
+      var itemDiv = document.createElement('div');
+      itemDiv.className = 'asset-item';
+      itemDiv.id = 'asset-item-' + spriteName;
+
+      var label = document.createElement('label');
+      label.textContent = spriteName;
+      itemDiv.appendChild(label);
+
+      var previewDiv = document.createElement('div');
+      previewDiv.className = 'asset-preview';
+      previewDiv.id = 'preview-' + spriteName;
+      itemDiv.appendChild(previewDiv);
+
+      var uploadBtn = document.createElement('button');
+      uploadBtn.className = 'asset-upload-btn';
+      uploadBtn.textContent = 'Upload';
+      uploadBtn.onclick = function() {
+        var input = document.getElementById('file-input-' + spriteName);
+        input.click();
+      };
+      itemDiv.appendChild(uploadBtn);
+
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.className = 'asset-file-input';
+      fileInput.id = 'file-input-' + spriteName;
+      fileInput.onchange = function(e) {
+        handleAssetUpload(spriteName, e.target.files[0]);
+      };
+      itemDiv.appendChild(fileInput);
+
+      var resetBtn = document.createElement('button');
+      resetBtn.className = 'asset-reset-btn';
+      resetBtn.textContent = 'Reset';
+      resetBtn.onclick = function() {
+        resetAsset(spriteName);
+      };
+      itemDiv.appendChild(resetBtn);
+
+      // Initial preview
+      updateAssetPreview(spriteName);
+
+      return itemDiv;
+    }
+
+    function createBackgroundLayerItem(layerName) {
+      var itemDiv = document.createElement('div');
+      itemDiv.className = 'asset-item';
+      itemDiv.id = 'asset-item-bg-' + layerName;
+
+      var label = document.createElement('label');
+      label.textContent = layerName.charAt(0).toUpperCase() + layerName.slice(1);
+      itemDiv.appendChild(label);
+
+      var previewDiv = document.createElement('div');
+      previewDiv.className = 'asset-preview';
+      previewDiv.id = 'preview-bg-' + layerName;
+      itemDiv.appendChild(previewDiv);
+
+      var uploadBtn = document.createElement('button');
+      uploadBtn.className = 'asset-upload-btn';
+      uploadBtn.textContent = 'Upload';
+      uploadBtn.onclick = function() {
+        var input = document.getElementById('file-input-bg-' + layerName);
+        input.click();
+      };
+      itemDiv.appendChild(uploadBtn);
+
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.className = 'asset-file-input';
+      fileInput.id = 'file-input-bg-' + layerName;
+      fileInput.onchange = function(e) {
+        handleBackgroundUpload(layerName, e.target.files[0]);
+      };
+      itemDiv.appendChild(fileInput);
+
+      var resetBtn = document.createElement('button');
+      resetBtn.className = 'asset-reset-btn';
+      resetBtn.textContent = 'Reset';
+      resetBtn.onclick = function() {
+        resetBackgroundLayer(layerName);
+      };
+      itemDiv.appendChild(resetBtn);
+
+      // Initial preview
+      updateBackgroundPreview(layerName);
+
+      return itemDiv;
+    }
+
+    function handleAssetUpload(spriteName, file) {
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var img = new Image();
+        img.onload = function() {
+          customSprites[spriteName] = img;
+          updateAssetPreview(spriteName);
+          saveSpritesToStorage(); // Auto-save to localStorage
+          console.log('Uploaded custom sprite:', spriteName);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetAsset(spriteName) {
+      delete customSprites[spriteName];
+      updateAssetPreview(spriteName);
+      saveSpritesToStorage(); // Auto-save to localStorage
+      console.log('Reset sprite:', spriteName);
+    }
+
+    function updateAssetPreview(spriteName) {
+      var previewDiv = document.getElementById('preview-' + spriteName);
+      if (!previewDiv) return;
+
+      previewDiv.innerHTML = '';
+
+      console.log('Updating preview for', spriteName, '- custom:', !!customSprites[spriteName], 'horseSprites:', !!horseSprites[spriteName], 'sprites:', !!sprites, 'sprites.complete:', sprites ? sprites.complete : 'N/A', 'SPRITES defined:', typeof SPRITES !== 'undefined', 'in SPRITES:', SPRITES && SPRITES[spriteName] ? true : false);
+
+      if (customSprites[spriteName]) {
+        // Show custom sprite
+        var img = document.createElement('img');
+        img.src = customSprites[spriteName].src;
+        previewDiv.appendChild(img);
+      } else if (horseSprites[spriteName] && horseSprites[spriteName].complete) {
+        // Show horse sprite (loaded separately)
+        var img = document.createElement('img');
+        img.src = horseSprites[spriteName].src;
+        previewDiv.appendChild(img);
+      } else if (sprites && sprites.complete && sprites.naturalWidth > 0 && typeof SPRITES !== 'undefined' && SPRITES[spriteName]) {
+        // Show default sprite from spritesheet
+        try {
+          var canvas = document.createElement('canvas');
+          var spriteData = SPRITES[spriteName];
+
+          // Verify dimensions are within image bounds
+          if (spriteData.x + spriteData.w > sprites.naturalWidth || spriteData.y + spriteData.h > sprites.naturalHeight) {
+            throw new Error('Sprite rect out of bounds for ' + spriteName + ' (image: ' + sprites.naturalWidth + 'x' + sprites.naturalHeight + ', rect needs: ' + (spriteData.x + spriteData.w) + 'x' + (spriteData.y + spriteData.h) + ')');
+          }
+
+          canvas.width = spriteData.w;
+          canvas.height = spriteData.h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(sprites, spriteData.x, spriteData.y, spriteData.w, spriteData.h, 0, 0, spriteData.w, spriteData.h);
+
+          var img = document.createElement('img');
+          img.src = canvas.toDataURL();
+          previewDiv.appendChild(img);
+        } catch (e) {
+          console.error('Failed to render sprite preview for', spriteName, e);
+          var errorText = document.createElement('div');
+          errorText.textContent = 'Out of bounds';
+          errorText.style.color = '#f00';
+          errorText.style.textAlign = 'center';
+          errorText.style.paddingTop = '40px';
+          errorText.style.fontSize = '9px';
+          previewDiv.appendChild(errorText);
+        }
+      } else {
+        // Sprites not loaded yet or sprite not found - show message
+        var loadingText = document.createElement('div');
+        if (!sprites && Object.keys(horseSprites).length === 0) {
+          loadingText.textContent = 'Loading...';
+        } else if (typeof SPRITES === 'undefined') {
+          loadingText.textContent = 'SPRITES not loaded';
+        } else {
+          loadingText.textContent = 'Sprite "' + spriteName + '" not found';
+          console.warn('Sprite not found:', spriteName, 'Available sprites:', Object.keys(SPRITES));
+        }
+        loadingText.style.color = '#aaa';
+        loadingText.style.textAlign = 'center';
+        loadingText.style.paddingTop = '40px';
+        loadingText.style.fontSize = '11px';
+        previewDiv.appendChild(loadingText);
+      }
+    }
+
+    function handleBackgroundUpload(layerName, file) {
+      if (!file) return;
+
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var dataUrl = e.target.result;
+        var img = new Image();
+        img.onload = function() {
+          customBackgroundLayers[layerName] = img;
+
+          // Compress image for storage (max 640px width to save space while preserving transparency)
+          var canvas = document.createElement('canvas');
+          var maxWidth = 640; // Smaller size to fit in localStorage
+          var scale = Math.min(1, maxWidth / img.width);
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // Store compressed version as PNG to preserve transparency
+          var compressedDataUrl = canvas.toDataURL('image/png');
+          customBackgroundLayersDataURL[layerName] = compressedDataUrl;
+          console.log('Original size:', (dataUrl.length / 1024 / 1024).toFixed(2), 'MB, Compressed:', (compressedDataUrl.length / 1024 / 1024).toFixed(2), 'MB');
+
+          currentBackgroundSelection[layerName] = 'custom';
+          updateBackgroundPreview(layerName);
+          saveBackgroundsToStorage(); // Auto-save to localStorage
+          console.log('Uploaded custom background layer:', layerName);
+        };
+        img.src = dataUrl;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function resetBackgroundLayer(layerName) {
+      customBackgroundLayers[layerName] = null;
+      customBackgroundLayersDataURL[layerName] = null;
+      currentBackgroundSelection[layerName] = 'default';
+      updateBackgroundPreview(layerName);
+      saveBackgroundsToStorage(); // Auto-save to localStorage
+      console.log('Reset background layer:', layerName);
+    }
+
+    function updateBackgroundPreview(layerName) {
+      var previewDiv = document.getElementById('preview-bg-' + layerName);
+      if (!previewDiv) return;
+
+      previewDiv.innerHTML = '';
+
+      if (customBackgroundLayers[layerName]) {
+        // Show custom background layer
+        var img = document.createElement('img');
+        img.src = customBackgroundLayers[layerName].src;
+        previewDiv.appendChild(img);
+      } else if (background && background.complete && background.naturalWidth > 0) {
+        // Show default background layer from spritesheet
+        try {
+          var canvas = document.createElement('canvas');
+          var bgRect;
+
+          if (layerName === 'sky') {
+            bgRect = BACKGROUND.SKY;
+          } else if (layerName === 'hills') {
+            bgRect = BACKGROUND.HILLS;
+          } else if (layerName === 'trees') {
+            bgRect = BACKGROUND.TREES;
+          }
+
+          if (bgRect) {
+            // Verify dimensions are within image bounds
+            if (bgRect.x + bgRect.w > background.naturalWidth || bgRect.y + bgRect.h > background.naturalHeight) {
+              throw new Error('Background rect out of bounds for ' + layerName + ' (image: ' + background.naturalWidth + 'x' + background.naturalHeight + ', rect needs: ' + (bgRect.x + bgRect.w) + 'x' + (bgRect.y + bgRect.h) + ')');
+            }
+
+            canvas.width = bgRect.w;
+            canvas.height = bgRect.h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(background, bgRect.x, bgRect.y, bgRect.w, bgRect.h, 0, 0, bgRect.w, bgRect.h);
+
+            var img = document.createElement('img');
+            img.src = canvas.toDataURL();
+            previewDiv.appendChild(img);
+          }
+        } catch (e) {
+          console.error('Failed to render background preview for', layerName, e);
+          var errorText = document.createElement('div');
+          errorText.textContent = 'Out of bounds';
+          errorText.style.color = '#f00';
+          errorText.style.textAlign = 'center';
+          errorText.style.paddingTop = '40px';
+          errorText.style.fontSize = '9px';
+          previewDiv.appendChild(errorText);
+        }
+      } else {
+        // Background not loaded yet - show loading message
+        var loadingText = document.createElement('div');
+        loadingText.textContent = 'Loading...';
+        loadingText.style.color = '#aaa';
+        loadingText.style.textAlign = 'center';
+        loadingText.style.paddingTop = '40px';
+        loadingText.style.fontSize = '11px';
+        previewDiv.appendChild(loadingText);
+      }
+    }
+
+    function openAssetEditor() {
+      var modal = Dom.get('asset-editor-modal');
+      modal.style.display = 'block';
+      initAssetEditor();
+
+      // If images are loaded, refresh all previews after a short delay
+      // to ensure DOM elements are created
+      if (sprites || background) {
+        setTimeout(function() {
+          refreshAllPreviews();
+        }, 100);
+      }
+    }
+
+    function refreshAllPreviews() {
+      // Refresh sprite previews
+      for (var categoryName in spriteCategories) {
+        var spriteNames = spriteCategories[categoryName];
+        for (var i = 0; i < spriteNames.length; i++) {
+          updateAssetPreview(spriteNames[i]);
+        }
+      }
+
+      // Refresh background layer previews
+      var bgLayers = ['sky', 'hills', 'trees'];
+      for (var i = 0; i < bgLayers.length; i++) {
+        updateBackgroundPreview(bgLayers[i]);
+      }
+    }
+
+    function closeAssetEditor() {
+      var modal = Dom.get('asset-editor-modal');
+      modal.style.display = 'none';
+    }
+
+    function getSprite(spriteName) {
+      // Return custom sprite if available, otherwise return reference to default
+      return customSprites[spriteName] ? customSprites[spriteName] : null;
+    }
+
+    // Reverse lookup: sprite object → name. Built once, used every frame.
+    var _spriteNameMap = null;
+    function _getSpriteNameMap() {
+      if (!_spriteNameMap) {
+        _spriteNameMap = new Map();
+        for (var n in SPRITES) {
+          if (SPRITES[n] && typeof SPRITES[n] === 'object' && 'x' in SPRITES[n])
+            _spriteNameMap.set(SPRITES[n], n);
+        }
+      }
+      return _spriteNameMap;
+    }
+
+    function renderCustomSprite(ctx, width, height, resolution, roadWidth, sprite, scale, destX, destY, offsetX, offsetY, clipY) {
+      // Check if this sprite has a replacement (priority: level > custom > default)
+      var replacementSprite = null;
+      var spriteName = _getSpriteNameMap().get(sprite) || null;
+
+      if (spriteName) {
+        // Priority 1: Level-specific sprite
+        if (currentLevel > 0 && levelSprites[currentLevel] && levelSprites[currentLevel][spriteName]) {
+          replacementSprite = levelSprites[currentLevel][spriteName];
+        }
+        // Priority 2: User-uploaded custom sprite
+        else if (customSprites[spriteName]) {
+          replacementSprite = customSprites[spriteName];
+        }
+      }
+
+      if (replacementSprite) {
+        // Render replacement sprite (level or custom)
+        var destW  = (sprite.w * scale * width/2) * (SPRITES.SCALE * roadWidth);
+        var destH  = (sprite.h * scale * width/2) * (SPRITES.SCALE * roadWidth);
+
+        destX = destX + (destW * (offsetX || 0));
+        destY = destY + (destH * (offsetY || 0));
+
+        var clipH = clipY ? Math.max(0, destY+destH-clipY) : 0;
+        if (clipH < destH) {
+          ctx.drawImage(replacementSprite, 0, 0, replacementSprite.width, replacementSprite.height - (replacementSprite.height*clipH/destH), destX, destY, destW, destH - clipH);
+        }
+      } else {
+        // Use default rendering from spritesheet
+        Render.sprite(ctx, width, height, resolution, roadWidth, sprites, sprite, scale, destX, destY, offsetX, offsetY, clipY);
+      }
+    }
+
+    //=========================================================================
+    // DUAL MONITOR FUNCTIONS
+    //=========================================================================
+
+    // Store screen details for reuse
+    var cachedScreenDetails = null;
+    var targetSecondScreen = null;
+
+    function openDualMonitorMode() {
+      if (isDualMonitorMode) {
+        closeDualMonitorMode();
+        return;
+      }
+
+      // Try to use Window Management API for multi-screen support
+      console.log('=== DUAL MONITOR MODE: Starting ===');
+      console.log('Window Management API available:', !!window.getScreenDetails);
+
+      if (window.getScreenDetails) {
+        console.log('Requesting screen details...');
+        window.getScreenDetails().then(function(screenDetails) {
+          cachedScreenDetails = screenDetails;
+          var screens = screenDetails.screens;
+          console.log('Detected', screens.length, 'screen(s)');
+
+          // Log all screens
+          for (var i = 0; i < screens.length; i++) {
+            var s = screens[i];
+            console.log('Screen ' + i + ':', {
+              width: s.width,
+              height: s.height,
+              availWidth: s.availWidth,
+              availHeight: s.availHeight,
+              left: s.left,
+              top: s.top,
+              availLeft: s.availLeft,
+              availTop: s.availTop,
+              isPrimary: s.isPrimary,
+              isInternal: s.isInternal
+            });
+          }
+
+          // Find a screen that's not the current one (prefer non-primary)
+          var currentScreen = screenDetails.currentScreen;
+          console.log('Current screen index:', screens.indexOf(currentScreen));
+          targetSecondScreen = null;
+
+          for (var i = 0; i < screens.length; i++) {
+            if (screens[i] !== currentScreen) {
+              targetSecondScreen = screens[i];
+              console.log('Found second screen at index:', i);
+              break;
+            }
+          }
+
+          if (targetSecondScreen) {
+            console.log('Opening fullscreen on second screen:');
+            console.log('  Resolution:', targetSecondScreen.width + 'x' + targetSecondScreen.height);
+            console.log('  Position:', targetSecondScreen.left + ',' + targetSecondScreen.top);
+            openFullscreenOnSecondScreen(targetSecondScreen);
+          } else {
+            console.log('No second screen found, using fallback popup');
+            openWithFallback();
+          }
+        }).catch(function(err) {
+          console.log('Window Management API error:', err);
+          openWithFallback();
+        });
+      } else {
+        console.log('Window Management API not supported, using fallback');
+        openWithFallback();
+      }
+    }
+
+    function openFullscreenOnSecondScreen(screen) {
+      console.log('openFullscreenOnSecondScreen: Opening popup on second screen');
+
+      // Open popup window positioned on the second screen
+      var windowFeatures =
+        'left=' + screen.availLeft +
+        ',top=' + screen.availTop +
+        ',width=' + screen.availWidth +
+        ',height=' + screen.availHeight +
+        ',menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes';
+
+      console.log('Opening window at:', screen.availLeft + ',' + screen.availTop);
+      console.log('Window size:', screen.availWidth + 'x' + screen.availHeight);
+
+      dualMonitorWindow = window.open('', 'HorseRacingGameView', windowFeatures);
+
+      if (!dualMonitorWindow) {
+        console.log('Failed to open window - popup blocked?');
+        alert('Consenti i popup per la modalità dual monitor!');
+        return;
+      }
+
+      // Setup the window content
+      setupDualMonitorWindow(screen.width, screen.height, screen);
+    }
+
+    function updateDualMonitorUI(active) {
+      Dom.get('dual-monitor-status').style.display = active ? 'block' : 'none';
+      var btn = Dom.get('dual-monitor-btn');
+      if (active) {
+        btn.innerHTML = '<span class="material-icons text-base">close</span> Close Dual Monitor';
+        btn.style.background = '#f44336';
+      } else {
+        btn.innerHTML = '<span class="material-icons text-base">desktop_windows</span> Dual Monitor Mode';
+        btn.style.background = '';
+      }
+    }
+
+    function openOnScreen(screen) {
+      // Redirect to the main function
+      openFullscreenOnSecondScreen(screen);
+    }
+
+    function openWithFallback() {
+      console.log('openWithFallback: Using fallback method');
+      // Fallback: estimate second monitor position
+      var screenWidth = window.screen.width;
+      var screenHeight = window.screen.height;
+
+      console.log('  Primary screen:', screenWidth + 'x' + screenHeight);
+      console.log('  Estimating second monitor at position:', screenWidth + ',0');
+
+      var windowFeatures =
+        'left=' + screenWidth +
+        ',top=0' +
+        ',width=' + screenWidth +
+        ',height=' + screenHeight +
+        ',fullscreen=yes' +
+        ',menubar=no,toolbar=no,location=no,status=no,titlebar=no,scrollbars=no,resizable=no';
+
+      console.log('  Window features:', windowFeatures);
+
+      dualMonitorWindow = window.open('', 'Horse Racing - Game View', windowFeatures);
+
+      if (!dualMonitorWindow) {
+        console.log('Failed to open window - popup blocked?');
+        alert('Please allow popups for dual monitor mode!');
+        return;
+      }
+
+      console.log('Window opened successfully');
+      setupDualMonitorWindow(screenWidth, screenHeight, null);
+    }
+
+    function setupDualMonitorWindow(targetWidth, targetHeight, screen) {
+      console.log('setupDualMonitorWindow: Setting up with target resolution:', targetWidth + 'x' + targetHeight);
+
+      // Move and resize window to exact position
+      if (screen) {
+        try {
+          dualMonitorWindow.moveTo(screen.left, screen.top);
+          dualMonitorWindow.resizeTo(screen.width, screen.height);
+          console.log('Window moved to:', screen.left + ',' + screen.top);
+        } catch (e) {
+          console.log('Could not move/resize window:', e);
+        }
+      }
+
+      // Create HTML for secondary window with auto-fullscreen script
+      dualMonitorWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Horse Racing - Game View</title>
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              border: 0;
+              box-sizing: border-box;
+            }
+            html, body {
+              width: 100%;
+              height: 100%;
+              overflow: hidden;
+              background: #000;
+              position: fixed;
+              top: 0;
+              left: 0;
+              cursor: none;
+            }
+            body {
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            #game-canvas {
+              display: block;
+              width: 100vw;
+              height: 100vh;
+              object-fit: contain;
+              image-rendering: pixelated;
+              image-rendering: -moz-crisp-edges;
+              image-rendering: crisp-edges;
+              background: #000;
+            }
+            #fullscreen-overlay {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0,0,0,0.95);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              z-index: 10000;
+              cursor: pointer;
+              color: white;
+              font-family: Arial, sans-serif;
+            }
+            #fullscreen-overlay h1 {
+              font-size: 48px;
+              margin-bottom: 20px;
+            }
+            #fullscreen-overlay p {
+              font-size: 24px;
+              opacity: 0.8;
+            }
+            #fullscreen-overlay .click-icon {
+              font-size: 80px;
+              margin-bottom: 30px;
+              animation: pulse 1.5s infinite;
+            }
+            @keyframes pulse {
+              0%, 100% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.1); opacity: 0.7; }
+            }
+          </style>
+        </head>
+        <body>
+          <canvas id="game-canvas"></canvas>
+          <div id="fullscreen-overlay">
+            <div class="click-icon">🖱️</div>
+            <h1>Click to Start Fullscreen</h1>
+            <p>Il gioco apparirà a schermo intero</p>
+          </div>
+          <script>
+            var overlay = document.getElementById('fullscreen-overlay');
+            var canvas = document.getElementById('game-canvas');
+
+            function enterFullscreen() {
+              var elem = document.documentElement;
+              var promise = null;
+
+              if (elem.requestFullscreen) {
+                promise = elem.requestFullscreen();
+              } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
+              } else if (elem.mozRequestFullScreen) {
+                elem.mozRequestFullScreen();
+              } else if (elem.msRequestFullscreen) {
+                elem.msRequestFullscreen();
+              }
+
+              if (promise) {
+                promise.then(function() {
+                  overlay.style.display = 'none';
+                  document.body.style.cursor = 'none';
+                  // Update canvas size
+                  canvas.width = window.innerWidth;
+                  canvas.height = window.innerHeight;
+                }).catch(function(err) {
+                  console.log('Fullscreen failed:', err);
+                  // Hide overlay anyway, window is already maximized
+                  overlay.style.display = 'none';
+                });
+              } else {
+                overlay.style.display = 'none';
+              }
+            }
+
+            // Click anywhere to go fullscreen
+            overlay.addEventListener('click', enterFullscreen);
+
+            // Also support keyboard
+            document.addEventListener('keydown', function(e) {
+              if (overlay.style.display !== 'none') {
+                enterFullscreen();
+              } else if (e.key === 'Escape') {
+                // Allow ESC to exit fullscreen
+              } else if (e.key === 'f' || e.key === 'F') {
+                if (document.fullscreenElement) {
+                  document.exitFullscreen();
+                } else {
+                  enterFullscreen();
+                }
+              }
+            });
+
+            // Handle fullscreen changes
+            document.addEventListener('fullscreenchange', function() {
+              if (document.fullscreenElement) {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+              }
+            });
+
+            // Handle resize
+            window.addEventListener('resize', function() {
+              canvas.width = window.innerWidth;
+              canvas.height = window.innerHeight;
+            });
+          <\/script>
+        </body>
+        </html>
+      `);
+      dualMonitorWindow.document.close();
+
+      console.log('Dual monitor window HTML created');
+
+      // Get canvas from secondary window
+      dualMonitorCanvas = dualMonitorWindow.document.getElementById('game-canvas');
+      dualMonitorCtx = dualMonitorCanvas.getContext('2d');
+
+      console.log('Canvas element retrieved');
+      console.log('  Window inner size:', dualMonitorWindow.innerWidth + 'x' + dualMonitorWindow.innerHeight);
+
+      // Set initial canvas size
+      dualMonitorCanvas.width = dualMonitorWindow.innerWidth || targetWidth;
+      dualMonitorCanvas.height = dualMonitorWindow.innerHeight || targetHeight;
+
+      console.log('Canvas resolution set to:', dualMonitorCanvas.width + 'x' + dualMonitorCanvas.height);
+
+      isDualMonitorMode = true;
+      console.log('Dual monitor mode activated');
+
+      // Update UI
+      updateDualMonitorUI(true);
+
+      // Handle window close
+      var checkWindowClosed = setInterval(function() {
+        if (dualMonitorWindow && dualMonitorWindow.closed) {
+          clearInterval(checkWindowClosed);
+          closeDualMonitorMode();
+        }
+      }, 1000);
+
+      // Focus the new window so user can click to go fullscreen
+      dualMonitorWindow.focus();
+    }
+
+    function closeDualMonitorMode() {
+      // Close popup window if open
+      if (dualMonitorWindow && !dualMonitorWindow.closed) {
+        dualMonitorWindow.close();
+      }
+
+      dualMonitorWindow = null;
+      dualMonitorCanvas = null;
+      dualMonitorCtx = null;
+      isDualMonitorMode = false;
+
+      // Update UI
+      updateDualMonitorUI(false);
+
+      console.log('Dual monitor mode deactivated');
+    }
+
+    //=========================================================================
+    // MAIN SCREEN INTRO/TITLE FUNCTIONS
+    //=========================================================================
+
+    function initMainIntro() {
+      mainIntroScreen = document.getElementById('main-intro-screen');
+      mainIntroCanvas = document.getElementById('main-intro-canvas');
+      mainIntroCtx = mainIntroCanvas.getContext('2d');
+      mainTitleScreen = document.getElementById('main-title-screen');
+      mainTitleImage = document.getElementById('main-title-image');
+
+      // Preload title images to avoid flicker between frames
+      var titleImagePaths = [
+        'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09.jpeg',
+        'images/titoli/WhatsApp Image 2025-11-11 at 19.25.09 (1).jpeg'
+      ];
+      titleImagePaths.forEach(function(path, index) {
+        var img = new Image();
+        img.src = path;
+        mainTitleImages[index] = img;
+      });
+
+      // Hide HUD during intro
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'none';
+      }
+
+      // Set canvas to fill the screen
+      mainIntroCanvas.width = window.innerWidth;
+      mainIntroCanvas.height = window.innerHeight;
+
+      var INTRO_FRAMES = 61;
+      var FRAME_RATE = 30;
+      var FRAME_DURATION = 1000 / FRAME_RATE;
+      var firstImageLoaded = null;
+
+      // Load intro frames
+      var introLoadedCount = 0;
+      for (var i = 0; i < INTRO_FRAMES; i++) {
+        (function(index) {
+          var img = new Image();
+          var frameNumber = String(index).padStart(4, '0');
+          img.src = 'images/loop intro cavalli mongoli/loop iniziale' + frameNumber + '.png';
+
+          img.onload = function() {
+            introLoadedCount++;
+            if (introLoadedCount === 1) {
+              firstImageLoaded = img;
+            }
+            if (introLoadedCount === INTRO_FRAMES) {
+              // Start intro animation
+              function animateMainIntro(timestamp) {
+                if (!mainIntroActive) return;
+
+                if (timestamp - mainIntroLastFrameTime >= FRAME_DURATION) {
+                  if (mainIntroFrames[mainIntroCurrentFrame] && mainIntroFrames[mainIntroCurrentFrame].complete) {
+                    var currentImg = mainIntroFrames[mainIntroCurrentFrame];
+
+                    // Clear canvas
+                    mainIntroCtx.clearRect(0, 0, mainIntroCanvas.width, mainIntroCanvas.height);
+
+                    // Calculate dimensions to cover the screen while maintaining aspect ratio
+                    var imgAspect = currentImg.width / currentImg.height;
+                    var canvasAspect = mainIntroCanvas.width / mainIntroCanvas.height;
+                    var drawWidth, drawHeight, drawX, drawY;
+
+                    if (imgAspect > canvasAspect) {
+                      // Image is wider - fit to height
+                      drawHeight = mainIntroCanvas.height;
+                      drawWidth = drawHeight * imgAspect;
+                      drawX = (mainIntroCanvas.width - drawWidth) / 2;
+                      drawY = 0;
+                    } else {
+                      // Image is taller - fit to width
+                      drawWidth = mainIntroCanvas.width;
+                      drawHeight = drawWidth / imgAspect;
+                      drawX = 0;
+                      drawY = (mainIntroCanvas.height - drawHeight) / 2;
+                    }
+
+                    mainIntroCtx.drawImage(currentImg, drawX, drawY, drawWidth, drawHeight);
+                  }
+
+                  mainIntroCurrentFrame = (mainIntroCurrentFrame + 1) % INTRO_FRAMES;
+                  mainIntroLastFrameTime = timestamp;
+                }
+
+                mainIntroAnimationId = requestAnimationFrame(animateMainIntro);
+              }
+
+              mainIntroLastFrameTime = performance.now();
+              animateMainIntro(mainIntroLastFrameTime);
+            }
+          };
+
+          img.onerror = function() {
+            console.error('Failed to load main intro frame ' + frameNumber);
+          };
+
+          mainIntroFrames[index] = img;
+        })(i);
+      }
+
+      // Add click handler for main intro/title
+      mainIntroScreen.addEventListener('click', handleMainIntroClick);
+      mainTitleScreen.addEventListener('click', handleMainIntroClick);
+
+      // Add keyboard handler for any key
+      document.addEventListener('keydown', handleMainIntroKeyPress);
+
+      // Add window resize handler to update canvas size (main window only)
+      var resizeHandler = function() {
+        // Only resize if this is the main window (not the dual monitor popup)
+        if (mainIntroActive && mainIntroCanvas && window.name !== 'Horse Racing - Game View') {
+          mainIntroCanvas.width = window.innerWidth;
+          mainIntroCanvas.height = window.innerHeight;
+        }
+      };
+      window.addEventListener('resize', resizeHandler);
+
+      // Start checking for gamepad input during intro/title
+      checkIntroGamepadInput();
+    }
+
+    function handleMainIntroClick() {
+      if (mainIntroActive) {
+        hideMainIntro(); // Go from intro to first title
+      } else if (mainCurrentTitleFrame === 1) {
+        showMainTitleScreen(2); // Go from first title to second title
+      } else if (mainCurrentTitleFrame === 2) {
+        hideMainTitleScreen(); // Go from second title to game
+      }
+    }
+
+    function handleMainIntroKeyPress(ev) {
+      // Only handle keys during intro/title screens, not during gameplay
+      if (!mainIntroActive && mainCurrentTitleFrame === 0) return;
+
+      // Ignore if user is typing in a text field
+      if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA') return;
+
+      // Prevent default behavior
+      ev.preventDefault();
+
+      // Advance through intro/title sequence
+      handleMainIntroClick();
+    }
+
+    var lastIntroGamepadState = {};
+
+    function checkIntroGamepadInput() {
+      // Only check during intro/title screens
+      if (!mainIntroActive && mainCurrentTitleFrame === 0) {
+        // Not in intro/title, check again later
+        setTimeout(checkIntroGamepadInput, 100);
+        return;
+      }
+
+      var gamepad = getGamepad();
+      if (gamepad) {
+        // Check all buttons
+        for (var i = 0; i < gamepad.buttons.length; i++) {
+          var pressed = gamepad.buttons[i].pressed;
+          var wasPressed = lastIntroGamepadState[i] || false;
+
+          // Detect button press (edge detection)
+          if (pressed && !wasPressed) {
+            handleMainIntroClick();
+            break;
+          }
+
+          lastIntroGamepadState[i] = pressed;
+        }
+      }
+
+      // Continue checking
+      setTimeout(checkIntroGamepadInput, 50);
+    }
+
+    function hideMainIntro() {
+      if (!mainIntroActive) return;
+
+      mainIntroActive = false;
+      if (mainIntroAnimationId) {
+        cancelAnimationFrame(mainIntroAnimationId);
+      }
+
+      // Instant transition: show title and hide intro immediately
+      // Title is rendered directly on canvas using preloaded images
+      mainCurrentTitleFrame = 1;
+      mainTitleScreen.style.display = 'none';
+      mainIntroScreen.style.display = 'none';
+    }
+
+    function showMainTitleScreen(frameNumber) {
+      // Just set the frame number - images are already preloaded in mainTitleImages
+      mainCurrentTitleFrame = frameNumber;
+      mainTitleScreen.style.display = 'none';
+    }
+
+    function hideMainTitleScreen() {
+      // Title is rendered on canvas, just reset the frame counter
+      // The canvas will stop showing the title when mainCurrentTitleFrame is 0
+      mainCurrentTitleFrame = 0;
+      mainTitleScreen.style.display = 'none';
+
+      // Show HUD when game starts
+      var hudElement = document.getElementById('hud');
+      if (hudElement) {
+        hudElement.style.display = 'block';
+      }
+    }
+
+    //=========================================================================
+    // LOAD HORSE SPRITES
+    //=========================================================================
+
+    function loadHorseSprites(callback) {
+      // Animation frames for gallop
+      // STRAIGHT has 8 frames, other directions have 8 frames (from DX/SX folders)
+      var directions = ['STRAIGHT', 'LEFT', 'RIGHT'];
+      var terrains = ['', 'UPHILL_'];
+
+      var spriteNames = [];
+
+      // Generate all sprite names: PLAYER_[UPHILL_]DIRECTION_FRAME
+      terrains.forEach(function(terrain) {
+        directions.forEach(function(direction) {
+          // All directions now have 8 frames
+          var frameCount = 8;
+
+          for (var frame = 1; frame <= frameCount; frame++) {
+            var name = 'PLAYER_' + terrain + direction + '_' + frame;
+            spriteNames.push(name);
+          }
+        });
+      });
+
+      var loaded = 0;
+      var total = spriteNames.length;
+
+      spriteNames.forEach(function(name) {
+        var img = new Image();
+        img.onload = function() {
+          loaded++;
+          if (loaded === total) {
+            callback();
+          }
+        };
+        img.onerror = function() {
+          // If frame-specific sprite doesn't exist, try to load base sprite (fallback)
+          var baseName = name.replace(/_[1-8]$/, '');
+          if (!horseSprites[baseName]) {
+            console.warn('Failed to load horse sprite:', name, '- trying fallback');
+            var fallbackImg = new Image();
+            fallbackImg.onload = function() {
+              horseSprites[name] = fallbackImg;
+              loaded++;
+              if (loaded === total) {
+                callback();
+              }
+            };
+            fallbackImg.onerror = function() {
+              console.error('Failed to load fallback sprite:', baseName);
+              loaded++;
+              if (loaded === total) {
+                callback();
+              }
+            };
+            fallbackImg.src = 'images/horses/' + baseName + '.png';
+          } else {
+            // Use already loaded base sprite as fallback
+            horseSprites[name] = horseSprites[baseName];
+            loaded++;
+            if (loaded === total) {
+              callback();
+            }
+          }
+        };
+
+        // Determine the correct path based on direction
+        var imgPath;
+        var frameNum = name.match(/_(\d+)$/)[1]; // Extract frame number
+
+        if (name.includes('_LEFT_')) {
+          // Use images from Cavallone SX folder
+          imgPath = 'images/horses/Cavallone SX/0' + frameNum + '_sx.png';
+        } else if (name.includes('_RIGHT_')) {
+          // Use images from Cavallone DX folder
+          imgPath = 'images/horses/Cavallone DX/0' + frameNum + '_dx.png';
+        } else {
+          // STRAIGHT uses existing images
+          imgPath = 'images/horses/' + name + '.png';
+        }
+
+        img.src = imgPath;
+        horseSprites[name] = img;
+      });
+    }
+
+    //=========================================================================
+    // SKY ANIMATION
+    //=========================================================================
+
+    function updateSkyAnimation() {
+      if (skyAnim.frames.length === 0) return; // no animation for this level
+
+      var now = Date.now();
+      if (skyAnim.lastTime === 0) skyAnim.lastTime = now; // first tick init
+
+      var interval = 1000 / skyAnim.fps;
+      if (now - skyAnim.lastTime >= interval) {
+        skyAnim.currentFrame = (skyAnim.currentFrame + 1) % skyAnim.frames.length;
+        skyAnim.lastTime = now;
+        // Update the active sky layer so the renderer picks it up automatically
+        customBackgroundLayers.sky = skyAnim.frames[skyAnim.currentFrame];
+      }
+    }
+
+    //=========================================================================
+    // UPDATE THE GAME WORLD
+    //=========================================================================
+
+    function update(dt) {
+
+      // Check for pause input (always check, even when paused)
+      checkPauseInput();
+
+      // If game is paused, don't update game logic
+      if (isPaused) {
+        return;
+      }
+
+      var n, car, carW, sprite, spriteW;
+      var playerSegment = findSegment(position+playerZ);
+      var playerW       = SPRITES.PLAYER_STRAIGHT.w * SPRITES.SCALE;
+      var speedPercent  = speed/maxSpeed;
+      var dx            = dt * 2 * speedPercent;
+      var startPosition = position;
+
+      // Update gamepad input
+      updateGamepadInput();
+
+      // Update audio-reactive camera shake
+      updateCameraShake();
+
+      // Update flash effect
+      updateFlash();
+
+      // Update level transition
+      updateLevelTransition();
+
+      // Advance sky animation frame
+      updateSkyAnimation();
+
+      updateCars(dt, playerSegment, playerW);
+
+      position = Util.increase(position, dt * speed, trackLength);
+
+      if (keyLeft)
+        playerX = playerX - dx;
+      else if (keyRight)
+        playerX = playerX + dx;
+
+      playerX = playerX - (dx * speedPercent * playerSegment.curve * centrifugal);
+
+      if (keyFaster)
+        speed = Util.accelerate(speed, accel, dt);
+      else if (keySlower)
+        speed = Util.accelerate(speed, breaking, dt);
+      else
+        speed = Util.accelerate(speed, decel, dt);
+
+      if ((playerX < -1) || (playerX > 1)) {
+
+        if (speed > offRoadLimit)
+          speed = Util.accelerate(speed, offRoadDecel, dt);
+
+        for(n = 0 ; n < playerSegment.sprites.length ; n++) {
+          sprite  = playerSegment.sprites[n];
+          spriteW = sprite.source.w * SPRITES.SCALE;
+          if (Util.overlap(playerX, playerW, sprite.offset + spriteW/2 * (sprite.offset > 0 ? 1 : -1), spriteW)) {
+            speed = maxSpeed/5;
+            position = Util.increase(playerSegment.p1.world.z, -playerZ, trackLength);
+            break;
+          }
+        }
+      }
+
+      for(n = 0 ; n < playerSegment.cars.length ; n++) {
+        car  = playerSegment.cars[n];
+        carW = car.sprite.w * SPRITES.SCALE;
+        if (speed > car.speed) {
+          if (Util.overlap(playerX, playerW, car.offset, carW, 0.8)) {
+            speed    = car.speed * (car.speed/speed);
+            position = Util.increase(car.z, -playerZ, trackLength);
+            break;
+          }
+        }
+      }
+
+      playerX = Util.limit(playerX, -3, 3);
+      speed   = Util.limit(speed, 0, maxSpeed);
+
+      skyOffset  = Util.increase(skyOffset,  skySpeed  * playerSegment.curve * (position-startPosition)/segmentLength, 1);
+      hillOffset = Util.increase(hillOffset, hillSpeed * playerSegment.curve * (position-startPosition)/segmentLength, 1);
+      treeOffset = Util.increase(treeOffset, treeSpeed * playerSegment.curve * (position-startPosition)/segmentLength, 1);
+
+      if (position > playerZ) {
+        if (currentLapTime && (startPosition < playerZ)) {
+          lastLapTime    = currentLapTime;
+          currentLapTime = 0;
+          if (lastLapTime <= Util.toFloat(Dom.storage.fast_lap_time)) {
+            Dom.storage.fast_lap_time = lastLapTime;
+            updateHud('fast_lap_time', formatTime(lastLapTime));
+            Dom.addClassName('fast_lap_time', 'fastest');
+            Dom.addClassName('last_lap_time', 'fastest');
+          }
+          else {
+            Dom.removeClassName('fast_lap_time', 'fastest');
+            Dom.removeClassName('last_lap_time', 'fastest');
+          }
+          updateHud('last_lap_time', formatTime(lastLapTime));
+          Dom.show('last_lap_time');
+        }
+        else {
+          currentLapTime += dt;
+        }
+      }
+
+      // Changed from mph to km/h (multiply by 8 instead of 5)
+      updateHud('speed', 8 * Math.round(speed/500));
+      updateHud('current_lap_time', formatTime(currentLapTime));
+    }
+
+    //-------------------------------------------------------------------------
+
+    function updateCars(dt, playerSegment, playerW) {
+      var n, car, oldSegment, newSegment;
+      for(n = 0 ; n < cars.length ; n++) {
+        car         = cars[n];
+        oldSegment  = findSegment(car.z);
+        car.offset  = car.offset + updateCarOffset(car, oldSegment, playerSegment, playerW);
+        car.z       = Util.increase(car.z, dt * car.speed, trackLength);
+        car.percent = Util.percentRemaining(car.z, segmentLength);
+        newSegment  = findSegment(car.z);
+        if (oldSegment != newSegment) {
+          index = oldSegment.cars.indexOf(car);
+          oldSegment.cars.splice(index, 1);
+          newSegment.cars.push(car);
+        }
+      }
+    }
+
+    function updateCarOffset(car, carSegment, playerSegment, playerW) {
+
+      var i, j, dir, segment, otherCar, otherCarW, lookahead = 20, carW = car.sprite.w * SPRITES.SCALE;
+
+      if ((carSegment.index - playerSegment.index) > drawDistance)
+        return 0;
+
+      for(i = 1 ; i < lookahead ; i++) {
+        segment = segments[(carSegment.index+i)%segments.length];
+
+        if ((segment === playerSegment) && (car.speed > speed) && (Util.overlap(playerX, playerW, car.offset, carW, 1.2))) {
+          if (playerX > 0.5)
+            dir = -1;
+          else if (playerX < -0.5)
+            dir = 1;
+          else
+            dir = (car.offset > playerX) ? 1 : -1;
+          return dir * 1/i * (car.speed-speed)/maxSpeed;
+        }
+
+        for(j = 0 ; j < segment.cars.length ; j++) {
+          otherCar  = segment.cars[j];
+          otherCarW = otherCar.sprite.w * SPRITES.SCALE;
+          if ((car.speed > otherCar.speed) && Util.overlap(car.offset, carW, otherCar.offset, otherCarW, 1.2)) {
+            if (otherCar.offset > 0.5)
+              dir = -1;
+            else if (otherCar.offset < -0.5)
+              dir = 1;
+            else
+              dir = (car.offset > otherCar.offset) ? 1 : -1;
+            return dir * 1/i * (car.speed-otherCar.speed)/maxSpeed;
+          }
+        }
+      }
+
+      if (car.offset < -0.9)
+        return 0.1;
+      else if (car.offset > 0.9)
+        return -0.1;
+      else
+        return 0;
+    }
+
+    //-------------------------------------------------------------------------
+
+    function generateUglyFontFlashImages() {
+      flashStyles = [
+        { font: 'Comic Sans MS',       fg: '#FFFF00', shadow: '#8B0057' },
+        { font: 'Papyrus',             fg: '#2E4A1A', shadow: '#8B6914' },
+        { font: 'Impact',              fg: '#FF0000', shadow: '#880000' },
+        { font: 'Courier New',         fg: '#000000', shadow: '#888888' },
+        { font: 'Brush Script MT',     fg: '#FFD700', shadow: '#1A0030' },
+        { font: 'Wide Latin',          fg: '#FFFFFF', shadow: '#003333' },
+        { font: 'Old English Text MT', fg: '#FFD700', shadow: '#2A0000' },
+        { font: 'Lucida Handwriting',  fg: '#003366', shadow: '#001122' },
+        { font: 'Arial Black',         fg: '#FF00FF', shadow: '#005500' },
+        { font: 'Jokerman',            fg: '#00FFFF', shadow: '#550000' },
+      ];
+
+      var countDisplay = document.getElementById('flash-images-count');
+      if (countDisplay) {
+        countDisplay.textContent = flashStyles.length + ' stili caricati';
+      }
+      if (!currentFlashStyle && flashStyles.length > 0) {
+        currentFlashStyle = flashStyles[0];
+      }
+    }
+
+    function updateHud(key, value) {
+      if (hud[key].value !== value) {
+        hud[key].value = value;
+        Dom.set(hud[key].dom, value);
+      }
+    }
+
+    function formatTime(dt) {
+      var minutes = Math.floor(dt/60);
+      var seconds = Math.floor(dt - (minutes * 60));
+      var tenths  = Math.floor(10 * (dt - Math.floor(dt)));
+      if (minutes > 0)
+        return minutes + "." + (seconds < 10 ? "0" : "") + seconds + "." + tenths;
+      else
+        return seconds + "." + tenths;
+    }
+
+    //=========================================================================
+    // RENDER HUD ON DUAL MONITOR
+    //=========================================================================
+
+    function renderHudOnDualMonitor() {
+      if (!dualMonitorCtx) return;
+
+      // Don't show HUD during intro or title screens
+      if (mainIntroActive || mainCurrentTitleFrame > 0) return;
+
+      var ctx = dualMonitorCtx;
+      var canvasWidth = dualMonitorCanvas.width;
+      var canvasHeight = dualMonitorCanvas.height;
+
+      // HUD styling
+      var fontSize = Math.floor(canvasHeight / 25); // Responsive font size
+      var padding = Math.floor(canvasHeight / 40);
+      var hudHeight = fontSize + padding * 2;
+
+      // Background bar
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, canvasWidth, hudHeight);
+
+      // Border
+      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+      ctx.fillRect(0, hudHeight, canvasWidth, 2);
+
+      // Text styling
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.font = fontSize + 'px Verdana, Geneva, sans-serif';
+      ctx.textBaseline = 'middle';
+
+      var textY = hudHeight / 2;
+
+      // Speed (right)
+      var speedText = (hud.speed.value || 0) + ' km/h';
+      var speedWidth = ctx.measureText(speedText).width;
+      ctx.fillText(speedText, canvasWidth - speedWidth - padding, textY);
+
+      // Current lap time (left)
+      var currentTimeText = 'Time: ' + (hud.current_lap_time.value || '0.0');
+      ctx.fillText(currentTimeText, padding, textY);
+
+      // Fast lap time (center)
+      if (hud.fast_lap_time.value) {
+        var fastTimeText = 'Fastest Lap: ' + hud.fast_lap_time.value;
+        var fastTimeWidth = ctx.measureText(fastTimeText).width;
+        ctx.fillText(fastTimeText, (canvasWidth - fastTimeWidth) / 2, textY);
+      }
+    }
+
+    //=========================================================================
+    // RENDER THE GAME WORLD
+    //=========================================================================
+
+    function renderTitleOverlay() {
+      titleCtx.clearRect(0, 0, titleCanvas.width, titleCanvas.height);
+      var rw = titleCanvas.width;
+      var rh = titleCanvas.height;
+      var imgAspect, canvasAspect, drawWidth, drawHeight, drawX, drawY;
+
+      if (mainIntroActive && mainIntroFrames[mainIntroCurrentFrame] && mainIntroFrames[mainIntroCurrentFrame].complete) {
+        var introImg = mainIntroFrames[mainIntroCurrentFrame];
+        imgAspect    = introImg.width / introImg.height;
+        canvasAspect = rw / rh;
+        if (imgAspect > canvasAspect) {
+          drawHeight = rh; drawWidth = drawHeight * imgAspect;
+          drawX = (rw - drawWidth) / 2; drawY = 0;
+        } else {
+          drawWidth = rw; drawHeight = drawWidth / imgAspect;
+          drawX = 0; drawY = (rh - drawHeight) / 2;
+        }
+        titleCtx.drawImage(introImg, drawX, drawY, drawWidth, drawHeight);
+      } else if (mainCurrentTitleFrame > 0) {
+        var titleImg = mainTitleImages[mainCurrentTitleFrame - 1];
+        if (titleImg && titleImg.complete && titleImg.naturalWidth > 0) {
+          imgAspect    = titleImg.naturalWidth / titleImg.naturalHeight;
+          canvasAspect = rw / rh;
+          if (imgAspect > canvasAspect) {
+            drawHeight = rh; drawWidth = drawHeight * imgAspect;
+            drawX = (rw - drawWidth) / 2; drawY = 0;
+          } else {
+            drawWidth = rw; drawHeight = drawWidth / imgAspect;
+            drawX = 0; drawY = (rh - drawHeight) / 2;
+          }
+          titleCtx.drawImage(titleImg, drawX, drawY, drawWidth, drawHeight);
+        }
+      }
+    }
+
+    function render() {
+
+      // Render to main canvas (level filter applied via canvas.style.filter)
+      renderToCanvas(ctx, width, height);
+
+      // Render titles on overlay canvas (no filter)
+      renderTitleOverlay();
+
+      // Copy main canvas to dual monitor canvas (identical mirror)
+      if (isDualMonitorMode && dualMonitorCanvas && dualMonitorCtx) {
+        // Clear the dual monitor canvas
+        dualMonitorCtx.fillStyle = '#000';
+        dualMonitorCtx.fillRect(0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+
+        // Draw the main canvas content scaled to fit the second screen
+        dualMonitorCtx.drawImage(canvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+
+        // Draw titles on dual monitor (from title overlay canvas)
+        dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+
+        // Draw HUD on dual monitor
+        renderHudOnDualMonitor();
+      }
+    }
+
+    function renderToCanvas(context, renderWidth, renderHeight) {
+      var baseSegment   = findSegment(position);
+      var basePercent   = Util.percentRemaining(position, segmentLength);
+      var playerSegment = findSegment(position+playerZ);
+      var playerPercent = Util.percentRemaining(position+playerZ, segmentLength);
+      var playerY       = Util.interpolate(playerSegment.p1.world.y, playerSegment.p2.world.y, playerPercent);
+      var maxy          = renderHeight;
+
+      var x  = 0;
+      var dx = - (baseSegment.curve * basePercent);
+
+      // Apply camera shake by translating the canvas
+      context.save();
+      context.translate(cameraShakeX, cameraShakeY);
+
+      context.clearRect(-cameraShakeX, -cameraShakeY, renderWidth, renderHeight);
+
+      // Render background layers (with custom support)
+      var skyImage = customBackgroundLayers.sky || background;
+      var hillsImage = customBackgroundLayers.hills || background;
+      var treesImage = customBackgroundLayers.trees || background;
+
+      var skyRect = customBackgroundLayers.sky ?
+        { x: 0, y: 0, w: customBackgroundLayers.sky.width, h: customBackgroundLayers.sky.height } :
+        BACKGROUND.SKY;
+      var hillsRect = customBackgroundLayers.hills ?
+        { x: 0, y: 0, w: customBackgroundLayers.hills.width, h: customBackgroundLayers.hills.height } :
+        BACKGROUND.HILLS;
+      var treesRect = customBackgroundLayers.trees ?
+        { x: 0, y: 0, w: customBackgroundLayers.trees.width, h: customBackgroundLayers.trees.height } :
+        BACKGROUND.TREES;
+
+      // Level 7: use webcam feed as sky layer if active
+      if (currentLevel === 7 && webcamActive && webcamVideo) {
+        var skyH = Math.floor(renderHeight * 0.55);
+        context.drawImage(webcamVideo, 0, 0, renderWidth, skyH);
+      } else {
+        Render.background(context, skyImage, renderWidth, renderHeight, skyRect, skyOffset, resolution * skySpeed * playerY);
+      }
+      if (!(currentLevel === 7 && webcamActive && webcamVideo)) {
+        Render.background(context, hillsImage, renderWidth, renderHeight, hillsRect, hillOffset, resolution * hillSpeed * playerY);
+      }
+      Render.background(context, treesImage, renderWidth, renderHeight, treesRect, treeOffset, resolution * treeSpeed * playerY);
+
+      var n, i, segment, car, sprite, spriteScale, spriteX, spriteY;
+
+      for(n = 0 ; n < drawDistance ; n++) {
+
+        segment        = segments[(baseSegment.index + n) % segments.length];
+        segment.looped = segment.index < baseSegment.index;
+        segment.fog    = getFog(n);
+        segment.clip   = maxy;
+
+        Util.project(segment.p1, (playerX * roadWidth) - x,      playerY + cameraHeight, position - (segment.looped ? trackLength : 0), cameraDepth, renderWidth, renderHeight, roadWidth);
+        Util.project(segment.p2, (playerX * roadWidth) - x - dx, playerY + cameraHeight, position - (segment.looped ? trackLength : 0), cameraDepth, renderWidth, renderHeight, roadWidth);
+
+        x  = x + dx;
+        dx = dx + segment.curve;
+
+        if ((segment.p1.camera.z <= cameraDepth)         ||
+            (segment.p2.screen.y >= segment.p1.screen.y) ||
+            (segment.p2.screen.y >= maxy))
+          continue;
+
+        Render.segment(context, renderWidth, lanes,
+                       segment.p1.screen.x,
+                       segment.p1.screen.y,
+                       segment.p1.screen.w,
+                       segment.p2.screen.x,
+                       segment.p2.screen.y,
+                       segment.p2.screen.w,
+                       segment.fog,
+                       segment.color);
+
+        maxy = segment.p1.screen.y;
+      }
+
+      for(n = (drawDistance-1) ; n > 0 ; n--) {
+        segment = segments[(baseSegment.index + n) % segments.length];
+
+        for(i = 0 ; i < segment.cars.length ; i++) {
+          car         = segment.cars[i];
+          sprite      = car.sprite;
+          spriteScale = Util.interpolate(segment.p1.screen.scale, segment.p2.screen.scale, car.percent);
+          spriteX     = Util.interpolate(segment.p1.screen.x,     segment.p2.screen.x,     car.percent) + (spriteScale * car.offset * roadWidth * renderWidth/2);
+          spriteY     = Util.interpolate(segment.p1.screen.y,     segment.p2.screen.y,     car.percent);
+          renderCustomSprite(context, renderWidth, renderHeight, resolution, roadWidth, car.sprite, spriteScale, spriteX, spriteY, -0.5, -1, segment.clip);
+        }
+
+        for(i = 0 ; i < segment.sprites.length ; i++) {
+          sprite      = segment.sprites[i];
+          spriteScale = segment.p1.screen.scale;
+          spriteX     = segment.p1.screen.x + (spriteScale * sprite.offset * roadWidth * renderWidth/2);
+          spriteY     = segment.p1.screen.y;
+          renderCustomSprite(context, renderWidth, renderHeight, resolution, roadWidth, sprite.source, spriteScale, spriteX, spriteY, (sprite.offset < 0 ? -1 : 0), -1, segment.clip);
+        }
+
+        if (segment == playerSegment) {
+          renderHorsePlayer(context, renderWidth, renderHeight, resolution, roadWidth, speed/maxSpeed,
+                        cameraDepth/playerZ,
+                        renderWidth/2,
+                        (renderHeight/2) - (cameraDepth/playerZ * Util.interpolate(playerSegment.p1.camera.y, playerSegment.p2.camera.y, playerPercent) * renderHeight/2),
+                        speed * (keyLeft ? -1 : keyRight ? 1 : 0),
+                        playerSegment.p2.world.y - playerSegment.p1.world.y);
+        }
+      }
+
+      // Flash overlay
+      if (isFlashing) {
+        // White flash
+        if (flashEnabled) {
+          context.fillStyle = 'rgba(255, 255, 255, 0.7)';
+          context.fillRect(-cameraShakeX, -cameraShakeY, renderWidth, renderHeight);
+        }
+
+        // Text flash (Cavalli Mongoli - randomized style)
+        if (flashImageEnabled && currentFlashStyle) {
+          context.save();
+          context.globalAlpha = 0.9;
+
+          var flashText = 'CAVALLI MONGOLI';
+          var fontSize = Math.floor(renderHeight * 0.18);
+          context.font = 'bold ' + fontSize + 'px "' + currentFlashStyle.font + '", serif';
+          while (context.measureText(flashText).width > renderWidth * 0.9 && fontSize > 20) {
+            fontSize -= 4;
+            context.font = 'bold ' + fontSize + 'px "' + currentFlashStyle.font + '", serif';
+          }
+          context.textAlign    = 'center';
+          context.textBaseline = 'middle';
+          var cx = -cameraShakeX + renderWidth  / 2;
+          var cy = -cameraShakeY + renderHeight / 2;
+
+          context.fillStyle = currentFlashStyle.shadow;
+          context.fillText(flashText, cx + 4, cy + 4);
+          context.fillStyle = currentFlashStyle.fg;
+          context.fillText(flashText, cx, cy);
+
+          context.restore();
+        }
+      }
+
+      // (title/intro overlays are drawn on the separate title-canvas, unaffected by level filter)
+
+      // Restore canvas state after camera shake
+      context.restore();
+    }
+
+    //=========================================================================
+    // RENDER HORSE PLAYER (replaces Render.player)
+    //=========================================================================
+
+    // Fog cache: rebuilt only when drawDistance or fogDensity changes
+    var _fogCache = [];
+    var _fogCacheDrawDistance = -1;
+    var _fogCacheDensity = -1;
+    function getFog(n) {
+      if (_fogCacheDrawDistance !== drawDistance || _fogCacheDensity !== fogDensity) {
+        _fogCacheDrawDistance = drawDistance;
+        _fogCacheDensity = fogDensity;
+        _fogCache = new Array(drawDistance);
+        for (var i = 0; i < drawDistance; i++)
+          _fogCache[i] = Util.exponentialFog(i / drawDistance, fogDensity);
+      }
+      return _fogCache[n];
+    }
+
+    var gallopAnimationTime = 0; // Track animation time
+
+    function renderHorsePlayer(ctx, width, height, resolution, roadWidth, speedPercent, scale, destX, destY, steer, updown) {
+      var bounce = (1.5 * Math.random() * speedPercent * resolution) * (Math.random() < 0.5 ? -1 : 1);
+      var horseImg;
+
+      // Determine direction name
+      var direction;
+      if (steer < 0)
+        direction = 'LEFT';
+      else if (steer > 0)
+        direction = 'RIGHT';
+      else
+        direction = 'STRAIGHT';
+
+      // Determine terrain prefix
+      var terrainPrefix = (updown > 0) ? 'UPHILL_' : '';
+
+      // Calculate gallop animation frame based on speed and time
+      // Animation speed increases with horse speed
+      var animationSpeed = 10 + (speedPercent * 20); // Range: 10-30 fps for animation
+      gallopAnimationTime += (step * animationSpeed);
+
+      // All directions now have 8 frames
+      var maxFrames = 8;
+
+      // Cycle through frames (1, 2, 3, ..., maxFrames)
+      var frameIndex = Math.floor(gallopAnimationTime % maxFrames) + 1;
+
+      // Build sprite name: PLAYER_[UPHILL_]DIRECTION_FRAME
+      var spriteName = 'PLAYER_' + terrainPrefix + direction + '_' + frameIndex;
+      horseImg = horseSprites[spriteName];
+
+      // Fallback to frame 1 if specific frame not found
+      if (!horseImg || !horseImg.complete) {
+        spriteName = 'PLAYER_' + terrainPrefix + direction + '_1';
+        horseImg = horseSprites[spriteName];
+      }
+
+      // Final fallback to original car sprite
+      if (!horseImg || !horseImg.complete) {
+        Render.player(ctx, width, height, resolution, roadWidth, sprites, speedPercent, scale, destX, destY, steer, updown);
+        return;
+      }
+
+      // Calculate dimensions maintaining the original aspect ratio of the horse sprite
+      // Use the base width from original car sprite (80px) as reference
+      var baseWidth = 80;
+
+      // Horse size multiplier - adjust this value to make horses bigger/smaller
+      // 1.0 = same width as original car, <1.0 = smaller, >1.0 = bigger
+      var horseSizeMultiplier = 0.35;
+
+      var destW = (baseWidth * horseSizeMultiplier * scale * width/2) * (SPRITES.SCALE * roadWidth);
+
+      // Calculate height based on the actual aspect ratio of the horse image
+      var aspectRatio = horseImg.naturalHeight / horseImg.naturalWidth;
+      var destH = destW * aspectRatio;
+
+      // Position adjustments
+      destX = destX + (destW * -0.5);
+      destY = destY + (destH * -1) + bounce;
+
+      // Draw the horse sprite
+      ctx.drawImage(horseImg, destX, destY, destW, destH);
+    }
+
+    function findSegment(z) {
+      return segments[Math.floor(z/segmentLength) % segments.length];
+    }
+
+    //=========================================================================
+    // LEVEL SYSTEM FUNCTIONS
+    //=========================================================================
+
+    function lerpColor(colorA, colorB, t) {
+      function hexToRgb(hex) {
+        if (hex.charAt(0) !== '#') return { r: 0, g: 0, b: 0 };
+        var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+      }
+      function rgbToHex(r, g, b) {
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+      }
+      // Handle named colors (white, black) by converting to hex
+      var namedColors = { 'white': '#FFFFFF', 'black': '#000000', 'red': '#FF0000' };
+      colorA = namedColors[colorA] || colorA;
+      colorB = namedColors[colorB] || colorB;
+      var a = hexToRgb(colorA);
+      var b = hexToRgb(colorB);
+      return rgbToHex(
+        Math.round(a.r + (b.r - a.r) * t),
+        Math.round(a.g + (b.g - a.g) * t),
+        Math.round(a.b + (b.b - a.b) * t)
+      );
+    }
+
+    function lerpSegmentColors(from, to, t) {
+      var result = {
+        road:   lerpColor(from.road, to.road, t),
+        grass:  lerpColor(from.grass, to.grass, t),
+        rumble: lerpColor(from.rumble, to.rumble, t)
+      };
+      if (from.lane && to.lane) {
+        result.lane = lerpColor(from.lane, to.lane, t);
+      }
+      return result;
+    }
+
+    function lerpValue(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function snapshotCurrentState() {
+      return {
+        colors: {
+          SKY:   COLORS.SKY,
+          TREE:  COLORS.TREE,
+          FOG:   COLORS.FOG,
+          LIGHT: { road: COLORS.LIGHT.road, grass: COLORS.LIGHT.grass, rumble: COLORS.LIGHT.rumble, lane: COLORS.LIGHT.lane },
+          DARK:  { road: COLORS.DARK.road,  grass: COLORS.DARK.grass,  rumble: COLORS.DARK.rumble },
+          START: { road: COLORS.START.road,  grass: COLORS.START.grass, rumble: COLORS.START.rumble },
+          FINISH:{ road: COLORS.FINISH.road, grass: COLORS.FINISH.grass,rumble: COLORS.FINISH.rumble }
+        },
+        fogDensity: fogDensity,
+        shakeIntensity: shakeIntensity,
+        zoomIntensity: zoomIntensity,
+        cameraHeight: cameraHeight,
+        drawDistance: drawDistance,
+        canvasFilter: canvas ? (canvas.style.filter || 'none') : 'none'
+      };
+    }
+
+    function updateLevelButtons(levelNum) {
+      for (var i = 1; i <= 7; i++) {
+        var btn = document.getElementById('level-btn-' + i);
+        if (btn) {
+          btn.classList.remove('level-btn-active', 'level-modified');
+          if (i === levelNum) {
+            btn.classList.add('level-btn-active');
+          }
+        }
+      }
+      var nameEl = document.getElementById('level-current-name');
+      if (nameEl && LEVEL_PRESETS[levelNum]) {
+        nameEl.textContent = LEVEL_PRESETS[levelNum].name;
+      }
+    }
+
+    function updateSegmentColors() {
+      for (var i = 0; i < segments.length; i++) {
+        var seg = segments[i];
+        if (seg._isStart)  { seg.color = COLORS.START;  continue; }
+        if (seg._isFinish) { seg.color = COLORS.FINISH; continue; }
+        seg.color = Math.floor(i / rumbleLength) % 2 ? COLORS.DARK : COLORS.LIGHT;
+      }
+    }
+
+    var trackFunctionMap = {
+      'addStraight':        null, // will be set after functions are defined
+      'addHill':            null,
+      'addCurve':           null,
+      'addLowRollingHills': null,
+      'addSCurves':         null,
+      'addBumps':           null,
+      'addDownhillToEnd':   null
+    };
+
+    function rebuildTrackForLevel(preset) {
+      if (!preset || !preset.trackRecipe) return;
+
+      var positionPercent = trackLength > 0 ? position / trackLength : 0;
+
+      segments = [];
+
+      for (var i = 0; i < preset.trackRecipe.length; i++) {
+        var step = preset.trackRecipe[i];
+        var fn = trackFunctionMap[step.fn];
+        if (fn) {
+          fn.apply(null, step.args || []);
+        }
+      }
+
+      resetSprites();
+      resetCars();
+
+      // Tag start/finish segments
+      if (segments.length > 5) {
+        segments[findSegment(playerZ).index + 2].color = COLORS.START;
+        segments[findSegment(playerZ).index + 2]._isStart = true;
+        segments[findSegment(playerZ).index + 3].color = COLORS.START;
+        segments[findSegment(playerZ).index + 3]._isStart = true;
+        for (var n = 0; n < rumbleLength; n++) {
+          segments[segments.length - 1 - n].color = COLORS.FINISH;
+          segments[segments.length - 1 - n]._isFinish = true;
+        }
+      }
+
+      trackLength = segments.length * segmentLength;
+      position = positionPercent * trackLength;
+    }
+
+    function applyLevel(levelNum) {
+      var preset = LEVEL_PRESETS[levelNum];
+      if (!preset) return;
+
+      levelTransitionFrom = snapshotCurrentState();
+      levelTransitionTo = preset;
+      levelTransitionStart = Date.now();
+      levelTransitionDuration = Util.toInt(
+        document.getElementById('level-transition-speed') ?
+          document.getElementById('level-transition-speed').value : 2000, 2000
+      );
+      levelTransitionActive = true;
+      currentLevel = levelNum;
+
+      localStorage.setItem(STORAGE_KEY_LEVEL, levelNum);
+      updateLevelButtons(levelNum);
+
+      // Rebuild track immediately
+      rebuildTrackForLevel(preset);
+
+      // Show/hide webcam panel
+      var webcamPanel = document.getElementById('webcam-panel');
+      if (webcamPanel) webcamPanel.classList.toggle('hidden', levelNum !== 7);
+      if (levelNum !== 7 && webcamActive) stopWebcam();
+    }
+
+    function applyLevelImmediate(levelNum) {
+      var preset = LEVEL_PRESETS[levelNum];
+      if (!preset) return;
+
+      currentLevel = levelNum;
+
+      COLORS.SKY   = preset.colors.SKY;
+      COLORS.FOG   = preset.colors.FOG;
+      COLORS.TREE  = preset.colors.TREE;
+      COLORS.LIGHT = { road: preset.colors.LIGHT.road, grass: preset.colors.LIGHT.grass, rumble: preset.colors.LIGHT.rumble, lane: preset.colors.LIGHT.lane };
+      COLORS.DARK  = { road: preset.colors.DARK.road,  grass: preset.colors.DARK.grass,  rumble: preset.colors.DARK.rumble };
+      COLORS.START = { road: preset.colors.START.road,  grass: preset.colors.START.grass, rumble: preset.colors.START.rumble };
+      COLORS.FINISH= { road: preset.colors.FINISH.road, grass: preset.colors.FINISH.grass,rumble: preset.colors.FINISH.rumble };
+
+      fogDensity     = preset.fogDensity;
+      shakeIntensity = preset.shakeIntensity;
+      zoomIntensity  = preset.zoomIntensity;
+      cameraHeight   = preset.cameraHeight;
+      drawDistance    = preset.drawDistance;
+
+      if (canvas) canvas.style.filter = preset.canvasFilter || 'none';
+
+      cameraDepth = 1 / Math.tan((fieldOfView / 2) * Math.PI / 180);
+      playerZ     = (cameraHeight * cameraDepth);
+
+      rebuildTrackForLevel(preset);
+      refreshTweakUI();
+      updateLevelButtons(levelNum);
+
+      // Apply level background layers (override customBackgroundLayers if available)
+      applyLevelBackgrounds(levelNum);
+
+      // Show/hide webcam panel
+      var webcamPanel = document.getElementById('webcam-panel');
+      if (webcamPanel) webcamPanel.classList.toggle('hidden', levelNum !== 7);
+      if (levelNum !== 7 && webcamActive) stopWebcam();
+
+      localStorage.setItem(STORAGE_KEY_LEVEL, levelNum);
+    }
+
+    function applyLevelBackgrounds(levelNum) {
+      var bg = levelBackgrounds[levelNum];
+      if (!bg) return;
+      // For each layer: use level image if present, otherwise restore null (= default spritesheet)
+      customBackgroundLayers.sky   = bg.sky   || null;
+      customBackgroundLayers.hills = bg.hills || null;
+      customBackgroundLayers.trees = bg.trees || null;
+
+      // Set up sky animation for this level (overrides the static sky if frames exist)
+      var frames = levelSkyFrames[levelNum] || [];
+      skyAnim.frames       = frames;
+      skyAnim.currentFrame = 0;
+      skyAnim.lastTime     = 0; // will be initialised on first render tick
+
+      // If animated frames exist, use frame 0 immediately as the active sky layer
+      if (frames.length > 0) {
+        customBackgroundLayers.sky = frames[0];
+      }
+    }
+
+    function updateLevelTransition() {
+      if (!levelTransitionActive) return;
+
+      var now = Date.now();
+      var elapsed = now - levelTransitionStart;
+      var t = Math.min(elapsed / levelTransitionDuration, 1);
+
+      // Ease in-out (cosine)
+      t = (-Math.cos(t * Math.PI) / 2) + 0.5;
+
+      var from = levelTransitionFrom;
+      var to = levelTransitionTo;
+
+      // Lerp COLORS
+      COLORS.SKY   = lerpColor(from.colors.SKY, to.colors.SKY, t);
+      COLORS.FOG   = lerpColor(from.colors.FOG, to.colors.FOG, t);
+      COLORS.TREE  = lerpColor(from.colors.TREE, to.colors.TREE, t);
+      COLORS.LIGHT = lerpSegmentColors(from.colors.LIGHT, to.colors.LIGHT, t);
+      COLORS.DARK  = lerpSegmentColors(from.colors.DARK, to.colors.DARK, t);
+      COLORS.START = lerpSegmentColors(from.colors.START, to.colors.START, t);
+      COLORS.FINISH= lerpSegmentColors(from.colors.FINISH, to.colors.FINISH, t);
+
+      // Lerp numeric parameters
+      fogDensity     = Math.round(lerpValue(from.fogDensity, to.fogDensity, t));
+      shakeIntensity = Math.round(lerpValue(from.shakeIntensity, to.shakeIntensity, t));
+      zoomIntensity  = Math.round(lerpValue(from.zoomIntensity, to.zoomIntensity, t));
+      cameraHeight   = Math.round(lerpValue(from.cameraHeight, to.cameraHeight, t));
+      drawDistance    = Math.round(lerpValue(from.drawDistance, to.drawDistance, t));
+
+      // Apply canvas filter (switch at midpoint)
+      if (canvas) {
+        canvas.style.filter = t >= 0.5 ? (to.canvasFilter || 'none') : (from.canvasFilter || 'none');
+      }
+
+      // Update segment colors live
+      updateSegmentColors();
+
+      // Recalculate camera
+      playerZ = (cameraHeight * cameraDepth);
+
+      // Check if complete
+      if (elapsed >= levelTransitionDuration) {
+        levelTransitionActive = false;
+
+        // Set final values exactly
+        COLORS.SKY   = to.colors.SKY;
+        COLORS.FOG   = to.colors.FOG;
+        COLORS.TREE  = to.colors.TREE;
+        COLORS.LIGHT = { road: to.colors.LIGHT.road, grass: to.colors.LIGHT.grass, rumble: to.colors.LIGHT.rumble, lane: to.colors.LIGHT.lane };
+        COLORS.DARK  = { road: to.colors.DARK.road,  grass: to.colors.DARK.grass,  rumble: to.colors.DARK.rumble };
+        COLORS.START = { road: to.colors.START.road,  grass: to.colors.START.grass, rumble: to.colors.START.rumble };
+        COLORS.FINISH= { road: to.colors.FINISH.road, grass: to.colors.FINISH.grass,rumble: to.colors.FINISH.rumble };
+        fogDensity     = to.fogDensity;
+        shakeIntensity = to.shakeIntensity;
+        zoomIntensity  = to.zoomIntensity;
+        cameraHeight   = to.cameraHeight;
+        drawDistance    = to.drawDistance;
+        if (canvas) canvas.style.filter = to.canvasFilter || 'none';
+
+        // Apply level background layers at end of transition
+        applyLevelBackgrounds(currentLevel);
+
+        updateSegmentColors();
+        refreshTweakUI();
+      }
+    }
+
+    //=========================================================================
+    // LEVEL SPRITE LOADING
+    //=========================================================================
+
+    function loadLevelSprites(levelNum, callback) {
+      var preset = LEVEL_PRESETS[levelNum];
+      if (!preset || !preset.spriteFolder) {
+        if (callback) callback();
+        return;
+      }
+
+      // Already loaded? Skip
+      if (levelSpritesLoaded[levelNum]) {
+        if (callback) callback();
+        return;
+      }
+
+      levelSprites[levelNum] = {};
+      levelBackgrounds[levelNum] = {};
+      var folder = 'images/levels/' + preset.spriteFolder + '/';
+
+      var spritesToLoad = LEVEL_SPRITE_OVERRIDES;
+      var bgLayers = ['sky', 'hills', 'trees'];
+      var bgFiles  = { sky: 'sky.png', hills: 'hills.png', trees: 'trees.png' };
+
+      var totalCount = spritesToLoad.length + bgLayers.length;
+      var loadCount = 0;
+
+      function onDone() {
+        loadCount++;
+        if (loadCount === totalCount) {
+          levelSpritesLoaded[levelNum] = true;
+          var loadedNames = Object.keys(levelSprites[levelNum]);
+          var loadedBg = Object.keys(levelBackgrounds[levelNum]);
+          console.log('Level ' + levelNum + ' (' + preset.name + '): sprites [' + loadedNames.join(', ') + '] bg [' + loadedBg.join(', ') + ']');
+          if (callback) callback();
+        }
+      }
+
+      // Load sprites
+      for (var i = 0; i < spritesToLoad.length; i++) {
+        (function(spriteName) {
+          var img = new Image();
+          img.onload = function() { levelSprites[levelNum][spriteName] = img; onDone(); };
+          img.onerror = function() { onDone(); }; // silently skip missing sprites
+          img.src = folder + spriteName + '.png';
+        })(spritesToLoad[i]);
+      }
+
+      // Load background layers (sky, hills, trees)
+      for (var j = 0; j < bgLayers.length; j++) {
+        (function(layerName) {
+          var img = new Image();
+          img.onload = function() { levelBackgrounds[levelNum][layerName] = img; onDone(); };
+          img.onerror = function() { onDone(); }; // silently skip missing backgrounds
+          img.src = folder + bgFiles[layerName];
+        })(bgLayers[j]);
+      }
+
+      // Load animated sky frames: sky_1.png, sky_2.png, ... (probe until 404)
+      levelSkyFrames[levelNum] = [];
+      (function probeFrame(n) {
+        var img = new Image();
+        img.onload = function() {
+          levelSkyFrames[levelNum].push(img);
+          probeFrame(n + 1); // try next frame
+        };
+        img.onerror = function() {
+          // No more frames — done probing (this is silent/expected)
+          if (levelSkyFrames[levelNum].length > 0) {
+            console.log('Level ' + levelNum + ': sky animation loaded (' + levelSkyFrames[levelNum].length + ' frames)');
+          }
+        };
+        img.src = folder + 'sky_' + n + '.png';
+      })(1);
+    }
+
+    function preloadAllLevelSprites(callback) {
+      var levelsToLoad = 7;
+      var levelsLoaded = 0;
+
+      console.log('Preloading sprites for all 7 levels...');
+
+      for (var l = 1; l <= 7; l++) {
+        loadLevelSprites(l, function() {
+          levelsLoaded++;
+          if (levelsLoaded === levelsToLoad) {
+            console.log('All level sprites preloaded.');
+            if (callback) callback();
+          }
+        });
+      }
+    }
+
+    //=========================================================================
+    // BUILD ROAD GEOMETRY
+    //=========================================================================
+
+    function lastY() { return (segments.length == 0) ? 0 : segments[segments.length-1].p2.world.y; }
+
+    function addSegment(curve, y) {
+      var n = segments.length;
+      segments.push({
+          index: n,
+             p1: { world: { y: lastY(), z:  n   *segmentLength }, camera: {}, screen: {} },
+             p2: { world: { y: y,       z: (n+1)*segmentLength }, camera: {}, screen: {} },
+          curve: curve,
+        sprites: [],
+           cars: [],
+          color: Math.floor(n/rumbleLength)%2 ? COLORS.DARK : COLORS.LIGHT
+      });
+    }
+
+    function addSprite(n, sprite, offset) {
+      if (n >= 0 && n < segments.length) {
+        segments[n].sprites.push({ source: sprite, offset: offset });
+      }
+    }
+
+    function addRoad(enter, hold, leave, curve, y) {
+      var startY   = lastY();
+      var endY     = startY + (Util.toInt(y, 0) * segmentLength);
+      var n, total = enter + hold + leave;
+      for(n = 0 ; n < enter ; n++)
+        addSegment(Util.easeIn(0, curve, n/enter), Util.easeInOut(startY, endY, n/total));
+      for(n = 0 ; n < hold  ; n++)
+        addSegment(curve, Util.easeInOut(startY, endY, (enter+n)/total));
+      for(n = 0 ; n < leave ; n++)
+        addSegment(Util.easeInOut(curve, 0, n/leave), Util.easeInOut(startY, endY, (enter+hold+n)/total));
+    }
+
+    var ROAD = {
+      LENGTH: { NONE: 0, SHORT:  25, MEDIUM:   50, LONG:  100 },
+      HILL:   { NONE: 0, LOW:    20, MEDIUM:   40, HIGH:   60 },
+      CURVE:  { NONE: 0, EASY:    2, MEDIUM:    4, HARD:    6 }
+    };
+
+    function addStraight(num) {
+      num = num || ROAD.LENGTH.MEDIUM;
+      addRoad(num, num, num, 0, 0);
+    }
+
+    function addHill(num, height) {
+      num    = num    || ROAD.LENGTH.MEDIUM;
+      height = height || ROAD.HILL.MEDIUM;
+      addRoad(num, num, num, 0, height);
+    }
+
+    function addCurve(num, curve, height) {
+      num    = num    || ROAD.LENGTH.MEDIUM;
+      curve  = curve  || ROAD.CURVE.MEDIUM;
+      height = height || ROAD.HILL.NONE;
+      addRoad(num, num, num, curve, height);
+    }
+
+    function addLowRollingHills(num, height) {
+      num    = num    || ROAD.LENGTH.SHORT;
+      height = height || ROAD.HILL.LOW;
+      addRoad(num, num, num,  0,                height/2);
+      addRoad(num, num, num,  0,               -height);
+      addRoad(num, num, num,  ROAD.CURVE.EASY,  height);
+      addRoad(num, num, num,  0,                0);
+      addRoad(num, num, num, -ROAD.CURVE.EASY,  height/2);
+      addRoad(num, num, num,  0,                0);
+    }
+
+    function addSCurves() {
+      addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  -ROAD.CURVE.EASY,    ROAD.HILL.NONE);
+      addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,   ROAD.CURVE.MEDIUM,  ROAD.HILL.MEDIUM);
+      addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,   ROAD.CURVE.EASY,   -ROAD.HILL.LOW);
+      addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  -ROAD.CURVE.EASY,    ROAD.HILL.MEDIUM);
+      addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  -ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
+    }
+
+    function addBumps() {
+      addRoad(10, 10, 10, 0,  5);
+      addRoad(10, 10, 10, 0, -2);
+      addRoad(10, 10, 10, 0, -5);
+      addRoad(10, 10, 10, 0,  8);
+      addRoad(10, 10, 10, 0,  5);
+      addRoad(10, 10, 10, 0, -7);
+      addRoad(10, 10, 10, 0,  5);
+      addRoad(10, 10, 10, 0, -2);
+    }
+
+    function addDownhillToEnd(num) {
+      num = num || 200;
+      addRoad(num, num, num, -ROAD.CURVE.EASY, -lastY()/segmentLength);
+    }
+
+    // Wire up track function map for level system
+    trackFunctionMap['addStraight']        = addStraight;
+    trackFunctionMap['addHill']            = addHill;
+    trackFunctionMap['addCurve']           = addCurve;
+    trackFunctionMap['addLowRollingHills'] = addLowRollingHills;
+    trackFunctionMap['addSCurves']         = addSCurves;
+    trackFunctionMap['addBumps']           = addBumps;
+    trackFunctionMap['addDownhillToEnd']   = addDownhillToEnd;
+
+    function resetRoad() {
+      segments = [];
+
+      addStraight(ROAD.LENGTH.SHORT);
+      addLowRollingHills();
+      addSCurves();
+      addCurve(ROAD.LENGTH.MEDIUM, ROAD.CURVE.MEDIUM, ROAD.HILL.LOW);
+      addBumps();
+      addLowRollingHills();
+      addCurve(ROAD.LENGTH.LONG*2, ROAD.CURVE.MEDIUM, ROAD.HILL.MEDIUM);
+      addStraight();
+      addHill(ROAD.LENGTH.MEDIUM, ROAD.HILL.HIGH);
+      addSCurves();
+      addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, ROAD.HILL.NONE);
+      addHill(ROAD.LENGTH.LONG, ROAD.HILL.HIGH);
+      addCurve(ROAD.LENGTH.LONG, ROAD.CURVE.MEDIUM, -ROAD.HILL.LOW);
+      addBumps();
+      addHill(ROAD.LENGTH.LONG, -ROAD.HILL.MEDIUM);
+      addStraight();
+      addSCurves();
+      addDownhillToEnd();
+
+      resetSprites();
+      resetCars();
+
+      segments[findSegment(playerZ).index + 2].color = COLORS.START;
+      segments[findSegment(playerZ).index + 2]._isStart = true;
+      segments[findSegment(playerZ).index + 3].color = COLORS.START;
+      segments[findSegment(playerZ).index + 3]._isStart = true;
+      for(var n = 0 ; n < rumbleLength ; n++) {
+        segments[segments.length-1-n].color = COLORS.FINISH;
+        segments[segments.length-1-n]._isFinish = true;
+      }
+
+      trackLength = segments.length * segmentLength;
+    }
+
+    function resetSprites() {
+      var n, i;
+
+      addSprite(20,  SPRITES.BILLBOARD07, -1);
+      addSprite(40,  SPRITES.BILLBOARD06, -1);
+      addSprite(60,  SPRITES.BILLBOARD08, -1);
+      addSprite(80,  SPRITES.BILLBOARD09, -1);
+      addSprite(100, SPRITES.BILLBOARD01, -1);
+      addSprite(120, SPRITES.BILLBOARD02, -1);
+      addSprite(140, SPRITES.BILLBOARD03, -1);
+      addSprite(160, SPRITES.BILLBOARD04, -1);
+      addSprite(180, SPRITES.BILLBOARD05, -1);
+
+      addSprite(240,                  SPRITES.BILLBOARD07, -1.2);
+      addSprite(240,                  SPRITES.BILLBOARD06,  1.2);
+      addSprite(segments.length - 25, SPRITES.BILLBOARD07, -1.2);
+      addSprite(segments.length - 25, SPRITES.BILLBOARD06,  1.2);
+
+      for(n = 10 ; n < 200 ; n += 4 + Math.floor(n/100)) {
+        addSprite(n, SPRITES.PALM_TREE, 0.5 + Math.random()*0.5);
+        addSprite(n, SPRITES.PALM_TREE,   1 + Math.random()*2);
+      }
+
+      for(n = 250 ; n < 1000 ; n += 5) {
+        addSprite(n,     SPRITES.COLUMN, 1.1);
+        addSprite(n + Util.randomInt(0,5), SPRITES.TREE1, -1 - (Math.random() * 2));
+        addSprite(n + Util.randomInt(0,5), SPRITES.TREE2, -1 - (Math.random() * 2));
+      }
+
+      for(n = 200 ; n < segments.length ; n += 3) {
+        addSprite(n, Util.randomChoice(SPRITES.PLANTS), Util.randomChoice([1,-1]) * (2 + Math.random() * 5));
+      }
+
+      var side, sprite, offset;
+      for(n = 1000 ; n < (segments.length-50) ; n += 100) {
+        side      = Util.randomChoice([1, -1]);
+        addSprite(n + Util.randomInt(0, 50), Util.randomChoice(SPRITES.BILLBOARDS), -side);
+        for(i = 0 ; i < 20 ; i++) {
+          sprite = Util.randomChoice(SPRITES.PLANTS);
+          offset = side * (1.5 + Math.random());
+          addSprite(n + Util.randomInt(0, 50), sprite, offset);
+        }
+
+      }
+
+    }
+
+    function resetCars() {
+      cars = [];
+      var n, car, segment, offset, z, sprite, speed;
+      for (var n = 0 ; n < totalCars ; n++) {
+        offset = Math.random() * Util.randomChoice([-0.8, 0.8]);
+        z      = Math.floor(Math.random() * segments.length) * segmentLength;
+        sprite = Util.randomChoice(SPRITES.CARS);
+        speed  = maxSpeed/4 + Math.random() * maxSpeed/(sprite == SPRITES.SEMI ? 4 : 2);
+        car = { offset: offset, z: z, sprite: sprite, speed: speed };
+        segment = findSegment(car.z);
+        segment.cars.push(car);
+        cars.push(car);
+      }
+    }
+
+    //=========================================================================
+    // THE GAME LOOP
+    //=========================================================================
+
+    // Setup gamepad event listeners
+    window.addEventListener('gamepadconnected', onGamepadConnected);
+    window.addEventListener('gamepaddisconnected', onGamepadDisconnected);
+
+    // Check for already connected gamepads (some browsers don't fire the event on page load)
+    window.addEventListener('load', function() {
+      var gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (var i = 0; i < gamepads.length; i++) {
+        if (gamepads[i]) {
+          onGamepadConnected({ gamepad: gamepads[i] });
+          break;
+        }
+      }
+    });
+
+    // First load horse sprites, then start the game
+    loadHorseSprites(function() {
+      console.log('Horse sprites loaded!');
+      Dom.get('loading').innerHTML = 'Loading saved customizations...';
+
+      // Load saved customizations from localStorage
+      loadSpritesFromStorage(function() {
+        loadBackgroundsFromStorage(function() {
+          console.log('All customizations loaded!');
+          Dom.get('loading').innerHTML = 'Loading level sprites...';
+
+          preloadAllLevelSprites(function() {
+          Dom.get('loading').innerHTML = '';
+
+          // Disable audio functionality
+          Game.playMusic = function() { /* no-op: audio removed */ };
+
+          Game.run({
+            canvas: canvas, render: render, update: update, stats: stats, step: step,
+            images: ["background", "sprites"],
+            keys: [
+              { keys: [KEY.LEFT,  KEY.A], mode: 'down', action: function() { keyLeft   = true;  } },
+              { keys: [KEY.RIGHT, KEY.D], mode: 'down', action: function() { keyRight  = true;  } },
+              { keys: [KEY.UP,    KEY.W], mode: 'down', action: function() { keyFaster = true;  } },
+              { keys: [KEY.DOWN,  KEY.S], mode: 'down', action: function() { keySlower = true;  } },
+              { keys: [KEY.LEFT,  KEY.A], mode: 'up',   action: function() { keyLeft   = false; } },
+              { keys: [KEY.RIGHT, KEY.D], mode: 'up',   action: function() { keyRight  = false; } },
+              { keys: [KEY.UP,    KEY.W], mode: 'up',   action: function() { keyFaster = false; } },
+              { keys: [KEY.DOWN,  KEY.S], mode: 'up',   action: function() { keySlower = false; } },
+              { keys: [KEY.T],            mode: 'down', action: function() { handleTap(); } }
+            ],
+            ready: function(images) {
+              background = images[0];
+              sprites    = images[1];
+              reset();
+              Dom.storage.fast_lap_time = Dom.storage.fast_lap_time || 180;
+              updateHud('fast_lap_time', formatTime(Util.toFloat(Dom.storage.fast_lap_time)));
+
+              // Restore saved level
+              var savedLevel = localStorage.getItem(STORAGE_KEY_LEVEL);
+              if (savedLevel) {
+                var levelNum = Util.toInt(savedLevel, 0);
+                if (levelNum >= 1 && levelNum <= 7) {
+                  applyLevelImmediate(levelNum);
+                }
+              }
+
+              // Initialize text flash styles
+              generateUglyFontFlashImages();
+
+              // Initialize main screen intro
+              initMainIntro();
+            }
+          });
+          }); // end preloadAllLevelSprites
+        }); // end loadBackgroundsFromStorage
+      }); // end loadSpritesFromStorage
+    }); // end window.load
+
+    function reset(options) {
+      options       = options || {};
+      canvas.width  = width  = Util.toInt(options.width,          width);
+      canvas.height = height = Util.toInt(options.height,         height);
+      titleCanvas.width  = canvas.width;
+      titleCanvas.height = canvas.height;
+      lanes                  = Util.toInt(options.lanes,          lanes);
+      roadWidth              = Util.toInt(options.roadWidth,      roadWidth);
+      cameraHeight           = Util.toInt(options.cameraHeight,   cameraHeight);
+      drawDistance           = Util.toInt(options.drawDistance,   drawDistance);
+      fogDensity             = Util.toInt(options.fogDensity,     fogDensity);
+      fieldOfView            = Util.toInt(options.fieldOfView,    fieldOfView);
+      segmentLength          = Util.toInt(options.segmentLength,  segmentLength);
+      rumbleLength           = Util.toInt(options.rumbleLength,   rumbleLength);
+      cameraDepth            = 1 / Math.tan((fieldOfView/2) * Math.PI/180);
+      playerZ                = (cameraHeight * cameraDepth);
+      resolution             = height/480;
+      refreshTweakUI();
+
+      if ((segments.length==0) || (options.segmentLength) || (options.rumbleLength))
+        resetRoad();
+    }
+
+    //=========================================================================
+    // TWEAK UI HANDLERS
+    //=========================================================================
+
+    Dom.on('resolution', 'change', function(ev) {
+      var w, h, ratio;
+      switch(ev.target.options[ev.target.selectedIndex].value) {
+        case 'fullhd': w = 1920; h = 1080; ratio=w/width; break;
+        case 'fine':   w = 1280; h = 960;  ratio=w/width; break;
+        case 'high':   w = 1024; h = 768;  ratio=w/width; break;
+        case 'medium': w = 640;  h = 480;  ratio=w/width; break;
+        case 'low':    w = 480;  h = 360;  ratio=w/width; break;
+      }
+      reset({ width: w, height: h })
+      Dom.blur(ev);
+    });
+
+    Dom.on('lanes',          'change', function(ev) { Dom.blur(ev); reset({ lanes:         ev.target.options[ev.target.selectedIndex].value }); });
+    Dom.on('roadWidth',      'change', function(ev) { Dom.blur(ev); reset({ roadWidth:     Util.limit(Util.toInt(ev.target.value), Util.toInt(ev.target.getAttribute('min')), Util.toInt(ev.target.getAttribute('max'))) }); });
+    Dom.on('cameraHeight',   'change', function(ev) { Dom.blur(ev); reset({ cameraHeight:  Util.limit(Util.toInt(ev.target.value), Util.toInt(ev.target.getAttribute('min')), Util.toInt(ev.target.getAttribute('max'))) }); });
+    Dom.on('drawDistance',   'change', function(ev) { Dom.blur(ev); reset({ drawDistance:  Util.limit(Util.toInt(ev.target.value), Util.toInt(ev.target.getAttribute('min')), Util.toInt(ev.target.getAttribute('max'))) }); });
+    Dom.on('fieldOfView',    'change', function(ev) { Dom.blur(ev); reset({ fieldOfView:   Util.limit(Util.toInt(ev.target.value), Util.toInt(ev.target.getAttribute('min')), Util.toInt(ev.target.getAttribute('max'))) }); });
+    Dom.on('fogDensity',     'change', function(ev) { Dom.blur(ev); reset({ fogDensity:    Util.limit(Util.toInt(ev.target.value), Util.toInt(ev.target.getAttribute('min')), Util.toInt(ev.target.getAttribute('max'))) }); });
+
+    // Audio reactivity handlers
+    Dom.on('audioFile', 'change', function(ev) {
+      var file = ev.target.files[0];
+      if (file) {
+        setupAudioFile(file);
+      }
+    });
+
+    Dom.on('shakeIntensity', 'input', function(ev) {
+      shakeIntensity = Util.toInt(ev.target.value);
+      var currentShake = Dom.get('currentShakeIntensity');
+      if (currentShake) currentShake.innerHTML = shakeIntensity;
+    });
+
+    Dom.on('zoomIntensity', 'input', function(ev) {
+      zoomIntensity = Util.toInt(ev.target.value);
+    });
+
+    // TAP button handler
+    Dom.on('tap-btn', 'click', function(ev) {
+      handleTap();
+    });
+
+    // Asset Editor handlers
+    Dom.on('open-asset-editor', 'click', function() {
+      openAssetEditor();
+    });
+
+    var closeBtn = document.querySelector('.asset-editor-close');
+    if (closeBtn) {
+      closeBtn.onclick = function() {
+        closeAssetEditor();
+      };
+    }
+
+    // Clear storage button handler
+    Dom.on('clear-storage-btn', 'click', function() {
+      if (confirm('Are you sure you want to clear all saved customizations? This cannot be undone!')) {
+        // Clear storage
+        clearAllStoredData();
+
+        // Reset runtime data
+        customSprites = {};
+        customBackgroundLayers = {
+          sky: null,
+          hills: null,
+          trees: null
+        };
+        currentBackgroundSelection = {
+          sky: 'default',
+          hills: 'default',
+          trees: 'default'
+        };
+
+        // Refresh asset editor if it's open
+        var assetModal = Dom.get('asset-editor-modal');
+        if (assetModal && assetModal.style.display === 'block') {
+          initAssetEditor();
+        }
+
+        // Show confirmation
+        var statusDiv = Dom.get('storage-status');
+        statusDiv.innerHTML = '✅ All customizations cleared!';
+        statusDiv.style.color = '#4CAF50';
+        setTimeout(function() {
+          statusDiv.innerHTML = '';
+        }, 3000);
+
+        console.log('All customizations reset');
+      }
+    });
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+      var modal = Dom.get('asset-editor-modal');
+      if (event.target === modal) {
+        closeAssetEditor();
+      }
+    };
+
+    function refreshTweakUI() {
+      Dom.get('lanes').selectedIndex = lanes-1;
+      Dom.get('currentRoadWidth').innerHTML      = Dom.get('roadWidth').value      = roadWidth;
+      Dom.get('currentCameraHeight').innerHTML   = Dom.get('cameraHeight').value   = cameraHeight;
+      Dom.get('currentDrawDistance').innerHTML   = Dom.get('drawDistance').value   = drawDistance;
+      Dom.get('currentFieldOfView').innerHTML    = Dom.get('fieldOfView').value    = fieldOfView;
+      Dom.get('currentFogDensity').innerHTML     = Dom.get('fogDensity').value     = fogDensity;
+      Dom.get('currentShakeIntensity').innerHTML = Dom.get('shakeIntensity').value = shakeIntensity;
+    }
+
+    //=========================================================================
+    // FULLSCREEN MODE
+    //=========================================================================
+
+    var isFullscreen = false;
+    var fullscreenElement = null;
+
+    function toggleFullscreen() {
+      var racerDiv = Dom.get('racer');
+      var btn = Dom.get('fullscreen-btn');
+
+      if (!isFullscreen) {
+        // Enter fullscreen
+        var requestFullscreen = racerDiv.requestFullscreen ||
+                                racerDiv.webkitRequestFullscreen ||
+                                racerDiv.mozRequestFullScreen ||
+                                racerDiv.msRequestFullscreen;
+
+        if (requestFullscreen) {
+          console.log('Requesting fullscreen...');
+          requestFullscreen.call(racerDiv);
+          isFullscreen = true;
+          btn.innerHTML = '🗙 Exit Fullscreen (ESC or F)';
+        } else {
+          alert('Fullscreen not supported on this browser');
+        }
+      } else {
+        // Exit fullscreen
+        var exitFullscreen = document.exitFullscreen ||
+                            document.webkitExitFullscreen ||
+                            document.mozCancelFullScreen ||
+                            document.msExitFullscreen;
+
+        if (exitFullscreen) {
+          console.log('Exiting fullscreen...');
+          exitFullscreen.call(document);
+          isFullscreen = false;
+          btn.innerHTML = '🖥️ Fullscreen Mode';
+        }
+      }
+    }
+
+    // Listen for fullscreen changes (including ESC key)
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    function handleFullscreenChange() {
+      var inFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement ||
+                           document.mozFullScreenElement || document.msFullscreenElement);
+
+      console.log('Fullscreen state:', inFullscreen);
+
+      if (inFullscreen) {
+        // Entered fullscreen
+        console.log('Entered fullscreen, resizing...');
+        setTimeout(function() {
+          var w = window.innerWidth;
+          var h = window.innerHeight;
+          console.log('Fullscreen size:', w, 'x', h);
+
+          // Set canvas internal resolution
+          canvas.width = w;
+          canvas.height = h;
+
+          // Also set CSS display size explicitly
+          canvas.style.width = w + 'px';
+          canvas.style.height = h + 'px';
+
+          // Update HUD width to match screen width
+          var hudElement = Dom.get('hud');
+          if (hudElement) {
+            hudElement.style.width = w + 'px';
+            hudElement.style.maxWidth = 'none';
+          }
+
+          // Reset game with new dimensions
+          reset({ width: w, height: h });
+
+          isFullscreen = true;
+          Dom.get('fullscreen-btn').innerHTML = '🗙 Exit Fullscreen (ESC or F)';
+        }, 100);
+      } else {
+        // Exited fullscreen
+        console.log('Exited fullscreen, resizing to normal...');
+        setTimeout(function() {
+          // Restore original dimensions (Full HD)
+          canvas.width = 1920;
+          canvas.height = 1080;
+
+          // Restore CSS display size
+          canvas.style.width = '640px';
+          canvas.style.height = '480px';
+
+          // Restore HUD width
+          var hudElement = Dom.get('hud');
+          if (hudElement) {
+            hudElement.style.width = '';
+            hudElement.style.maxWidth = '';
+          }
+
+          // Reset game with original dimensions
+          reset({ width: 1024, height: 768 });
+
+          isFullscreen = false;
+          Dom.get('fullscreen-btn').innerHTML = '🖥️ Fullscreen Mode';
+        }, 100);
+      }
+    }
+
+    // Attach click handler to fullscreen button
+    Dom.on('fullscreen-btn', 'click', toggleFullscreen);
+
+    // Attach click handler to dual monitor button
+    Dom.on('dual-monitor-btn', 'click', openDualMonitorMode);
+
+    // Alternative: Press F key for fullscreen
+    document.addEventListener('keydown', function(ev) {
+      if (ev.keyCode === 70 && !ev.ctrlKey && !ev.altKey) { // F key
+        ev.preventDefault();
+        toggleFullscreen();
+      }
+    });
+
+    // Pause menu keyboard controls: ESC and P
+    document.addEventListener('keydown', function(ev) {
+      if (ev.keyCode === 27 || ev.keyCode === 80) { // ESC or P key
+        ev.preventDefault();
+        togglePause();
+      }
+    });
+
+    // TAP tempo keyboard control: T key
+    document.addEventListener('keydown', function(ev) {
+      if (ev.keyCode === 84 && !ev.ctrlKey && !ev.altKey) { // T key
+        ev.preventDefault();
+        handleTap();
+      }
+    });
+
+    // Level switch keyboard controls: keys 1-7
+    document.addEventListener('keydown', function(ev) {
+      var levelNum = ev.keyCode - 48; // 49='1' -> 1, 55='7' -> 7
+      if (levelNum >= 1 && levelNum <= 7 && !ev.ctrlKey && !ev.altKey && !ev.shiftKey) {
+        // Don't trigger if user is typing in an input field
+        if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
+        ev.preventDefault();
+        applyLevel(levelNum);
+      }
+    });
+
+    // Pause menu button event listeners
+    Dom.on('resume-btn', 'click', function() {
+      resumeGame();
+    });
+
+    Dom.on('restart-btn', 'click', function() {
+      restartRace();
+    });
+
+    Dom.on('main-menu-btn', 'click', function() {
+      goToMainMenu();
+    });
+
+    //=========================================================================
+    // WEBRTC WEBCAM (Level 7 — phone as camera)
+    //=========================================================================
+
+    function setWebcamStatus(msg, active) {
+      var el = document.getElementById('webcam-status');
+      var stopBtn = document.getElementById('webcam-stop-btn');
+      if (el) el.textContent = msg;
+      if (stopBtn) stopBtn.classList.toggle('hidden', !active);
+    }
+
+    function stopWebcam() {
+      // Stop local stream
+      if (webcamVideo && webcamVideo.srcObject) {
+        webcamVideo.srcObject.getTracks().forEach(function(t) { t.stop(); });
+        webcamVideo.srcObject = null;
+      }
+      // Stop WebRTC
+      if (webcamPc) { webcamPc.close(); webcamPc = null; }
+      if (webcamSocket) { webcamSocket.disconnect(); webcamSocket = null; }
+      webcamActive = false;
+      setWebcamStatus('Off', false);
+    }
+
+    async function startLocalWebcam() {
+      stopWebcam();
+      setWebcamStatus('Accesso alla camera...', false);
+      try {
+        var stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        if (!webcamVideo) {
+          webcamVideo = document.createElement('video');
+          webcamVideo.autoplay = true;
+          webcamVideo.muted = true;
+          webcamVideo.playsInline = true;
+        }
+        webcamVideo.srcObject = stream;
+        await webcamVideo.play();
+        webcamActive = true;
+        setWebcamStatus('PC/USB attiva', true);
+      } catch(e) {
+        setWebcamStatus('Errore: ' + e.message, false);
+        console.warn('Local webcam error:', e);
+      }
+    }
+
+    function initWebcamWebRTC() {
+      if (webcamSocket) return; // already initialised
+
+      // socket.io must be available (loaded via server.js)
+      if (typeof io === 'undefined') {
+        console.warn('WebRTC: socket.io not available — serve via server.js to enable webcam.');
+        return;
+      }
+
+      var RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+      webcamSocket = io();
+
+      webcamSocket.on('connect', function() {
+        webcamSocket.emit('join', 'pc');
+        console.log('WebRTC: joined signaling as pc');
+      });
+
+      webcamSocket.on('peer-joined', function(role) {
+        if (role === 'phone') console.log('WebRTC: phone connected');
+      });
+
+      webcamSocket.on('offer', async function(offer) {
+        if (webcamPc) { webcamPc.close(); }
+        webcamPc = new RTCPeerConnection(RTC_CONFIG);
+
+        webcamPc.onicecandidate = function(e) {
+          if (e.candidate) webcamSocket.emit('ice-candidate', e.candidate);
+        };
+
+        webcamPc.ontrack = function(e) {
+          if (!webcamVideo) {
+            webcamVideo = document.createElement('video');
+            webcamVideo.autoplay = true;
+            webcamVideo.muted = true;
+            webcamVideo.playsInline = true;
+          }
+          webcamVideo.srcObject = e.streams[0];
+          webcamVideo.play().then(function() {
+            webcamActive = true;
+            setWebcamStatus('Phone attiva', true);
+            console.log('WebRTC: webcam stream active');
+          }).catch(function(err) {
+            setWebcamStatus('Errore play: ' + err.message, false);
+            console.warn('WebRTC: video play error', err);
+          });
+        };
+
+        webcamPc.onconnectionstatechange = function() {
+          if (webcamPc.connectionState === 'disconnected' || webcamPc.connectionState === 'failed') {
+            webcamActive = false;
+            setWebcamStatus('Disconnesso', false);
+            console.log('WebRTC: stream disconnected');
+          }
+        };
+
+        await webcamPc.setRemoteDescription(new RTCSessionDescription(offer));
+        var answer = await webcamPc.createAnswer();
+        await webcamPc.setLocalDescription(answer);
+        webcamSocket.emit('answer', answer);
+      });
+
+      webcamSocket.on('ice-candidate', async function(candidate) {
+        if (webcamPc && candidate) {
+          try { await webcamPc.addIceCandidate(new RTCIceCandidate(candidate)); } catch(e) {}
+        }
+      });
+
+      webcamSocket.on('peer-disconnected', function() {
+        webcamActive = false;
+      });
+    }
+
+    //=========================================================================
+
+  </script>
+
+</body>
+</html>

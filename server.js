@@ -8,14 +8,14 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'javascript-racer'), { index: false }));
+app.use(express.static(__dirname, { index: false }));
 
 app.get('/phone', (req, res) => {
   res.sendFile(path.join(__dirname, 'phone.html'));
 });
 
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'javascript-racer', 'horse-racing.html'));
+  res.sendFile(path.join(__dirname, 'horse-racing.html'));
 });
 
 // Simple 2-peer signaling: 'phone' and 'pc' roles
