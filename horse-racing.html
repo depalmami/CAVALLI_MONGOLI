@@ -401,9 +401,23 @@
             <span class="text-[10px] opacity-60">Club</span>
           </button>
         </div>
-        <!-- Level 7 Camera Source panel -->
+        <!-- Camera Source panel (sfondo live per qualsiasi livello) -->
         <div id="webcam-panel" class="mt-3 p-2 rounded bg-purple-50 dark:bg-purple-950 border border-purple-300 dark:border-purple-700 space-y-2">
-          <div class="text-xs font-semibold text-purple-700 dark:text-purple-300">Level 7 — Camera</div>
+          <div class="flex items-center justify-between gap-2 flex-wrap">
+            <div class="text-xs font-semibold text-purple-700 dark:text-purple-300">Camera Background — attivabile su qualsiasi livello</div>
+            <div class="flex items-center gap-2">
+              <span id="webcam-rtc-status" class="text-[10px] px-2 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">RTC: idle</span>
+              <button onclick="reinitWebcamWebRTC()" class="text-[10px] px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white" title="Riconnetti il signaling come PC">Re-init</button>
+            </div>
+          </div>
+          <div id="webcam-phone-url" class="text-[10px] text-purple-700 dark:text-purple-200 break-all"></div>
+
+          <!-- Avviso contesto non sicuro: getUserMedia bloccato → Continuity Camera non funziona -->
+          <div id="webcam-secure-warn" class="hidden text-[11px] leading-snug bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100 rounded p-2 border border-amber-300 dark:border-amber-700">
+            <b>⚠️ Contesto non sicuro:</b> stai aprendo il gioco da un LAN IP. I browser bloccano l'accesso alla camera (Continuity Camera).<br>
+            <b>Soluzione:</b> sul Mac apri <code class="font-mono">http://localhost:<span id="webcam-secure-port">3000</span></code> e premi nuovamente Livello 7.<br>
+            <span class="opacity-80">Il path WebRTC tramite iPad su <code>/phone</code> continua a funzionare anche da qui.</span>
+          </div>
 
           <!-- Device selector -->
           <div class="flex flex-wrap gap-2 items-center">
@@ -411,8 +425,8 @@
               class="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-white dark:bg-gray-800 border border-purple-300 dark:border-purple-600 text-gray-900 dark:text-white">
               <option value="">— seleziona camera —</option>
             </select>
-            <button onclick="enumerateWebcamDevices()"
-              class="px-2 py-1 text-xs rounded bg-purple-600 hover:bg-purple-700 text-white font-medium" title="Aggiorna lista device">
+            <button onclick="enumerateWebcamDevices(true)"
+              class="px-2 py-1 text-xs rounded bg-purple-600 hover:bg-purple-700 text-white font-medium" title="Richiedi permessi e aggiorna lista device">
               ↺
             </button>
             <button id="webcam-stop-btn" onclick="stopWebcam()"
@@ -420,6 +434,19 @@
               Stop
             </button>
             <span id="webcam-status" class="text-xs text-gray-500 dark:text-gray-400">Off</span>
+          </div>
+
+          <!-- Continuity Camera help banner (auto-hidden quando si trova un device esterno) -->
+          <div id="webcam-help" class="text-[11px] leading-snug text-purple-800 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/50 rounded p-2 hidden">
+            <div class="font-semibold mb-1">iPad non in lista? Checklist Continuity Camera:</div>
+            <ol class="list-decimal list-inside space-y-0.5">
+              <li>Stesso Apple ID, Wi-Fi e Bluetooth attivi su Mac + iPad</li>
+              <li>iPad: Impostazioni → Generali → AirPlay e Handoff → <b>Fotocamera Continuity</b> ON</li>
+              <li>iPad sbloccato e vicino al Mac (entro pochi metri)</li>
+              <li>Concedi permesso fotocamera al browser (premi ↺ e accetta)</li>
+              <li>Su Chrome: chrome://settings/content/camera deve permettere localhost</li>
+              <li>In alternativa apri <code id="webcam-phone-link" class="font-mono"></code> dall'iPad per il path WebRTC</li>
+            </ol>
           </div>
 
           <!-- Chroma key -->
@@ -1945,7 +1972,9 @@
         audioAnalyser.fftSize = 256;
         audioBufferLength = audioAnalyser.frequencyBinCount;
         audioDataArray = new Uint8Array(audioBufferLength);
-        audioAnalyser.connect(audioContext.destination);
+        // L'analyser è un nodo di analisi puro: non lo colleghiamo alle casse.
+        // Saranno le sorgenti specifiche (file musicale) a collegarsi alla destination.
+        // Il microfono invece resta collegato SOLO all'analyser → analizzato ma muto.
       }
     }
 
@@ -1970,6 +1999,9 @@
       // Create new audio source from audio element
       audioSource = audioContext.createMediaElementSource(audioPlayer);
       audioSource.connect(audioAnalyser);
+      // Il file musicale DEVE essere routato alla destination per essere udibile:
+      // createMediaElementSource interrompe il path nativo del <audio>.
+      audioSource.connect(audioContext.destination);
 
       console.log('Audio file loaded:', file.name);
     }
@@ -1985,7 +2017,8 @@
       audioStatus.style.display = 'block';
       audioStatus.textContent = 'Requesting microphone access...';
 
-      // Request microphone access
+      // Request microphone access (echoCancellation/noiseSuppression non servono qui:
+      // il mic viene SOLO analizzato, mai riprodotto sulle casse)
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(function(stream) {
           // Disconnect old source if exists
@@ -1995,13 +2028,14 @@
 
           // Create audio source from microphone stream
           audioSource = audioContext.createMediaStreamSource(stream);
+          // SOLO analyser: non colleghiamo alla destination per evitare feedback acustico.
           audioSource.connect(audioAnalyser);
 
-          audioStatus.textContent = 'Microphone active';
+          audioStatus.textContent = 'Microphone active (muted output)';
           audioStatus.classList.add('text-green-600', 'dark:text-green-400');
           audioStatus.classList.remove('text-gray-500', 'dark:text-gray-400');
 
-          console.log('Microphone input active');
+          console.log('Microphone input active (analysis only, output muted)');
         })
         .catch(function(err) {
           console.error('Error accessing microphone:', err);
@@ -3701,8 +3735,8 @@
         { x: 0, y: 0, w: customBackgroundLayers.trees.width, h: customBackgroundLayers.trees.height } :
         BACKGROUND.TREES;
 
-      // Level 7: use webcam feed as background if active
-      if (currentLevel === 7 && webcamActive && webcamVideo) {
+      // Camera background: se la camera è attiva, sostituisce sky+hills su ogni livello
+      if (webcamActive && webcamVideo) {
         drawWebcamFrame(context, 0, 0, renderWidth, renderHeight);
       } else {
         Render.background(context, skyImage, renderWidth, renderHeight, skyRect, skyOffset, resolution * skySpeed * playerY);
@@ -4058,10 +4092,8 @@
       // Rebuild track immediately
       rebuildTrackForLevel(preset);
 
-      // Show/hide webcam panel
-      var webcamPanel = document.getElementById('webcam-panel');
-      if (webcamPanel) webcamPanel.classList.toggle('hidden', levelNum !== 7);
-      if (levelNum !== 7 && webcamActive) stopWebcam();
+      // Camera background ora gira su ogni livello: il pannello resta visibile e
+      // lo stream non viene fermato cambiando livello.
     }
 
     function applyLevelImmediate(levelNum) {
@@ -4096,11 +4128,7 @@
       // Apply level background layers (override customBackgroundLayers if available)
       applyLevelBackgrounds(levelNum);
 
-      // Show/hide webcam panel
-      var webcamPanel = document.getElementById('webcam-panel');
-      if (webcamPanel) webcamPanel.classList.toggle('hidden', levelNum !== 7);
-      if (levelNum !== 7 && webcamActive) stopWebcam();
-
+      // Camera background ora gira su ogni livello — niente stop al cambio.
       localStorage.setItem(STORAGE_KEY_LEVEL, levelNum);
     }
 
@@ -4560,6 +4588,10 @@
 
               // Initialize main screen intro
               initMainIntro();
+
+              // Camera background system: enumera device, mostra phone URL, avvia signaling.
+              // La camera funziona come sfondo su qualsiasi livello.
+              initCameraSystem();
             }
           });
           }); // end preloadAllLevelSprites
@@ -4870,7 +4902,7 @@
     });
 
     //=========================================================================
-    // WEBRTC WEBCAM (Level 7 — phone as camera)
+    // WEBRTC WEBCAM (Level 7 — Continuity Camera locale + phone via WebRTC)
     //=========================================================================
 
     function setWebcamStatus(msg, active) {
@@ -4880,75 +4912,253 @@
       if (stopBtn) stopBtn.classList.toggle('hidden', !active);
     }
 
+    function ensureWebcamVideoElement() {
+      // Importante: alcuni browser (Safari/macOS in particolare) NON decodificano
+      // frame da un <video> che non è nel DOM. Lo attacchiamo nascosto.
+      if (webcamVideo && document.body.contains(webcamVideo)) return webcamVideo;
+      if (!webcamVideo) {
+        webcamVideo = document.createElement('video');
+        webcamVideo.autoplay   = true;
+        webcamVideo.muted      = true;
+        webcamVideo.playsInline = true;
+        webcamVideo.setAttribute('playsinline', '');
+        webcamVideo.setAttribute('muted', '');
+      }
+      webcamVideo.style.cssText =
+        'position:fixed;left:-9999px;top:-9999px;width:2px;height:2px;opacity:0;pointer-events:none;';
+      document.body.appendChild(webcamVideo);
+      return webcamVideo;
+    }
+
+    function looksLikeExternalCamera(label) {
+      if (!label) return false;
+      var l = label.toLowerCase();
+      return l.indexOf('ipad') >= 0 || l.indexOf('iphone') >= 0 ||
+             l.indexOf('continuity') >= 0 || l.indexOf('camo') >= 0 ||
+             l.indexOf('obs') >= 0;
+    }
+
+    function updateWebcamHelp(videoDevices) {
+      var help = document.getElementById('webcam-help');
+      if (!help) return;
+      var hasExternal = (videoDevices || []).some(function(d) { return looksLikeExternalCamera(d.label); });
+      help.classList.toggle('hidden', hasExternal);
+    }
+
+    function setRtcStatus(label, kind) {
+      var el = document.getElementById('webcam-rtc-status');
+      if (!el) return;
+      el.textContent = 'RTC: ' + label;
+      var colors = {
+        idle:    'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200',
+        wait:    'bg-yellow-200 dark:bg-yellow-800 text-yellow-900 dark:text-yellow-100',
+        ok:      'bg-green-200 dark:bg-green-800 text-green-900 dark:text-green-100',
+        err:     'bg-red-200 dark:bg-red-800 text-red-900 dark:text-red-100'
+      };
+      el.className = 'text-[10px] px-2 py-0.5 rounded ' + (colors[kind] || colors.idle);
+    }
+
+    async function updatePhoneUrlBadge() {
+      var badge = document.getElementById('webcam-phone-url');
+      var link  = document.getElementById('webcam-phone-link');
+      if (!badge && !link) return;
+
+      var host = location.hostname;
+      var port = location.port ? (':' + location.port) : '';
+      // IMPORTANTE: usiamo /cam (URL nuovo) invece di /phone, perché iOS Safari
+      // cacha /phone in modo aggressivo. URL mai visto = niente cache.
+      var phonePath = '/cam';
+      var base = 'http://' + host + port + phonePath;  // forziamo http: il server non parla https
+
+      // Su localhost il PC è il Mac stesso: chiediamo al server gli IP LAN reali
+      if (host === 'localhost' || host === '127.0.0.1') {
+        try {
+          var r = await fetch('/_lan_info', { cache: 'no-store' });
+          if (r.ok) {
+            var info = await r.json();
+            if (info.ips && info.ips.length) {
+              base = 'http://' + info.ips[0] + ':' + info.port + phonePath;
+            }
+          }
+        } catch(_) { /* ignore */ }
+      }
+
+      // Cache-buster di backup
+      var url = base + '?v=' + Date.now();
+
+      var msg = 'iPad → apri (http://, NON https://): ' + url + '   ⚠️ NON aprirlo sul Mac';
+      if (badge) badge.textContent = msg;
+      if (link) link.textContent = url;
+    }
+
+    function reinitWebcamWebRTC() {
+      // Forza un riallaccio pulito del signaling come 'pc'
+      try {
+        if (webcamPc) { webcamPc.close(); webcamPc = null; }
+        if (webcamSocket) { webcamSocket.disconnect(); webcamSocket = null; }
+      } catch(_) {}
+      setRtcStatus('reconnecting…', 'wait');
+      initWebcamWebRTC();
+    }
+
     function stopWebcam() {
       // Stop local stream
       if (webcamVideo && webcamVideo.srcObject) {
         webcamVideo.srcObject.getTracks().forEach(function(t) { t.stop(); });
         webcamVideo.srcObject = null;
       }
-      // Stop WebRTC
+      // NB: non chiudiamo webcamSocket qui — resta in ascolto per il phone WebRTC.
+      // Il path WebRTC ha il suo pc separato che viene chiuso quando arriva un nuovo offer
+      // o quando l'utente passa a un altro livello.
       if (webcamPc) { webcamPc.close(); webcamPc = null; }
-      if (webcamSocket) { webcamSocket.disconnect(); webcamSocket = null; }
       webcamActive = false;
       setWebcamStatus('Off', false);
     }
 
-    async function enumerateWebcamDevices() {
+    function updateSecureContextWarning() {
+      var warn = document.getElementById('webcam-secure-warn');
+      var portEl = document.getElementById('webcam-secure-port');
+      if (!warn) return;
+      var hasMD = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      var secure = (window.isSecureContext === true) || hasMD;
+      // Su http://<LAN-IP> isSecureContext è false e mediaDevices spesso è undefined.
+      // Su localhost/127.0.0.1/HTTPS isSecureContext è true.
+      warn.classList.toggle('hidden', secure);
+      if (portEl) portEl.textContent = location.port || '3000';
+    }
+
+    // Init del sistema camera — chiamato una volta all'avvio del gioco.
+    // La camera funziona come sfondo su qualsiasi livello, non solo Livello 7.
+    var __cameraInited = false;
+    function initCameraSystem() {
+      if (__cameraInited) return;
+      __cameraInited = true;
+      ensureWebcamVideoElement();
+      updatePhoneUrlBadge();
+      updateSecureContextWarning();
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        enumerateWebcamDevices(false);
+      } else {
+        var sel = document.getElementById('webcam-device-select');
+        if (sel) sel.innerHTML = '<option value="">— camera locale bloccata (apri da localhost) —</option>';
+        setWebcamStatus('Camera locale bloccata — usa /phone', false);
+      }
+      initWebcamWebRTC();
+    }
+
+    async function enumerateWebcamDevices(forcePermission) {
+      var sel = document.getElementById('webcam-device-select');
+      if (!sel) return;
       try {
-        // Trigger permission prompt if needed
-        await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(function(s) {
-          s.getTracks().forEach(function(t) { t.stop(); });
-        }).catch(function() {});
+        // Senza permesso, enumerateDevices ritorna label vuote. Se forcePermission o
+        // se al primo passaggio non vediamo nessuna label, chiediamo getUserMedia.
+        if (forcePermission) {
+          try {
+            var probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            probe.getTracks().forEach(function(t) { t.stop(); });
+          } catch(permErr) {
+            setWebcamStatus('Permesso negato: ' + permErr.name, false);
+            console.warn('Webcam permission error:', permErr);
+          }
+        }
+
         var devices = await navigator.mediaDevices.enumerateDevices();
         var videoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
-        var sel = document.getElementById('webcam-device-select');
-        if (!sel) return;
+
+        // Se i label sono vuoti (permesso non ancora concesso), richiedi una volta
+        var anyLabel = videoDevices.some(function(d) { return !!d.label; });
+        if (!forcePermission && videoDevices.length > 0 && !anyLabel) {
+          return enumerateWebcamDevices(true);
+        }
+
         sel.innerHTML = '<option value="">— seleziona camera —</option>';
-        videoDevices.forEach(function(d) {
+        videoDevices.forEach(function(d, idx) {
           var opt = document.createElement('option');
           opt.value = d.deviceId;
-          opt.textContent = d.label || ('Camera ' + (sel.options.length));
+          opt.textContent = d.label || ('Camera ' + (idx + 1));
+          if (looksLikeExternalCamera(d.label)) {
+            opt.textContent = '★ ' + opt.textContent;
+          }
           sel.appendChild(opt);
         });
-        if (videoDevices.length === 0) setWebcamStatus('Nessuna camera trovata', false);
+
+        updateWebcamHelp(videoDevices);
+
+        if (videoDevices.length === 0) {
+          setWebcamStatus('Nessuna camera trovata', false);
+        } else if (!webcamActive) {
+          setWebcamStatus(videoDevices.length + ' device — seleziona', false);
+        }
+
+        // Log diagnostico (utile per capire perché iPad non appare)
+        console.log('[webcam] videoinput devices:', videoDevices.map(function(d) {
+          return { label: d.label, deviceId: d.deviceId.slice(0,8) + '…' };
+        }));
       } catch(e) {
         setWebcamStatus('Errore enumerate: ' + e.message, false);
+        console.warn('enumerateDevices error:', e);
       }
     }
 
     async function startLocalWebcamById(deviceId) {
       if (!deviceId) return;
       stopWebcam();
+      ensureWebcamVideoElement();
       setWebcamStatus('Avvio camera...', false);
-      try {
-        var constraints = { video: { deviceId: { exact: deviceId } }, audio: false };
-        var stream = await navigator.mediaDevices.getUserMedia(constraints);
-        if (!webcamVideo) {
-          webcamVideo = document.createElement('video');
-          webcamVideo.autoplay = true;
-          webcamVideo.muted = true;
-          webcamVideo.playsInline = true;
+
+      // Constraints a cascata: prima ideali HD, poi solo deviceId, infine generico.
+      var attempts = [
+        { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
+        { video: { deviceId: { exact: deviceId } }, audio: false },
+        { video: { deviceId: deviceId }, audio: false }
+      ];
+
+      var stream = null, lastErr = null;
+      for (var i = 0; i < attempts.length; i++) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia(attempts[i]);
+          break;
+        } catch(e) {
+          lastErr = e;
+          console.warn('[webcam] attempt', i, 'failed:', e.name, e.message);
         }
+      }
+
+      if (!stream) {
+        setWebcamStatus('Errore: ' + (lastErr ? lastErr.name + ' — ' + lastErr.message : 'unknown'), false);
+        return;
+      }
+
+      try {
         webcamVideo.srcObject = stream;
         await webcamVideo.play();
         webcamActive = true;
         var sel = document.getElementById('webcam-device-select');
         var label = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'Camera';
-        setWebcamStatus(label, true);
+        setWebcamStatus(label.replace(/^★\s*/, ''), true);
+        // Ri-enumera ora che abbiamo permesso (rivela label completi)
+        enumerateWebcamDevices(false);
       } catch(e) {
-        setWebcamStatus('Errore: ' + e.message, false);
-        console.warn('Webcam error:', e);
+        setWebcamStatus('Errore play: ' + e.message, false);
+        console.warn('Webcam play error:', e);
       }
     }
 
     // legacy — kept for compatibility
     async function startLocalWebcam() {
-      await enumerateWebcamDevices();
+      await enumerateWebcamDevices(true);
       var sel = document.getElementById('webcam-device-select');
       if (sel && sel.options.length > 1) {
         sel.selectedIndex = 1;
         await startLocalWebcamById(sel.value);
       }
+    }
+
+    // Ri-enumera quando macOS connette/disconnette una Continuity Camera
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', function() {
+        enumerateWebcamDevices(false);
+      });
     }
 
     function setChromaColor(hex) {
@@ -5020,19 +5230,41 @@
       // socket.io must be available (loaded via server.js)
       if (typeof io === 'undefined') {
         console.warn('WebRTC: socket.io not available — serve via server.js to enable webcam.');
+        setRtcStatus('no socket.io (avvia server.js)', 'err');
         return;
       }
 
       var RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
       webcamSocket = io();
+      setRtcStatus('connecting…', 'wait');
 
       webcamSocket.on('connect', function() {
         webcamSocket.emit('join', 'pc');
         console.log('WebRTC: joined signaling as pc');
+        setRtcStatus('pc connected — wait phone', 'wait');
+      });
+
+      webcamSocket.on('disconnect', function() {
+        setRtcStatus('disconnected', 'err');
+      });
+
+      webcamSocket.on('connect_error', function(err) {
+        setRtcStatus('socket error: ' + (err && err.message || err), 'err');
+      });
+
+      webcamSocket.on('kicked', function(reason) {
+        console.warn('WebRTC: kicked —', reason);
+        setRtcStatus('kicked (' + reason + ')', 'err');
       });
 
       webcamSocket.on('peer-joined', function(role) {
-        if (role === 'phone') console.log('WebRTC: phone connected');
+        if (role === 'phone') {
+          console.log('WebRTC: phone connected — requesting offer');
+          setRtcStatus('phone presente — chiedo offer', 'wait');
+          // Il phone potrebbe avere già lo stream pronto (era entrato prima di noi).
+          // Forza un fresh offer in entrambi i casi.
+          webcamSocket.emit('request-offer');
+        }
       });
 
       webcamSocket.on('offer', async function(offer) {
@@ -5044,28 +5276,29 @@
         };
 
         webcamPc.ontrack = function(e) {
-          if (!webcamVideo) {
-            webcamVideo = document.createElement('video');
-            webcamVideo.autoplay = true;
-            webcamVideo.muted = true;
-            webcamVideo.playsInline = true;
-          }
+          ensureWebcamVideoElement();
           webcamVideo.srcObject = e.streams[0];
           webcamVideo.play().then(function() {
             webcamActive = true;
             setWebcamStatus('Phone attiva', true);
+            setRtcStatus('stream attivo', 'ok');
             console.log('WebRTC: webcam stream active');
           }).catch(function(err) {
             setWebcamStatus('Errore play: ' + err.message, false);
+            setRtcStatus('play error', 'err');
             console.warn('WebRTC: video play error', err);
           });
         };
 
         webcamPc.onconnectionstatechange = function() {
-          if (webcamPc.connectionState === 'disconnected' || webcamPc.connectionState === 'failed') {
+          var st = webcamPc.connectionState;
+          if (st === 'connected')      setRtcStatus('p2p connected', 'ok');
+          else if (st === 'connecting') setRtcStatus('p2p connecting…', 'wait');
+          else if (st === 'disconnected' || st === 'failed' || st === 'closed') {
             webcamActive = false;
             setWebcamStatus('Disconnesso', false);
-            console.log('WebRTC: stream disconnected');
+            setRtcStatus('p2p ' + st, 'err');
+            console.log('WebRTC: stream', st);
           }
         };
 

@@ -37,3 +37,7 @@ yarn-error.log*
 *.tmp
 *.temp
 .cache/
+
+# Self-signed TLS material — chiavi private, MAI committare
+ssl/
+*.pem

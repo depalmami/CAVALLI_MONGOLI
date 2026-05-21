@@ -57,6 +57,7 @@
 </head>
 <body>
   <h1>DIGGIEI — Level 7</h1>
+  <div style="font-size:11px;background:#00ff88;color:#000;padding:4px 10px;border-radius:4px;font-weight:bold;letter-spacing:0.5px;">BUILD v3 — handshake retroattivo</div>
   <video id="preview" autoplay muted playsinline></video>
   <div id="status"><span id="dot"></span>In attesa del PC...</div>
   <button id="btn" onclick="startCamera()">Avvia Camera</button>
@@ -65,6 +66,8 @@
     const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const socket = io();
     let pc = null;
+    let localStream = null;
+    let pcPresent = false;
 
     function setStatus(msg, cls) {
       document.getElementById('status').innerHTML = '<span id="dot" class="' + (cls || '') + '"></span>' + msg;
@@ -72,22 +75,41 @@
 
     socket.on('connect', () => {
       socket.emit('join', 'phone');
-      setStatus('Connesso al server, in attesa del PC...');
+      setStatus(pcPresent ? 'Re-join completato.' : 'Connesso al server, in attesa del PC...');
     });
 
     socket.on('peer-joined', (role) => {
-      if (role === 'pc') setStatus('PC connesso! Avvia la camera.', 'live');
+      if (role === 'pc') {
+        pcPresent = true;
+        setStatus('PC connesso!', 'live');
+        if (localStream && pc) sendOffer();
+      }
     });
 
     socket.on('peer-disconnected', (role) => {
-      if (role === 'pc') setStatus('PC disconnesso.', 'error');
+      if (role === 'pc') {
+        pcPresent = false;
+        setStatus('PC disconnesso.', 'error');
+      }
+    });
+
+    socket.on('request-offer', async () => {
+      if (!localStream) return;
+      console.log('[phone] PC ha richiesto offer');
+      if (pc) { try { pc.close(); } catch(_){} pc = null; }
+      buildPeerConnection();
+      pcPresent = true;
+      await sendOffer();
     });
 
     socket.on('answer', async (answer) => {
       if (!pc) return;
-      await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      setStatus('Stream attivo!', 'live');
-      document.getElementById('dot').className = 'live';
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        setStatus('Stream attivo!', 'live');
+      } catch(e) {
+        setStatus('Errore set answer: ' + e.message, 'error');
+      }
     });
 
     socket.on('ice-candidate', async (candidate) => {
@@ -96,33 +118,51 @@
       }
     });
 
+    socket.on('kicked', (reason) => {
+      setStatus('Espulso dal server: ' + reason, 'error');
+    });
+
+    function buildPeerConnection() {
+      pc = new RTCPeerConnection(RTC_CONFIG);
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit('ice-candidate', candidate);
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') setStatus('Stream P2P attivo!', 'live');
+        if (pc.connectionState === 'failed')    setStatus('Connessione P2P fallita.', 'error');
+      };
+    }
+
+    async function sendOffer() {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', offer);
+        setStatus(pcPresent ? 'Offer inviata, handshake in corso...' : 'Offer pronta, in attesa del PC...');
+      } catch(e) {
+        setStatus('Errore offer: ' + e.message, 'error');
+      }
+    }
+
     async function startCamera() {
       const btn = document.getElementById('btn');
       btn.disabled = true;
       setStatus('Accesso alla camera...');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        localStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
           audio: false
         });
-        document.getElementById('preview').srcObject = stream;
+        document.getElementById('preview').srcObject = localStream;
 
-        pc = new RTCPeerConnection(RTC_CONFIG);
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        buildPeerConnection();
 
-        pc.onicecandidate = ({ candidate }) => {
-          if (candidate) socket.emit('ice-candidate', candidate);
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (pc.connectionState === 'connected') setStatus('Stream P2P attivo!', 'live');
-          if (pc.connectionState === 'failed') setStatus('Connessione fallita.', 'error');
-        };
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('offer', offer);
-        setStatus('Offer inviata, in attesa del PC...');
+        if (pcPresent) {
+          await sendOffer();
+        } else {
+          setStatus('Camera pronta — in attesa del PC (apri il gioco sul Mac e clicca Livello 7)');
+        }
       } catch(e) {
         setStatus('Errore camera: ' + e.message, 'error');
         btn.disabled = false;
