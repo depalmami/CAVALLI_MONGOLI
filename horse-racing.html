@@ -810,11 +810,6 @@
               Dual Monitor Mode
             </button>
             <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
-            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="autopilot-btn" onclick="toggleAutopilot()">
-              <span class="material-icons text-base">smart_toy</span>
-              Pilota Automatico
-            </button>
-            <div class="text-xs text-center text-gray-500 dark:text-gray-400">Tasto <strong>O</strong> per attivare/disattivare</div>
           </div>
         </div>
 
@@ -832,6 +827,11 @@
               <span class="material-icons text-gray-400">sports_esports</span>
               <span id="gamepad-status-text" class="text-sm font-medium text-gray-500 dark:text-gray-400">No controller connected</span>
             </div>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="autopilot-btn" onclick="toggleAutopilot()">
+              <span class="material-icons text-base">smart_toy</span>
+              Pilota Automatico
+            </button>
+            <div class="text-xs text-center text-gray-500 dark:text-gray-400">Tasto <strong>O</strong> per attivare/disattivare</div>
           </div>
         </div>
 
@@ -952,7 +952,6 @@
         Sorry, this example cannot be run because your browser does not support the &lt;canvas&gt; element
       </canvas>
       <canvas id="title-canvas"></canvas>
-      <div id="autopilot-indicator" style="display:none; position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20; padding:6px 14px; border-radius:20px; background:rgba(0,0,0,0.6); color:#0f0; font-weight:bold; font-family:sans-serif; font-size:14px; letter-spacing:1px; pointer-events:none; box-shadow:0 0 12px rgba(0,255,0,0.5);">🤖 PILOTA AUTOMATICO</div>
     </div>
     <div id="loading">Loading horse sprites...</div>
   </div>
@@ -3730,16 +3729,76 @@
 
       // Pilota automatico: sovrascrive gli input e guida il cavallo da solo
       if (autopilot) {
-        // Accelera sempre (senza frenare)
+        // Accelera sempre (a meno di ostacoli imminenti, vedi sotto)
         keyFaster = true;
         keySlower = false;
 
-        // Guarda avanti per anticipare la curva
+        // Target di base: anticipa la curva restando sull'interno (centro in rettilineo)
         var aheadSegment = findSegment(position + playerZ + segmentLength * 5);
-        // Resta sull'interno della curva (più sicuro e realistico), centro in rettilineo
-        var targetX = Util.limit(aheadSegment.curve * 0.6, -0.6, 0.6);
-        var steerDeadzone = 0.04;
+        var targetX = Util.limit(aheadSegment.curve * 0.6, -0.7, 0.7);
 
+        // --- Avoidance ostacoli ---
+        // 1) Raccogli i cavalli davanti che raggiungeremo (più lenti di noi),
+        //    con la loro distanza in segmenti e il semi-margine di sicurezza.
+        var apHorizon = 50;                 // segmenti scanditi davanti
+        var apThreats = [];
+        var apNearest = apHorizon;          // distanza dell'ostacolo utile più vicino
+        for (var ai = 1; ai < apHorizon; ai++) {
+          var apSeg = segments[(playerSegment.index + ai) % segments.length];
+          for (var aj = 0; aj < apSeg.cars.length; aj++) {
+            var apCar = apSeg.cars[aj];
+            if (apCar.speed < speed) {
+              apThreats.push({
+                off:   apCar.offset,
+                // margine: metà somma larghezze + 30% di tolleranza
+                halfW: (apCar.sprite.w * SPRITES.SCALE + playerW) / 2 * 1.3,
+                dist:  ai
+              });
+            }
+          }
+        }
+
+        // 2) C'è una minaccia sulla nostra traiettoria ideale, entro l'orizzonte di manovra?
+        var apManeuver = 32;                // entro quanti segmenti vogliamo aver schivato
+        var imminent = null;
+        for (var ti = 0; ti < apThreats.length; ti++) {
+          var th = apThreats[ti];
+          if (th.dist <= apManeuver && Math.abs(targetX - th.off) < th.halfW) {
+            if (!imminent || th.dist < imminent.dist) imminent = th;
+          }
+        }
+
+        // 3) Se sì, campiona le corsie disponibili e scegli quella LIBERA da tutte
+        //    le minacce vicine con la deviazione minima dalla linea ideale.
+        if (imminent) {
+          var bestX = null, bestCost = 1e9;
+          for (var s = -90; s <= 90; s += 5) {     // corsie candidate da -0.90 a +0.90
+            var cand = s / 100, clear = true;
+            for (var ci = 0; ci < apThreats.length; ci++) {
+              var c = apThreats[ci];
+              if (c.dist > apManeuver) continue;
+              if (Math.abs(cand - c.off) < c.halfW) { clear = false; break; }
+            }
+            if (clear) {
+              var cost = Math.abs(cand - targetX);
+              if (cost < bestCost) { bestCost = cost; bestX = cand; }
+            }
+          }
+
+          if (bestX !== null) {
+            targetX = bestX;
+            // Manovra ampia + ostacolo molto vicino: alleggerisci per non sbattere
+            if (imminent.dist < 8 && Math.abs(bestX - playerX) > 0.5) keyFaster = false;
+          } else {
+            // Nessuna corsia libera: frena e allargati dal lato meno occupato
+            keyFaster = false;
+            keySlower = true;
+            targetX = (imminent.off <= 0) ? 0.85 : -0.85;
+          }
+        }
+
+        // 4) Sterzo verso targetX
+        var steerDeadzone = 0.04;
         if (playerX > targetX + steerDeadzone) {
           keyLeft = true;  keyRight = false;
         } else if (playerX < targetX - steerDeadzone) {
@@ -5429,8 +5488,6 @@
     // Pilota automatico: toggle via funzione, pulsante UI e tasto O
     function toggleAutopilot() {
       autopilot = !autopilot;
-      var indicator = document.getElementById('autopilot-indicator');
-      if (indicator) indicator.style.display = autopilot ? 'block' : 'none';
       var btn = document.getElementById('autopilot-btn');
       if (btn) {
         btn.classList.toggle('bg-primary', autopilot);
