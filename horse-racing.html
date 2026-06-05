@@ -66,6 +66,26 @@
       height: auto !important;
       display: block;
     }
+    /* Dual monitor attivo: il vero output va sul secondo schermo, qui resta una
+       preview compatta. Funziona anche con canvas quadrati (500x500) che altrimenti
+       riempirebbero tutta l'altezza disponibile del primario. */
+    #racer-container.dual-active,
+    #racer.dual-active {
+      max-width: 480px !important;
+      margin-left: auto !important;
+      margin-right: auto !important;
+    }
+    #racer-container.dual-active #canvas,
+    #racer.dual-active #canvas {
+      max-height: 320px !important;
+      width: auto !important;     /* mantiene aspect ratio nativo del canvas */
+      max-width: 100% !important;
+      margin: 0 auto !important;
+    }
+    #racer-container.dual-active #title-canvas,
+    #racer.dual-active #title-canvas {
+      /* il title-canvas è absolute con width/height 100% → segue il container ridotto */
+    }
     #title-canvas {
       position: absolute;
       top: 0;
@@ -412,6 +432,17 @@
           </div>
           <div id="webcam-phone-url" class="text-[10px] text-purple-700 dark:text-purple-200 break-all"></div>
 
+          <!-- QR code: inquadra dall'app Camera di iPad/iPhone per aprire /cam senza digitare -->
+          <div id="webcam-qr-wrap" class="flex items-center gap-3 hidden">
+            <div id="webcam-qr" class="bg-white p-2 rounded shadow-inner" style="width:148px;height:148px;display:flex;align-items:center;justify-content:center;"></div>
+            <div class="text-[11px] leading-snug text-purple-800 dark:text-purple-100">
+              <div class="font-semibold mb-1">Connetti iPad/telefono</div>
+              <div>Inquadra il QR con l'app <b>Fotocamera</b> di iPad/iPhone → tap sulla notifica gialla → Safari apre <code>/cam</code> sul cellulare.</div>
+              <div class="mt-1 opacity-80">Al primo accesso accetta il warning del certificato self-signed.</div>
+              <button onclick="updatePhoneUrlBadge()" class="mt-1 text-[10px] px-2 py-0.5 rounded bg-purple-600 hover:bg-purple-700 text-white">Rigenera QR</button>
+            </div>
+          </div>
+
           <!-- Avviso contesto non sicuro: getUserMedia bloccato → Continuity Camera non funziona -->
           <div id="webcam-secure-warn" class="hidden text-[11px] leading-snug bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-100 rounded p-2 border border-amber-300 dark:border-amber-700">
             <b>⚠️ Contesto non sicuro:</b> stai aprendo il gioco da un LAN IP. I browser bloccano l'accesso alla camera (Continuity Camera).<br>
@@ -477,6 +508,49 @@
               class="w-20">
             <span id="webcam-fx-val" class="text-xs text-gray-500 dark:text-gray-400">60</span>
           </div>
+
+          <!-- 🎬 Camera Distortion (reattiva al tap tempo / BPM) -->
+          <div class="p-2 rounded bg-fuchsia-100/60 dark:bg-fuchsia-900/30 border border-fuchsia-300 dark:border-fuchsia-700 space-y-2">
+            <label class="flex items-center gap-1 text-xs font-bold text-fuchsia-800 dark:text-fuchsia-200 cursor-pointer">
+              <input type="checkbox" id="webcam-distort-enabled" class="rounded">
+              🎬 Camera Distortion (reattiva al BPM)
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex items-center gap-1">
+                <label class="text-[10px] text-fuchsia-800 dark:text-fuchsia-200 whitespace-nowrap">Modo</label>
+                <select id="webcam-distort-mode" class="flex-1 min-w-0 px-1 py-0.5 text-xs rounded bg-white dark:bg-gray-800 border border-fuchsia-300 dark:border-fuchsia-600 text-gray-900 dark:text-white">
+                  <option value="zoom">🔍 Zoom pulse</option>
+                  <option value="shake">📳 Shake</option>
+                  <option value="glitch">📺 RGB glitch</option>
+                  <option value="mirror">🪞 Mirror flicker</option>
+                  <option value="hue">🌈 Hue cycle</option>
+                  <option value="blur">🌫 Blur pulse</option>
+                  <option value="invert">⚡ Invert pulse</option>
+                  <option value="kaleido">💎 Kaleido 4x</option>
+                  <option value="random">🎲 Random ogni beat</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-1">
+                <label class="text-[10px] text-fuchsia-800 dark:text-fuchsia-200 whitespace-nowrap">Subdiv</label>
+                <select id="webcam-distort-subdiv" class="flex-1 min-w-0 px-1 py-0.5 text-xs rounded bg-white dark:bg-gray-800 border border-fuchsia-300 dark:border-fuchsia-600 text-gray-900 dark:text-white">
+                  <option value="0.25">1/4 beat</option>
+                  <option value="0.5">1/2 beat</option>
+                  <option value="1" selected>1 beat</option>
+                  <option value="2">2 beat</option>
+                  <option value="4">4 beat</option>
+                </select>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-[10px] text-fuchsia-800 dark:text-fuchsia-200 whitespace-nowrap">Intensità</label>
+              <input type="range" id="webcam-distort-intensity" min="0" max="200" step="5" value="100" class="flex-1">
+              <span id="webcam-distort-intensity-val" class="text-[10px] font-mono text-fuchsia-800 dark:text-fuchsia-200 w-10 text-right">100%</span>
+            </div>
+            <div class="text-[10px] text-fuchsia-700 dark:text-fuchsia-300">
+              Usa il <kbd class="px-1 bg-white/70 dark:bg-black/40 rounded border border-fuchsia-400">T</kbd> per tappare il BPM, poi la distorsione segue.
+              Fallback a 500ms (120 BPM) se nessun tap.
+            </div>
+          </div>
         </div>
 
         <div class="mt-3 flex items-center justify-between">
@@ -512,6 +586,7 @@
                 <option value='high'>High (1024x768)</option>
                 <option value='medium'>Medium (640x480)</option>
                 <option value='low'>Low (480x360)</option>
+                <option value='square'>Square (500x500)</option>
               </select>
             </div>
             <div>
@@ -635,6 +710,60 @@
               </select>
               <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="flash-images-count">0 images loaded</div>
             </div>
+
+            <!-- Bonus flash one-shot (manuale, indipendente dai flash BPM automatici) -->
+            <div class="py-2 px-3 rounded bg-gradient-to-r from-amber-100 via-yellow-200 to-orange-200 dark:from-amber-900/40 dark:via-yellow-800/40 dark:to-orange-900/40 border border-amber-300 dark:border-amber-700 space-y-2">
+              <label class="block text-sm font-bold text-amber-800 dark:text-amber-200">🎁 Bonus Flash</label>
+              <input id="bonus-flash-text" type="text" value="DIMENSION BONUS" maxlength="32"
+                class="w-full px-2 py-1 text-sm rounded bg-white dark:bg-gray-800 border border-amber-400 dark:border-amber-600 text-gray-900 dark:text-white"
+                title="Testo che verrà mostrato in overlay">
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-amber-900 dark:text-amber-200 whitespace-nowrap">Durata</label>
+                <input id="bonus-flash-duration" type="range" min="500" max="4000" step="100" value="1800" class="flex-1">
+                <span id="bonus-flash-duration-val" class="text-xs font-mono text-amber-900 dark:text-amber-200 w-12 text-right">1800ms</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-amber-900 dark:text-amber-200 whitespace-nowrap">Bounce</label>
+                <input id="bonus-flash-bounce-speed" type="range" min="200" max="1200" step="50" value="550" class="flex-1" title="Periodo di un rimbalzo manuale (ignorato se 🥁 Sync è attivo)">
+                <span id="bonus-flash-bounce-val" class="text-xs font-mono text-amber-900 dark:text-amber-200 w-12 text-right">550ms</span>
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="bonus-flash-sync-bpm" type="checkbox" class="rounded">
+                <span class="text-xs font-semibold text-amber-900 dark:text-amber-200">🥁 Sync to tap tempo <span class="opacity-70 font-normal">(usa il BPM dei tap T)</span></span>
+              </label>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-amber-900 dark:text-amber-200 whitespace-nowrap">Intensità</label>
+                <input id="bonus-flash-intensity" type="range" min="0" max="200" step="5" value="100" class="flex-1" title="Quanto la scritta viene distorta dal rimbalzo (0 = ferma, 200 = esagerato)">
+                <span id="bonus-flash-intensity-val" class="text-xs font-mono text-amber-900 dark:text-amber-200 w-12 text-right">100%</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-amber-900 dark:text-amber-200 whitespace-nowrap">Palette</label>
+                <select id="bonus-flash-palette" class="flex-1 px-2 py-1 text-xs rounded bg-white dark:bg-gray-800 border border-amber-400 dark:border-amber-600 text-gray-900 dark:text-white">
+                  <option value="random" selected>🎲 Random</option>
+                  <option value="gold">🥇 Gold (default)</option>
+                  <option value="neon">💚 Neon Green</option>
+                  <option value="cyber">💙 Cyber Blue</option>
+                  <option value="vapor">💜 Vaporwave</option>
+                  <option value="fire">🔥 Fire</option>
+                  <option value="toxic">☢️ Toxic</option>
+                  <option value="ice">🧊 Ice</option>
+                  <option value="voodoo">🎭 Voodoo</option>
+                </select>
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="bonus-flash-hold" type="checkbox" class="rounded">
+                <span class="text-xs font-semibold text-amber-900 dark:text-amber-200">🔁 Hold (loop continuo)</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input id="bonus-flash-cycle-colors" type="checkbox" class="rounded">
+                <span class="text-xs font-semibold text-amber-900 dark:text-amber-200">🌈 Cycle colors ad ogni bounce</span>
+              </label>
+              <button id="bonus-flash-btn" onclick="triggerBonusFlash()" type="button"
+                class="w-full py-2 px-3 rounded font-bold text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 shadow active:scale-95 transition-transform">
+                🎁 ATTIVA BONUS FLASH
+              </button>
+              <div class="text-[10px] text-amber-700 dark:text-amber-300">Scorciatoia tastiera: <kbd class="px-1 bg-white/60 dark:bg-black/40 rounded border border-amber-400">B</kbd> (in hold: re-premi per fermare)</div>
+            </div>
           </div>
         </div>
 
@@ -650,11 +779,16 @@
               <span class="material-icons text-base">casino</span>
               Configure Randomization
             </button>
+            <button id="reload-assets-btn" onclick="reloadAllLevelSprites()" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded transition-colors" title="Ricarica gli asset per-livello dal server (utile dopo aver eseguito sync_levels_to_game.sh)">
+              <span class="material-icons text-base">refresh</span>
+              Ricarica asset (no cache)
+            </button>
             <button id="clear-storage-btn" class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-500 text-white text-sm font-medium rounded hover:bg-red-600 transition-colors">
               <span class="material-icons text-base">delete_sweep</span>
               Clear All Saved
             </button>
             <div id="storage-status" class="text-xs text-center text-gray-500 dark:text-gray-400"></div>
+            <div id="asset-debug-status" class="text-[10px] text-left text-gray-600 dark:text-gray-300 font-mono leading-tight whitespace-pre-wrap"></div>
           </div>
         </div>
 
@@ -676,6 +810,11 @@
               Dual Monitor Mode
             </button>
             <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="autopilot-btn" onclick="toggleAutopilot()">
+              <span class="material-icons text-base">smart_toy</span>
+              Pilota Automatico
+            </button>
+            <div class="text-xs text-center text-gray-500 dark:text-gray-400">Tasto <strong>O</strong> per attivare/disattivare</div>
           </div>
         </div>
 
@@ -719,6 +858,7 @@
           <option value='high'>High (1024x768)</option>
           <option value='medium'>Medium (640x480)</option>
           <option value='low'>Low (480x360)</option>
+          <option value='square'>Square (500x500)</option>
         </select>
       </td>
     </tr>
@@ -812,6 +952,7 @@
         Sorry, this example cannot be run because your browser does not support the &lt;canvas&gt; element
       </canvas>
       <canvas id="title-canvas"></canvas>
+      <div id="autopilot-indicator" style="display:none; position:absolute; top:12px; left:50%; transform:translateX(-50%); z-index:20; padding:6px 14px; border-radius:20px; background:rgba(0,0,0,0.6); color:#0f0; font-weight:bold; font-family:sans-serif; font-size:14px; letter-spacing:1px; pointer-events:none; box-shadow:0 0 12px rgba(0,255,0,0.5);">🤖 PILOTA AUTOMATICO</div>
     </div>
     <div id="loading">Loading horse sprites...</div>
   </div>
@@ -852,6 +993,8 @@
   <script src="common.js"></script>
   <!-- socket.io: available only when served via server.js; fails silently otherwise -->
   <script src="/socket.io/socket.io.js" onerror="console.info('socket.io not available — webcam disabled')"></script>
+  <!-- QR code generator per il link iPad/phone — funziona offline una volta cached -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js" onerror="console.warn('QR library failed to load (offline?) — fallback su URL testuale')"></script>
 
   <!-- Dark Mode Toggle Script -->
   <script>
@@ -1113,7 +1256,9 @@
       'BUSH1', 'BUSH2', 'CACTUS', 'STUMP',
       'BOULDER1', 'BOULDER2', 'BOULDER3', 'COLUMN',
       'BILLBOARD01', 'BILLBOARD02', 'BILLBOARD03', 'BILLBOARD04',
-      'BILLBOARD05', 'BILLBOARD06', 'BILLBOARD07', 'BILLBOARD08', 'BILLBOARD09'
+      'BILLBOARD05', 'BILLBOARD06', 'BILLBOARD07', 'BILLBOARD08', 'BILLBOARD09',
+      // Veicoli: PNG dedicati di alta qualità sostituiscono i ritagli dall'atlas
+      'SEMI', 'TRUCK', 'CAR01', 'CAR02', 'CAR03', 'CAR04'
     ];
 
     // Per-level sprite image cache: { 1: { TREE1: Image, ... }, 2: { ... }, ... }
@@ -1386,6 +1531,8 @@
     var keyRight       = false;
     var keyFaster      = false;
     var keySlower      = false;
+
+    var autopilot      = false;                   // "pilota automatico": guida da solo il cavallo
 
     //=========================================================================
     // GAMEPAD SUPPORT (Xbox Series X)
@@ -2124,6 +2271,188 @@
       console.log('Flash image enabled:', flashImageEnabled);
     }
 
+    // === BONUS FLASH (one-shot manuale o hold/loop) ===
+    var bonusFlashStart    = 0;     // ms timestamp di inizio (anche in hold)
+    var bonusFlashDuration = 1800;  // ms totali in modalità one-shot
+    var bonusFlashText     = 'DIMENSION BONUS';
+    var bonusFlashHold     = false; // true = loop infinito finché non si ferma
+    var bonusFlashBounceMs = 550;   // periodo di un rimbalzo MANUALE (se sync BPM off)
+    var bonusFlashCycleColors = false; // hold mode: cambia palette ogni rimbalzo
+    var bonusFlashSyncBpm  = false; // se true il period del bounce = bpmInterval (tap tempo)
+    var bonusFlashIntensity = 1.0;  // 0..2 — moltiplicatore distorsione (squash/stretch/bob)
+
+    // Palette per il testo bonus. Ogni palette ha:
+    //   halo:   colore dell'aura/glow (singolo colore)
+    //   grad:   array [color0, color1, color2] per il gradient verticale del testo
+    //   stroke: colore del contorno per leggibilità
+    var BONUS_FLASH_PALETTES = {
+      gold:   { halo: '#FFD700', grad: ['#FFF6A5', '#FF9F1C', '#E63946'], stroke: '#2D0014' }, // oro→arancio→rosso
+      neon:   { halo: '#39FF14', grad: ['#CCFFCC', '#39FF14', '#007F0E'], stroke: '#00190A' }, // verde acido
+      cyber:  { halo: '#00E5FF', grad: ['#A8F1FF', '#00B4FF', '#0050FF'], stroke: '#001A33' }, // blu elettrico
+      vapor:  { halo: '#FF71CE', grad: ['#FFE0FA', '#FF71CE', '#9C00FF'], stroke: '#2A0033' }, // rosa/viola anni 80
+      fire:   { halo: '#FF6A00', grad: ['#FFE600', '#FF3300', '#7A0000'], stroke: '#1A0000' }, // fiamme
+      toxic:  { halo: '#C7FF00', grad: ['#F0FF99', '#A4FF00', '#4D7A00'], stroke: '#1F2900' }, // tossico lime
+      ice:    { halo: '#CFEFFF', grad: ['#FFFFFF', '#9FE7FF', '#1E78B4'], stroke: '#001A33' }, // ghiaccio
+      voodoo: { halo: '#FF008C', grad: ['#FFDDF1', '#FF008C', '#3D0026'], stroke: '#1A000F' }  // magenta intenso
+    };
+    var BONUS_PALETTE_NAMES = Object.keys(BONUS_FLASH_PALETTES);
+    var currentBonusPalette = BONUS_FLASH_PALETTES.gold;
+    var lastBounceCycle = -1; // per riconoscere quando inizia un nuovo rimbalzo (cycle colors)
+
+    function pickBonusPalette(selectorValue) {
+      if (!selectorValue || selectorValue === 'random') {
+        var n = BONUS_PALETTE_NAMES[Math.floor(Math.random() * BONUS_PALETTE_NAMES.length)];
+        return BONUS_FLASH_PALETTES[n];
+      }
+      return BONUS_FLASH_PALETTES[selectorValue] || BONUS_FLASH_PALETTES.gold;
+    }
+
+    function updateBonusFlashButton() {
+      var btn = document.getElementById('bonus-flash-btn');
+      if (!btn) return;
+      if (bonusFlashHold) {
+        btn.textContent = '⏸ STOP BONUS FLASH';
+        btn.className   = 'w-full py-2 px-3 rounded font-bold text-white bg-gradient-to-r from-rose-600 via-red-600 to-orange-600 hover:from-rose-700 hover:via-red-700 hover:to-orange-700 shadow active:scale-95 transition-transform';
+      } else {
+        btn.textContent = '🎁 ATTIVA BONUS FLASH';
+        btn.className   = 'w-full py-2 px-3 rounded font-bold text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:via-orange-600 hover:to-rose-600 shadow active:scale-95 transition-transform';
+      }
+    }
+
+    function triggerBonusFlash() {
+      // Se siamo già in hold mode → toggle off (stop)
+      if (bonusFlashHold) {
+        bonusFlashHold  = false;
+        bonusFlashStart = 0;
+        console.log('[BonusFlash] STOP hold');
+        updateBonusFlashButton();
+        return;
+      }
+
+      var textEl      = document.getElementById('bonus-flash-text');
+      var durEl       = document.getElementById('bonus-flash-duration');
+      var bounceEl    = document.getElementById('bonus-flash-bounce-speed');
+      var holdEl      = document.getElementById('bonus-flash-hold');
+      var paletteEl   = document.getElementById('bonus-flash-palette');
+      var cycleEl     = document.getElementById('bonus-flash-cycle-colors');
+      var syncEl      = document.getElementById('bonus-flash-sync-bpm');
+      var intensityEl = document.getElementById('bonus-flash-intensity');
+
+      bonusFlashText        = (textEl && textEl.value.trim()) || 'DIMENSION BONUS';
+      bonusFlashDuration    = (durEl && parseInt(durEl.value, 10)) || 1800;
+      bonusFlashBounceMs    = (bounceEl && parseInt(bounceEl.value, 10)) || 550;
+      bonusFlashHold        = !!(holdEl && holdEl.checked);
+      bonusFlashCycleColors = !!(cycleEl && cycleEl.checked);
+      bonusFlashSyncBpm     = !!(syncEl && syncEl.checked);
+      bonusFlashIntensity   = (intensityEl && parseInt(intensityEl.value, 10) / 100) || 1.0;
+      bonusFlashStart       = Date.now();
+      lastBounceCycle       = -1;
+
+      var paletteName       = (paletteEl && paletteEl.value) || 'random';
+      currentBonusPalette   = pickBonusPalette(paletteName);
+
+      console.log('[BonusFlash] triggered:', bonusFlashText,
+                  bonusFlashHold ? '(HOLD)' : (bonusFlashDuration + 'ms'),
+                  'palette:', paletteName,
+                  'bounce:', bonusFlashSyncBpm ? ('SYNC BPM ' + (bpmInterval || '?') + 'ms') : (bonusFlashBounceMs + 'ms'),
+                  'intensity:', Math.round(bonusFlashIntensity * 100) + '%',
+                  bonusFlashCycleColors ? '🌈cycle' : '');
+      updateBonusFlashButton();
+    }
+
+    function isBonusFlashActive() {
+      if (bonusFlashHold) return bonusFlashStart > 0;
+      return bonusFlashStart > 0 && (Date.now() - bonusFlashStart) < bonusFlashDuration;
+    }
+
+    // Easing per l'animazione del bonus flash (pop-in con overshoot)
+    function easeOutBack(x) {
+      var c1 = 1.70158;
+      var c3 = c1 + 1;
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    }
+
+    // Scorciatoia tastiera B: trigger bonus flash (D è già usato per sterzata)
+    document.addEventListener('keydown', function(ev) {
+      if (ev.key === 'b' || ev.key === 'B') {
+        // Evita il trigger se l'utente sta scrivendo in un input/textarea
+        var t = ev.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        ev.preventDefault();
+        triggerBonusFlash();
+      }
+    });
+
+    // Sync display ms degli slider del bonus flash + reazione al toggle Hold
+    document.addEventListener('DOMContentLoaded', function() {
+      var durSlider   = document.getElementById('bonus-flash-duration');
+      var durLabel    = document.getElementById('bonus-flash-duration-val');
+      if (durSlider && durLabel) {
+        durSlider.addEventListener('input', function() {
+          durLabel.textContent = durSlider.value + 'ms';
+        });
+      }
+      var bounceSlider = document.getElementById('bonus-flash-bounce-speed');
+      var bounceLabel  = document.getElementById('bonus-flash-bounce-val');
+      if (bounceSlider && bounceLabel) {
+        bounceSlider.addEventListener('input', function() {
+          bounceLabel.textContent = bounceSlider.value + 'ms';
+          // Se siamo già in hold, applica la nuova velocità immediatamente
+          if (bonusFlashHold) bonusFlashBounceMs = parseInt(bounceSlider.value, 10) || 550;
+        });
+      }
+      var intensitySlider = document.getElementById('bonus-flash-intensity');
+      var intensityLabel  = document.getElementById('bonus-flash-intensity-val');
+      if (intensitySlider && intensityLabel) {
+        intensitySlider.addEventListener('input', function() {
+          intensityLabel.textContent = intensitySlider.value + '%';
+          // Live update durante hold mode
+          if (bonusFlashHold) bonusFlashIntensity = parseInt(intensitySlider.value, 10) / 100;
+        });
+      }
+      var syncToggle = document.getElementById('bonus-flash-sync-bpm');
+      if (syncToggle) {
+        syncToggle.addEventListener('change', function() {
+          // Live update durante hold mode
+          if (bonusFlashHold) bonusFlashSyncBpm = syncToggle.checked;
+        });
+      }
+
+      // === Camera Distortion UI wiring ===
+      var distEnabled   = document.getElementById('webcam-distort-enabled');
+      var distMode      = document.getElementById('webcam-distort-mode');
+      var distSubdiv    = document.getElementById('webcam-distort-subdiv');
+      var distIntensity = document.getElementById('webcam-distort-intensity');
+      var distIntLabel  = document.getElementById('webcam-distort-intensity-val');
+      if (distEnabled) distEnabled.addEventListener('change', function() {
+        cameraDistortEnabled = distEnabled.checked;
+      });
+      if (distMode) distMode.addEventListener('change', function() {
+        cameraDistortMode = distMode.value;
+        cameraDistortLastBeat = -1; // forza nuovo pick se random
+      });
+      if (distSubdiv) distSubdiv.addEventListener('change', function() {
+        cameraDistortSubdiv = parseFloat(distSubdiv.value) || 1;
+      });
+      if (distIntensity && distIntLabel) {
+        distIntensity.addEventListener('input', function() {
+          cameraDistortIntensity = parseInt(distIntensity.value, 10) / 100;
+          distIntLabel.textContent = distIntensity.value + '%';
+        });
+      }
+
+      // Il toggle "Hold" aggiorna anche il testo del pulsante PRIMA del trigger,
+      // così l'utente sa che cosa farà premerlo.
+      var holdToggle = document.getElementById('bonus-flash-hold');
+      if (holdToggle) {
+        holdToggle.addEventListener('change', function() {
+          var btn = document.getElementById('bonus-flash-btn');
+          if (!btn || bonusFlashHold) return; // se è già attivo non sovrascrivere lo stato STOP
+          btn.textContent = holdToggle.checked ? '🔁 AVVIA BOUNCE LOOP' : '🎁 ATTIVA BONUS FLASH';
+        });
+      }
+    });
+
     function triggerFlash(duration) {
       if (!flashEnabled && !flashImageEnabled) return;
 
@@ -2794,6 +3123,13 @@
         btn.innerHTML = '<span class="material-icons text-base">desktop_windows</span> Dual Monitor Mode';
         btn.style.background = '';
       }
+      // Quando il dual monitor è attivo, l'anteprima sul primario serve solo da reference
+      // → la rimpicciolisce. Indispensabile a risoluzioni quadrate (500x500) dove il
+      // canvas con width:100% diventava enorme (aspect 1:1 = altezza = larghezza container).
+      var racer = document.getElementById('racer');
+      var container = document.getElementById('racer-container');
+      if (racer)     racer.classList.toggle('dual-active', active);
+      if (container) container.classList.toggle('dual-active', active);
     }
 
     function openOnScreen(screen) {
@@ -3392,6 +3728,27 @@
       // Update gamepad input
       updateGamepadInput();
 
+      // Pilota automatico: sovrascrive gli input e guida il cavallo da solo
+      if (autopilot) {
+        // Accelera sempre (senza frenare)
+        keyFaster = true;
+        keySlower = false;
+
+        // Guarda avanti per anticipare la curva
+        var aheadSegment = findSegment(position + playerZ + segmentLength * 5);
+        // Resta sull'interno della curva (più sicuro e realistico), centro in rettilineo
+        var targetX = Util.limit(aheadSegment.curve * 0.6, -0.6, 0.6);
+        var steerDeadzone = 0.04;
+
+        if (playerX > targetX + steerDeadzone) {
+          keyLeft = true;  keyRight = false;
+        } else if (playerX < targetX - steerDeadzone) {
+          keyLeft = false; keyRight = true;
+        } else {
+          keyLeft = false; keyRight = false;
+        }
+      }
+
       // Update audio-reactive camera shake
       updateCameraShake();
 
@@ -3841,6 +4198,117 @@
         }
       }
 
+      // === BONUS FLASH (independente dai flash automatici) ===
+      // Disegnato fuori dal blocco isFlashing perché è un overlay separato a tempo proprio.
+      if (isBonusFlashActive()) {
+        var elapsed = Date.now() - bonusFlashStart;
+        var scale, scaleX, scaleY, alpha, bobY;
+        scaleX = scaleY = 1;
+        bobY = 0;
+
+        if (bonusFlashHold) {
+          // === HOLD MODE: bounce loop infinito (squash & stretch + bob verticale) ===
+          // Pop-in iniziale rapido (primi 200ms) per non comparire di colpo
+          var introMs = 200;
+          var introAlpha = elapsed < introMs ? (elapsed / introMs) : 1.0;
+          alpha = introAlpha;
+
+          // Period del bounce: o sincronizzato al tap tempo (bpmInterval), o manuale.
+          // Fallback al manuale se sync attivo ma BPM non ancora calcolato (no tap).
+          var effectivePeriod = (bonusFlashSyncBpm && bpmInterval > 0) ? bpmInterval : bonusFlashBounceMs;
+          // Hard floor di 80ms (evita divisioni per 0 e bouncing > 12Hz che è epilettico)
+          if (effectivePeriod < 80) effectivePeriod = 80;
+
+          // Curva di rimbalzo: 0 a metà ciclo (in aria) → 1 a inizio/fine (a terra)
+          var cycleIdx = Math.floor(elapsed / effectivePeriod);
+          var phase = (elapsed % effectivePeriod) / effectivePeriod; // 0..1
+          var inAir = Math.abs(Math.sin(phase * Math.PI));            // 0 a terra → 1 in cima
+          var landing = 1 - inAir;                                     // 1 a terra → 0 in cima
+
+          // 🌈 Cycle colors: ad ogni nuovo rimbalzo cambia palette (modalità rave)
+          if (bonusFlashCycleColors && cycleIdx !== lastBounceCycle) {
+            lastBounceCycle = cycleIdx;
+            currentBonusPalette = pickBonusPalette('random');
+          }
+
+          // Intensità: moltiplica tutte le deformazioni
+          // - 0% → testo praticamente fermo (solo halo/intro)
+          // - 100% → bounce standard
+          // - 200% → squash/stretch estremo, bob più ampio
+          var k = bonusFlashIntensity;
+          scaleY = 1.0 + 0.18 * k * inAir - 0.10 * k * landing;
+          scaleX = 1.0 - 0.12 * k * inAir + 0.08 * k * landing;
+          bobY   = -inAir * renderHeight * 0.06 * k;
+        } else {
+          // === ONE-SHOT MODE: pop-in / tenuta / fade-out (comportamento originale) ===
+          var t = elapsed / bonusFlashDuration; // 0 → 1
+          if (t < 0.15) {
+            var k = t / 0.15;
+            scale = 0.5 + 0.6 * easeOutBack(k);
+            alpha = k;
+          } else if (t < 0.75) {
+            scale = 1.0 + 0.03 * Math.sin((t - 0.15) * 30);
+            alpha = 1.0;
+          } else {
+            var k2 = (t - 0.75) / 0.25;
+            scale = 1.0 + 0.4 * k2;
+            alpha = 1.0 - k2;
+          }
+          scaleX = scaleY = scale;
+        }
+
+        context.save();
+        context.globalAlpha = alpha;
+
+        var bcx = -cameraShakeX + renderWidth  / 2;
+        var bcy = -cameraShakeY + renderHeight / 2 + bobY;
+
+        // Background banner semitrasparente per leggibilità (segue scaleY)
+        var bannerH = renderHeight * 0.28 * scaleY;
+        var grad = context.createLinearGradient(0, bcy - bannerH/2, 0, bcy + bannerH/2);
+        grad.addColorStop(0,   'rgba(0,0,0,0.0)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+        grad.addColorStop(1,   'rgba(0,0,0,0.0)');
+        context.fillStyle = grad;
+        context.fillRect(-cameraShakeX, bcy - bannerH/2, renderWidth, bannerH);
+
+        // Testo bonus: squash & stretch indipendente su X/Y
+        context.translate(bcx, bcy);
+        context.scale(scaleX, scaleY);
+
+        var fontSize = Math.floor(renderHeight * 0.16);
+        context.font = '900 ' + fontSize + 'px "Impact", "Arial Black", sans-serif';
+        // Riduzione se troppo largo (usa scaleX perché è la dimensione orizzontale)
+        while (context.measureText(bonusFlashText).width > renderWidth * 0.9 / Math.max(scaleX, 0.1) && fontSize > 20) {
+          fontSize -= 4;
+          context.font = '900 ' + fontSize + 'px "Impact", "Arial Black", sans-serif';
+        }
+        context.textAlign    = 'center';
+        context.textBaseline = 'middle';
+
+        // Halo (palette.halo)
+        context.shadowColor = currentBonusPalette.halo;
+        context.shadowBlur  = 28;
+        context.fillStyle   = currentBonusPalette.halo;
+        context.fillText(bonusFlashText, 0, 0);
+        context.shadowBlur  = 0;
+
+        // Gradiente verticale dai 3 colori della palette
+        var textGrad = context.createLinearGradient(0, -fontSize/2, 0, fontSize/2);
+        textGrad.addColorStop(0,   currentBonusPalette.grad[0]);
+        textGrad.addColorStop(0.5, currentBonusPalette.grad[1]);
+        textGrad.addColorStop(1,   currentBonusPalette.grad[2]);
+        context.fillStyle = textGrad;
+        context.fillText(bonusFlashText, 0, 0);
+
+        // Stroke per stacco (palette.stroke)
+        context.lineWidth   = 3;
+        context.strokeStyle = currentBonusPalette.stroke;
+        context.strokeText(bonusFlashText, 0, 0);
+
+        context.restore();
+      }
+
       // (title/intro overlays are drawn on the separate title-canvas, unaffected by level filter)
 
       // Restore canvas state after camera shake
@@ -4094,6 +4562,7 @@
 
       // Camera background ora gira su ogni livello: il pannello resta visibile e
       // lo stream non viene fermato cambiando livello.
+      try { updateAssetDebugStatus(); } catch(_) {}
     }
 
     function applyLevelImmediate(levelNum) {
@@ -4307,9 +4776,81 @@
           levelsLoaded++;
           if (levelsLoaded === levelsToLoad) {
             console.log('All level sprites preloaded.');
+            updateAssetDebugStatus();
             if (callback) callback();
           }
         });
+      }
+    }
+
+    // Mostra a video lo stato del caricamento sprite per-livello, così
+    // diagnostichiamo SUBITO se manca qualcosa senza dover aprire la console.
+    function updateAssetDebugStatus() {
+      var el = document.getElementById('asset-debug-status');
+      if (!el) return;
+      var lines = [];
+      var expected = LEVEL_SPRITE_OVERRIDES.length;
+      for (var l = 1; l <= 7; l++) {
+        var loaded = Object.keys(levelSprites[l] || {}).length;
+        var bg = Object.keys(levelBackgrounds[l] || {}).length;
+        var sky = (levelSkyFrames[l] || []).length;
+        var ok = loaded === expected;
+        lines.push((ok ? '✓' : '⚠') + ' L' + l + ': sprites ' + loaded + '/' + expected +
+                   ', bg ' + bg + '/3' + (sky ? ', sky_anim ' + sky : ''));
+      }
+      var atlasOk = (typeof sprites !== 'undefined' && sprites && sprites.width > 0);
+      lines.unshift((atlasOk ? '✓' : '✗') + ' Atlas sprites.png ' + (atlasOk ? sprites.width + 'x' + sprites.height : 'NON CARICATO'));
+      lines.unshift('Current level: ' + (typeof currentLevel !== 'undefined' ? currentLevel : '?'));
+      el.textContent = lines.join('\n');
+    }
+
+    // Forza ricaricamento di TUTTI gli sprite per-livello dal server, bypassando la cache
+    function reloadAllLevelSprites() {
+      var btn = document.getElementById('reload-assets-btn');
+      if (btn) btn.disabled = true;
+      // Svuota le cache e rimuovi flag "già caricato"
+      for (var l = 1; l <= 7; l++) {
+        levelSprites[l] = {};
+        levelBackgrounds[l] = {};
+        levelSkyFrames[l] = [];
+        levelSpritesLoaded[l] = false;
+      }
+      // Forziamo un cache-buster query string sui prossimi load
+      var bust = Date.now();
+      var origLoad = window.__origLoadLevelSprites || loadLevelSprites;
+      window.__origLoadLevelSprites = origLoad;
+      // Patch temporaneo: aggiungiamo ?v=bust ai path richiesti durante questa pass
+      var origImageProto = HTMLImageElement.prototype;
+      // Più semplice: aspettiamo che loadLevelSprites usi semplicemente l'image.src; aggiungiamo bust via override.
+      var origSrcDescriptor = Object.getOwnPropertyDescriptor(origImageProto, 'src');
+      try {
+        Object.defineProperty(origImageProto, 'src', {
+          set: function(v) {
+            if (typeof v === 'string' && v.indexOf('images/levels/') >= 0 && v.indexOf('?') < 0) {
+              v = v + '?v=' + bust;
+            }
+            origSrcDescriptor.set.call(this, v);
+          },
+          get: function() { return origSrcDescriptor.get.call(this); },
+          configurable: true
+        });
+
+        preloadAllLevelSprites(function() {
+          // Ripristina il setter originale
+          Object.defineProperty(origImageProto, 'src', origSrcDescriptor);
+          updateAssetDebugStatus();
+          if (btn) btn.disabled = false;
+          console.log('[reloadAllLevelSprites] DONE');
+          // Forza un rebuild della traccia corrente per applicare gli sprite freschi
+          if (typeof currentLevel !== 'undefined' && currentLevel > 0 && LEVEL_PRESETS[currentLevel]) {
+            rebuildTrackForLevel(LEVEL_PRESETS[currentLevel]);
+          }
+        });
+      } catch(e) {
+        console.warn('reloadAllLevelSprites error:', e);
+        if (btn) btn.disabled = false;
+        // Ripristina anche in caso di errore
+        try { Object.defineProperty(origImageProto, 'src', origSrcDescriptor); } catch(_) {}
       }
     }
 
@@ -4634,6 +5175,7 @@
         case 'high':   w = 1024; h = 768;  ratio=w/width; break;
         case 'medium': w = 640;  h = 480;  ratio=w/width; break;
         case 'low':    w = 480;  h = 360;  ratio=w/width; break;
+        case 'square': w = 500;  h = 500;  ratio=w/width; break;
       }
       reset({ width: w, height: h })
       Dom.blur(ev);
@@ -4817,7 +5359,7 @@
           reset({ width: w, height: h });
 
           isFullscreen = true;
-          Dom.get('fullscreen-btn').innerHTML = '🗙 Exit Fullscreen (ESC or F)';
+          Dom.get('fullscreen-btn').innerHTML = '🗙 Exit Fullscreen (ESC)';
         }, 100);
       } else {
         // Exited fullscreen
@@ -4853,13 +5395,9 @@
     // Attach click handler to dual monitor button
     Dom.on('dual-monitor-btn', 'click', openDualMonitorMode);
 
-    // Alternative: Press F key for fullscreen
-    document.addEventListener('keydown', function(ev) {
-      if (ev.keyCode === 70 && !ev.ctrlKey && !ev.altKey) { // F key
-        ev.preventDefault();
-        toggleFullscreen();
-      }
-    });
+    // Scorciatoia F per fullscreen RIMOSSA: catturava la digitazione in input/textarea
+    // (es. campo "Testo bonus flash"). Usa il pulsante "Fullscreen Mode" nel pannello;
+    // ESC continua a far uscire dal fullscreen come comportamento nativo del browser.
 
     // Pause menu keyboard controls: ESC and P
     document.addEventListener('keydown', function(ev) {
@@ -4885,6 +5423,34 @@
         if (ev.target.tagName === 'INPUT' || ev.target.tagName === 'SELECT' || ev.target.tagName === 'TEXTAREA') return;
         ev.preventDefault();
         applyLevel(levelNum);
+      }
+    });
+
+    // Pilota automatico: toggle via funzione, pulsante UI e tasto O
+    function toggleAutopilot() {
+      autopilot = !autopilot;
+      var indicator = document.getElementById('autopilot-indicator');
+      if (indicator) indicator.style.display = autopilot ? 'block' : 'none';
+      var btn = document.getElementById('autopilot-btn');
+      if (btn) {
+        btn.classList.toggle('bg-primary', autopilot);
+        btn.classList.toggle('text-white', autopilot);
+        btn.classList.toggle('bg-gray-200', !autopilot);
+        btn.classList.toggle('dark:bg-gray-700', !autopilot);
+      }
+      if (!autopilot) {
+        // Rilascia i comandi quando si disattiva, così il gioco non resta "incollato"
+        keyLeft = keyRight = keyFaster = keySlower = false;
+      }
+    }
+    window.toggleAutopilot = toggleAutopilot;
+
+    document.addEventListener('keydown', function(ev) {
+      if (ev.keyCode === 79 && !ev.ctrlKey && !ev.altKey && !ev.metaKey) { // O key
+        var t = ev.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        ev.preventDefault();
+        toggleAutopilot();
       }
     });
 
@@ -4965,10 +5531,10 @@
 
       var host = location.hostname;
       var port = location.port ? (':' + location.port) : '';
-      // IMPORTANTE: usiamo /cam (URL nuovo) invece di /phone, perché iOS Safari
-      // cacha /phone in modo aggressivo. URL mai visto = niente cache.
+      // /cam = URL nuovo, bypassa la cache aggressiva di iOS Safari sul vecchio /phone
       var phonePath = '/cam';
-      var base = 'http://' + host + port + phonePath;  // forziamo http: il server non parla https
+      var proto = location.protocol;  // segue lo schema del server (http o https)
+      var base = proto + '//' + host + port + phonePath;
 
       // Su localhost il PC è il Mac stesso: chiediamo al server gli IP LAN reali
       if (host === 'localhost' || host === '127.0.0.1') {
@@ -4977,18 +5543,45 @@
           if (r.ok) {
             var info = await r.json();
             if (info.ips && info.ips.length) {
-              base = 'http://' + info.ips[0] + ':' + info.port + phonePath;
+              var realProto = (info.proto || proto.replace(':','')) + ':';
+              base = realProto + '//' + info.ips[0] + ':' + info.port + phonePath;
             }
           }
         } catch(_) { /* ignore */ }
       }
 
-      // Cache-buster di backup
+      // Cache-buster: forza iOS Safari a non usare la copia cached
       var url = base + '?v=' + Date.now();
 
-      var msg = 'iPad → apri (http://, NON https://): ' + url + '   ⚠️ NON aprirlo sul Mac';
+      var msg = 'iPad → apri: ' + url + '   ⚠️ NON aprirlo sul Mac';
       if (badge) badge.textContent = msg;
       if (link) link.textContent = url;
+
+      renderPhoneQR(url);
+    }
+
+    function renderPhoneQR(url) {
+      var wrap = document.getElementById('webcam-qr-wrap');
+      var box  = document.getElementById('webcam-qr');
+      if (!wrap || !box) return;
+      if (typeof qrcode === 'undefined') {
+        wrap.classList.add('hidden');
+        return;
+      }
+      try {
+        // ECC level M (~15% data recovery) e versione auto: gestisce URL fino a ~250 char
+        var qr = qrcode(0, 'M');
+        qr.addData(url);
+        qr.make();
+        // SVG scalable: nitido a qualsiasi grandezza, perfetto per zoom su iPad
+        box.innerHTML = qr.createSvgTag({ scalable: true, margin: 1 });
+        var svg = box.querySelector('svg');
+        if (svg) { svg.style.width = '100%'; svg.style.height = '100%'; }
+        wrap.classList.remove('hidden');
+      } catch(e) {
+        console.warn('QR render error:', e);
+        wrap.classList.add('hidden');
+      }
     }
 
     function reinitWebcamWebRTC() {
@@ -5174,54 +5767,202 @@
       var vw = webcamVideo.videoWidth  || w;
       var vh = webcamVideo.videoHeight || h;
 
-      // --- Audio FX: canvas filter modulated by audio level ---
+      // === 1) STRINGA FILTER (audio FX + parte additiva della distorsione) ===
+      var filterPieces = [];
       if (webcamAudioFxEnabled && currentAudioLevel > 0) {
         var lvl  = currentAudioLevel * webcamFxIntensity;
-        var bright = 1 + lvl * 0.6;
-        var sat    = 1 + lvl * 1.2;
-        var hue    = isFlashing ? Math.round(lvl * 180) : 0;
-        var cont   = 1 + lvl * 0.4;
-        ctx.filter = 'brightness(' + bright.toFixed(2) + ') saturate(' + sat.toFixed(2) +
-                     ') hue-rotate(' + hue + 'deg) contrast(' + cont.toFixed(2) + ')';
+        filterPieces.push('brightness(' + (1 + lvl * 0.6).toFixed(2) + ')');
+        filterPieces.push('saturate('   + (1 + lvl * 1.2).toFixed(2) + ')');
+        filterPieces.push('hue-rotate(' + (isFlashing ? Math.round(lvl * 180) : 0) + 'deg)');
+        filterPieces.push('contrast('   + (1 + lvl * 0.4).toFixed(2) + ')');
+      }
+      var distort = computeCameraDistortion(); // calcola beat + applica filter/transform
+      if (distort.filter) filterPieces.push(distort.filter);
+      ctx.filter = filterPieces.length ? filterPieces.join(' ') : 'none';
+
+      // === 2) PREPARA SORGENTE: video diretto o canvas chroma-keyed ===
+      var source = webcamVideo;
+      if (chromaKeyEnabled) {
+        if (!chromaCanvas || chromaCanvas.width !== vw || chromaCanvas.height !== vh) {
+          chromaCanvas = document.createElement('canvas');
+          chromaCanvas.width  = vw;
+          chromaCanvas.height = vh;
+          chromaCtx = chromaCanvas.getContext('2d', { willReadFrequently: true });
+        }
+        chromaCtx.drawImage(webcamVideo, 0, 0, vw, vh);
+        var imgData = chromaCtx.getImageData(0, 0, vw, vh);
+        var data    = imgData.data;
+        var kr = chromaKeyColor.r, kg = chromaKeyColor.g, kb = chromaKeyColor.b;
+        var tol = chromaKeyTolerance;
+        for (var i = 0; i < data.length; i += 4) {
+          var dr = data[i] - kr, dg = data[i+1] - kg, db = data[i+2] - kb;
+          var distRGB = Math.sqrt(dr*dr + dg*dg + db*db);
+          if (distRGB < tol) {
+            data[i+3] = Math.round(Math.max(0, (distRGB / tol - 0.5) * 2) * 255);
+          }
+        }
+        chromaCtx.putImageData(imgData, 0, 0);
+        source = chromaCanvas;
+      }
+
+      // === 3) DRAW con eventuali trasformazioni (zoom/shake/mirror/glitch) ===
+      if (distort.draw) {
+        // distort.draw è una funzione custom (es. glitch RGB split)
+        distort.draw(ctx, source, x, y, w, h);
+      } else if (distort.transform) {
+        ctx.save();
+        distort.transform(ctx, x, y, w, h);
+        ctx.drawImage(source, x, y, w, h);
+        ctx.restore();
       } else {
-        ctx.filter = 'none';
+        ctx.drawImage(source, x, y, w, h);
       }
 
-      if (!chromaKeyEnabled) {
-        // Fast path: direct draw
-        ctx.drawImage(webcamVideo, x, y, w, h);
-        ctx.filter = 'none';
-        return;
+      ctx.filter = 'none';
+    }
+
+    // === CAMERA DISTORTION (reattiva al BPM / tap tempo) ===
+    var cameraDistortEnabled   = false;
+    var cameraDistortMode      = 'zoom';
+    var cameraDistortIntensity = 1.0;
+    var cameraDistortSubdiv    = 1;
+    var cameraDistortLastBeat  = -1;
+    var cameraDistortRandomMode = 'zoom'; // mode pescato in modalità "random ogni beat"
+
+    var DISTORT_MODES = ['zoom','shake','glitch','mirror','hue','blur','invert','kaleido'];
+
+    function computeCameraDistortion() {
+      if (!cameraDistortEnabled) return {};
+
+      // Periodo: bpmInterval × subdiv, fallback 500ms (= 120 BPM)
+      var basePeriod = (typeof bpmInterval !== 'undefined' && bpmInterval > 0) ? bpmInterval : 500;
+      var period = basePeriod * cameraDistortSubdiv;
+      if (period < 60) period = 60; // floor anti-epilessia
+
+      var t = Date.now();
+      var phase   = (t % period) / period;             // 0..1
+      var pulse   = Math.abs(Math.sin(phase * Math.PI)); // 0..1..0
+      var beatIdx = Math.floor(t / period);
+
+      // Modalità "random ogni beat": cambia mode all'inizio di ogni periodo
+      var mode = cameraDistortMode;
+      if (mode === 'random') {
+        if (beatIdx !== cameraDistortLastBeat) {
+          cameraDistortLastBeat = beatIdx;
+          cameraDistortRandomMode = DISTORT_MODES[Math.floor(Math.random() * DISTORT_MODES.length)];
+        }
+        mode = cameraDistortRandomMode;
       }
 
-      // --- Chroma key path ---
-      if (!chromaCanvas || chromaCanvas.width !== vw || chromaCanvas.height !== vh) {
-        chromaCanvas = document.createElement('canvas');
-        chromaCanvas.width  = vw;
-        chromaCanvas.height = vh;
-        chromaCtx = chromaCanvas.getContext('2d', { willReadFrequently: true });
-      }
+      var k = cameraDistortIntensity;
+      var res = {};
 
-      chromaCtx.drawImage(webcamVideo, 0, 0, vw, vh);
-      var imgData = chromaCtx.getImageData(0, 0, vw, vh);
-      var data    = imgData.data;
-      var kr = chromaKeyColor.r, kg = chromaKeyColor.g, kb = chromaKeyColor.b;
-      var tol = chromaKeyTolerance;
-
-      for (var i = 0; i < data.length; i += 4) {
-        var dr = data[i]   - kr;
-        var dg = data[i+1] - kg;
-        var db = data[i+2] - kb;
-        var dist = Math.sqrt(dr*dr + dg*dg + db*db);
-        if (dist < tol) {
-          // Soft edge: fade out near tolerance boundary
-          data[i+3] = Math.round(Math.max(0, (dist / tol - 0.5) * 2) * 255);
+      switch (mode) {
+        case 'zoom': {
+          // Zoom in/out attorno al centro, fino a +30% all'apice del battito (k=1)
+          var scale = 1 + 0.30 * pulse * k;
+          res.transform = function(ctx, x, y, w, h) {
+            var cx = x + w/2, cy = y + h/2;
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+            ctx.translate(-cx, -cy);
+          };
+          break;
+        }
+        case 'shake': {
+          // Jitter casuale che si attenua tra un beat e l'altro
+          var amt = pulse * k * 0.05; // fino a 5% del canvas
+          var dx = (Math.random() - 0.5) * amt * 2;
+          var dy = (Math.random() - 0.5) * amt * 2;
+          res.transform = function(ctx, x, y, w, h) {
+            ctx.translate(dx * w, dy * h);
+          };
+          break;
+        }
+        case 'mirror': {
+          // Specchio orizzontale alternato a ogni beat
+          if (beatIdx % 2 === 1) {
+            res.transform = function(ctx, x, y, w, h) {
+              ctx.translate(x + w, y);
+              ctx.scale(-1, 1);
+              ctx.translate(-x, -y);
+            };
+          }
+          break;
+        }
+        case 'hue': {
+          // Rotazione hue progressiva: un giro completo ogni 8 beat
+          var deg = Math.round((t / (period * 8)) * 360) % 360;
+          res.filter = 'hue-rotate(' + Math.round(deg * k) + 'deg) saturate(' + (1 + 0.5 * k).toFixed(2) + ')';
+          break;
+        }
+        case 'blur': {
+          // Blur che pulsa col beat — usa pixel reali, non %
+          var px = pulse * k * 12; // max 12px
+          res.filter = 'blur(' + px.toFixed(1) + 'px)';
+          break;
+        }
+        case 'invert': {
+          // Invert color che lampeggia al beat
+          res.filter = 'invert(' + (pulse * k).toFixed(2) + ')';
+          break;
+        }
+        case 'glitch': {
+          // RGB split: disegna 3 volte con offset crescente al picco del beat
+          var off = pulse * k * 0.012;
+          res.draw = function(ctx, source, x, y, w, h) {
+            var prevComp = ctx.globalCompositeOperation;
+            ctx.globalCompositeOperation = 'screen';
+            // RED (offset destro)
+            ctx.filter = (filterPiecesGlitch('red')) || ctx.filter;
+            ctx.drawImage(source, x + w*off,  y,            w, h);
+            // GREEN (centrato)
+            ctx.filter = filterPiecesGlitch('green');
+            ctx.drawImage(source, x,           y,            w, h);
+            // BLUE (offset sinistro)
+            ctx.filter = filterPiecesGlitch('blue');
+            ctx.drawImage(source, x - w*off,  y,            w, h);
+            ctx.globalCompositeOperation = prevComp;
+          };
+          break;
+        }
+        case 'kaleido': {
+          // Effetto 2x2 tiles: divide il canvas in 4 quadranti, riflessi
+          res.draw = function(ctx, source, x, y, w, h) {
+            var hw = w/2, hh = h/2;
+            // top-left: normale
+            ctx.drawImage(source, x,      y,      hw, hh);
+            // top-right: flip horizontal
+            ctx.save();
+            ctx.translate(x + w, y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(source, 0, 0, hw, hh);
+            ctx.restore();
+            // bottom-left: flip vertical
+            ctx.save();
+            ctx.translate(x, y + h);
+            ctx.scale(1, -1);
+            ctx.drawImage(source, 0, 0, hw, hh);
+            ctx.restore();
+            // bottom-right: flip both
+            ctx.save();
+            ctx.translate(x + w, y + h);
+            ctx.scale(-1, -1);
+            ctx.drawImage(source, 0, 0, hw, hh);
+            ctx.restore();
+          };
+          break;
         }
       }
+      return res;
+    }
 
-      chromaCtx.putImageData(imgData, 0, 0);
-      ctx.drawImage(chromaCanvas, x, y, w, h);
-      ctx.filter = 'none';
+    // Helper per glitch: applica un tint colore singolo come filter
+    function filterPiecesGlitch(channel) {
+      if (channel === 'red')   return 'sepia(1) hue-rotate(-50deg) saturate(4)';
+      if (channel === 'green') return 'sepia(1) hue-rotate(50deg) saturate(4)';
+      if (channel === 'blue')  return 'sepia(1) hue-rotate(180deg) saturate(4)';
+      return 'none';
     }
 
     function initWebcamWebRTC() {

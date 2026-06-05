@@ -22,12 +22,20 @@ try {
 }
 const io = new Server(server);
 
-// Log every HTTP request with IP and User-Agent
+// Log every HTTP request with IP, status code and User-Agent.
+// Mostrare lo status code aiuta a identificare al volo eventuali 404/500
+// nascosti tra centinaia di richieste (es. durante il preload di tutti i livelli).
 app.use((req, res, next) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const ua = req.headers['user-agent'] || '-';
   const isIpad = /iPad|iPhone/.test(ua);
-  console.log(`[${isIpad ? 'iPAD' : 'REQ '}] ${ip} ${req.method} ${req.url}  (${ua.slice(0, 60)})`);
+  const start = Date.now();
+  res.on('finish', () => {
+    const code = res.statusCode;
+    const tag = code >= 500 ? 'ERR ' : code >= 400 ? 'WARN' : (isIpad ? 'iPAD' : 'REQ ');
+    const ms = Date.now() - start;
+    console.log(`[${tag}] ${code} ${ip} ${req.method} ${req.url}  (${ms}ms)  (${ua.slice(0, 50)})`);
+  });
   next();
 });
 
@@ -44,6 +52,11 @@ app.use(express.static(__dirname, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
       res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    } else if (/\.(png|jpe?g|gif|svg|webp)$/i.test(filePath)) {
+      // Anti-cache aggressivo su immagini: il dev sostituisce asset frequentemente
+      // e iOS Safari / Chrome cachano vecchie versioni indefinitamente.
+      // ETag basato su mtime/size resta abilitato → reload veloci se nulla cambia.
+      res.set('Cache-Control', 'no-cache, must-revalidate');
     }
   }
 }));
