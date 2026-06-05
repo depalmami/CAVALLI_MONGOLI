@@ -5485,6 +5485,23 @@
       }
     });
 
+    // Quando si scrive in una casella di testo (es. la scritta del visual bonus),
+    // disattiva TUTTE le scorciatoie da tastiera: intercetta in fase di cattura su
+    // window e blocca la propagazione verso i listener di gioco/shortcut (su document),
+    // senza impedire la digitazione (nessun preventDefault, le lettere si scrivono).
+    function isTypingTarget(el) {
+      if (!el) return false;
+      var tag = el.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+    ['keydown', 'keyup', 'keypress'].forEach(function(type) {
+      window.addEventListener(type, function(ev) {
+        if (isTypingTarget(ev.target)) {
+          ev.stopPropagation();
+        }
+      }, true); // capture: precede tutti i listener di gioco/shortcut
+    });
+
     // Pilota automatico: toggle via funzione, pulsante UI e tasto O
     function toggleAutopilot() {
       autopilot = !autopilot;
