@@ -297,7 +297,8 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
   for (let i = 8; i < N; i += 6) {
     for (const side of [-1, 1]) {
       if (Math.random() < 0.35) continue;
-      spots.push({ i, lat: side * (1.5 + Math.random()*3.5), s: 0.7 + Math.random()*0.9 });
+      // mai dentro l'escursione laterale del giocatore (playerX max ±2.2)
+      spots.push({ i, lat: side * (2.8 + Math.random()*3.5), s: 0.7 + Math.random()*0.9 });
     }
   }
   const trunkG = new THREE.CylinderGeometry(60, 90, 600, 6);
@@ -506,6 +507,9 @@ function updateCamera(dt) {
   const h = player.heading;
   const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
 
+  // in prima persona il cavallo del giocatore non si deve vedere da dentro
+  player.group.visible = CAM_MODES[camMode] !== 'onboard';
+
   switch (CAM_MODES[camMode]) {
     case 'chase': {
       tmpB.copy(p).addScaledVector(fwd, -2300); tmpB.y += 1150;
@@ -515,9 +519,9 @@ function updateCamera(dt) {
       break;
     }
     case 'onboard': {
-      tmpB.copy(p).addScaledVector(fwd, 350); tmpB.y += 850;
+      tmpB.copy(p).addScaledVector(fwd, 500); tmpB.y += 1000;
       camera.position.copy(tmpB);
-      tmpB.copy(p).addScaledVector(fwd, 4000); tmpB.y += 500;
+      tmpB.copy(p).addScaledVector(fwd, 4500); tmpB.y += 550;
       camera.lookAt(tmpB);
       break;
     }
