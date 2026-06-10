@@ -324,14 +324,19 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
 const texLoader = new THREE.TextureLoader();
 const frames = [];                  // 8 frame galoppo dal gioco attuale
 let spriteAspect = 0.9;
+let spritesOK = false;
 const framesReady = Promise.all(
-  Array.from({length: 8}, (_, i) => new Promise((res, rej) => {
+  Array.from({length: 8}, (_, i) => new Promise((res) => {
     texLoader.load(`images/horses/PLAYER_STRAIGHT_${i+1}.png`, t => {
       t.colorSpace = THREE.SRGBColorSpace;
-      frames[i] = t; res();
-    }, undefined, rej);
+      frames[i] = t; res(true);
+    }, undefined, () => res(false));
   }))
-).then(() => { spriteAspect = frames[0].image.width / frames[0].image.height; });
+).then(oks => {
+  spritesOK = oks.every(Boolean);
+  if (spritesOK) spriteAspect = frames[0].image.width / frames[0].image.height;
+  return spritesOK;
+});
 
 // ombra finta (blob) sotto ogni cavallo
 const blobTex = (() => {
@@ -546,7 +551,8 @@ const $ = id => document.getElementById(id);
 let renderMode = 'sprite';
 
 function setMode(mode) {
-  if (mode === 'model' && !modelTemplate) return;     // GLB non ancora caricato
+  if (mode === 'model'  && !modelTemplate) return;    // GLB non disponibile
+  if (mode === 'sprite' && !spritesOK)     return;    // sprite non caricati
   renderMode = mode;
   allActors.forEach(a => { a.initModel(); a.setMode(mode); });
   $('btn-sprite').classList.toggle('active', mode === 'sprite');
@@ -593,15 +599,43 @@ function frame(now) {
   $('lastlap').textContent = lastLapTime ? lastLapTime.toFixed(1)+'s' : '—';
 }
 
-framesReady
-  .catch(() => { $('loading').innerHTML = '<div class="err">Sprite non trovati: apri questa pagina da un server HTTP nella cartella del progetto (es. <code>npx http-server</code>), non con doppio click sul file.</div>'; throw new Error('sprites'); })
-  .then(() => {
+const isFile = location.protocol === 'file:';
+const serverHint = 'apri <b>http://127.0.0.1:8901/horse-racing-3d.html</b> ' +
+  '(se il server non è attivo: <code>python3 -m http.server 8901 --bind 127.0.0.1</code> ' +
+  'nella cartella del progetto, oppure <code>node server.js</code> e poi ' +
+  '<b>https://localhost:3000/horse-racing-3d.html</b>)';
+
+function showWarning(html) {
+  const w = document.createElement('div');
+  w.className = 'panel';
+  w.style.cssText = 'top:60px; left:50%; transform:translateX(-50%); max-width:640px; font-size:14px; background:rgba(140,80,0,.75); cursor:pointer;';
+  w.innerHTML = html + '<br><small>(clicca per chiudere)</small>';
+  w.onclick = () => w.remove();
+  document.body.appendChild(w);
+}
+
+Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
+  if (!sOK && !mOK) {
+    $('loading').innerHTML = '<div class="err">' + (isFile
+      ? 'Pagina aperta con doppio click (<code>file://</code>): il browser blocca sia gli sprite locali sia il modello. Per favore ' + serverHint + '.'
+      : 'Né gli sprite (<code>images/horses/</code>) né il modello 3D (CDN) si sono caricati. Controlla che il server serva la cartella del progetto e che ci sia connessione internet, poi ricarica. In alternativa ' + serverHint + '.') + '</div>';
+    return;
+  }
+  if (sOK) {
     allActors.forEach(a => a.initSprite());
-    modelReady.then(ok => { if (!ok) $('btn-model').disabled = true; });
-    $('loading').remove();
-    player.place(0, 0);
-    requestAnimationFrame(frame);
-  });
+  } else {
+    $('btn-sprite').disabled = true;
+    showWarning((isFile
+      ? 'Pagina aperta con doppio click (<code>file://</code>): gli sprite locali non si caricano così — per il confronto A/B ' + serverHint + '.'
+      : 'Sprite non trovati in <code>images/horses/</code> su questo server.') +
+      '<br>Per ora parto con l\'<b>Opzione B (modello 3D)</b>.');
+  }
+  if (!mOK) $('btn-model').disabled = true;
+  setMode(sOK ? 'sprite' : 'model');
+  $('loading').remove();
+  player.place(0, 0);
+  requestAnimationFrame(frame);
+});
 </script>
 </body>
 </html>
