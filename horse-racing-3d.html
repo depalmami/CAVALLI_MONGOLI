@@ -168,7 +168,7 @@ const pts = [];
   let x = 0, z = 0, heading = 0;
   for (const s of segments) {
     pts.push({ x, y: s.p1y * Y_SCALE, z, heading });
-    heading += s.curve * CURVE_K;
+    heading -= s.curve * CURVE_K;       // curve positiva = curva a destra, come nell'originale
     x += Math.sin(heading) * SEGMENT_LENGTH;
     z += Math.cos(heading) * SEGMENT_LENGTH;
   }
@@ -182,7 +182,7 @@ function posToWorld(position, lateralN, out, lookahead) {
   const t = (position % SEGMENT_LENGTH) / SEGMENT_LENGTH;
   const a = pts[i], b = pts[i+1];
   const h = a.heading + (b.heading - a.heading) * t;
-  const rx =  Math.cos(h), rz = -Math.sin(h);
+  const rx = -Math.cos(h), rz = Math.sin(h);   // destra di chi guarda lungo (sin h, cos h)
   out.x = a.x + (b.x-a.x)*t + rx * lateralN * ROAD_WIDTH;
   out.y = a.y + (b.y-a.y)*t;
   out.z = a.z + (b.z-a.z)*t + rz * lateralN * ROAD_WIDTH;
@@ -242,7 +242,7 @@ ext.push(...pts);
 function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false }) {
   const positions = [], colors = [];
   const edge = (p, off) => {
-    const rx = Math.cos(p.heading), rz = -Math.sin(p.heading);
+    const rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
     return [ p.x + rx*(centerOff+off), p.y + yOff, p.z + rz*(centerOff+off) ];
   };
   for (let i = 0; i < ext.length - 1; i++) {
@@ -250,7 +250,7 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false }) 
     if (!c) continue;
     const a = ext[i], b = ext[i+1];
     const al = edge(a,-half), ar = edge(a,half), bl = edge(b,-half), br = edge(b,half);
-    positions.push(...al, ...br, ...ar,  ...al, ...bl, ...br);
+    positions.push(...al, ...ar, ...br,  ...al, ...br, ...bl);
     for (let k = 0; k < 6; k++) colors.push(c.r, c.g, c.b);
   }
   const g = new THREE.BufferGeometry();
