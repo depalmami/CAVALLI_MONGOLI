@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cavalli Mongoli 3D — Prototipo (Opzione A/B)</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin:0; padding:0; overflow:hidden; background:#000; font-family:-apple-system, 'Segoe UI', sans-serif; }
+  #scene { position:fixed; inset:0; display:block; }
+
+  .panel { position:fixed; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8);
+           background:rgba(0,0,0,.45); border-radius:10px; padding:10px 14px; backdrop-filter:blur(4px); }
+  #hud-left  { top:12px; left:12px; font-size:15px; line-height:1.5; }
+  #hud-left b { font-size:26px; }
+  #hud-right { top:12px; right:12px; text-align:right; }
+  #hud-help  { bottom:12px; left:50%; transform:translateX(-50%); font-size:13px; white-space:nowrap; }
+
+  button { background:#2b6cb0; color:#fff; border:0; border-radius:8px; padding:8px 12px;
+           font-size:14px; cursor:pointer; margin:2px 0 2px 6px; }
+  button.active { background:#38a169; }
+  button:hover { filter:brightness(1.15); }
+
+  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+             flex-direction:column; gap:12px; background:#1a202c; color:#fff; font-size:20px; z-index:10; }
+  #loading small { opacity:.6; }
+  .err { color:#feb2b2; max-width:600px; text-align:center; font-size:15px; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="loading">🐎 Caricamento prototipo 3D… <small>(serve connessione internet per Three.js e il modello)</small></div>
+
+<div id="hud-left" class="panel">
+  <b><span id="speed">0</span></b> km/h<br>
+  Giro: <span id="laptime">0.0</span>s &nbsp; Ultimo: <span id="lastlap">—</span>
+</div>
+
+<div id="hud-right" class="panel">
+  <div>
+    <button id="btn-sprite" class="active">Opzione A — Sprite</button>
+    <button id="btn-model">Opzione B — Modello 3D</button>
+  </div>
+  <div>
+    <button id="btn-camera">Camera: chase</button>
+  </div>
+</div>
+
+<div id="hud-help" class="panel">
+  ↑↓/WS accelera-frena · ←→/AD sterza · <b>B</b> sprite/modello · <b>C</b> camera · <b>R</b> riparti
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+//=========================================================================
+// COSTANTI — stesse unità del gioco originale (javascript-racer)
+//=========================================================================
+const SEGMENT_LENGTH = 200;
+const RUMBLE_LENGTH  = 3;
+const ROAD_WIDTH     = 2000;          // semilarghezza: playerX = ±1 è il bordo strada
+const MAX_SPEED      = 12000;         // unità/secondo (= segmentLength/(1/60))
+const ACCEL          =  MAX_SPEED/5;
+const BRAKING        = -MAX_SPEED;
+const DECEL          = -MAX_SPEED/5;
+const OFFROAD_DECEL  = -MAX_SPEED/2;
+const OFFROAD_LIMIT  =  MAX_SPEED/4;
+const CENTRIFUGAL    = 0.3;
+
+// Conversione pseudo-3D → 3D reale:
+const CURVE_K = 0.0038;               // radianti di sterzata per unità di "curve" per segmento
+const Y_SCALE = 0.6;                  // smorza le colline (nel finto 3D erano esagerate dalla proiezione)
+
+const HORSE_HEIGHT = 1300;            // altezza cavallo in unità mondo (≈ 1 corsia)
+const SKY_COLOR    = 0x72D7EE;
+
+//=========================================================================
+// TRACCIATO — porting fedele di addRoad/resetRoad dal gioco originale
+//=========================================================================
+const easeIn    = (a,b,p) => a + (b-a)*Math.pow(p,2);
+const easeInOut = (a,b,p) => a + (b-a)*((-Math.cos(p*Math.PI)/2) + 0.5);
+
+const segments = [];
+const lastY = () => segments.length === 0 ? 0 : segments[segments.length-1].p2y;
+
+function addSegment(curve, y) {
+  segments.push({ index: segments.length, p1y: lastY(), p2y: y, curve });
+}
+function addRoad(enter, hold, leave, curve, y) {
+  const startY = lastY();
+  const endY   = startY + ((y|0) * SEGMENT_LENGTH);
+  const total  = enter + hold + leave;
+  for (let n = 0; n < enter; n++) addSegment(easeIn(0, curve, n/enter),            easeInOut(startY, endY, n/total));
+  for (let n = 0; n < hold;  n++) addSegment(curve,                                easeInOut(startY, endY, (enter+n)/total));
+  for (let n = 0; n < leave; n++) addSegment(easeInOut(curve, 0, n/leave),         easeInOut(startY, endY, (enter+hold+n)/total));
+}
+
+const ROAD = {
+  LENGTH: { NONE:0, SHORT:25, MEDIUM:50, LONG:100 },
+  HILL:   { NONE:0, LOW:20, MEDIUM:40, HIGH:60 },
+  CURVE:  { NONE:0, EASY:2, MEDIUM:4, HARD:6 }
+};
+const addStraight = (n=ROAD.LENGTH.MEDIUM)                                    => addRoad(n,n,n, 0, 0);
+const addHill     = (n=ROAD.LENGTH.MEDIUM, h=ROAD.HILL.MEDIUM)                => addRoad(n,n,n, 0, h);
+const addCurve    = (n=ROAD.LENGTH.MEDIUM, c=ROAD.CURVE.MEDIUM, h=ROAD.HILL.NONE) => addRoad(n,n,n, c, h);
+function addLowRollingHills(n=ROAD.LENGTH.SHORT, h=ROAD.HILL.LOW) {
+  addRoad(n,n,n,  0,  h/2);
+  addRoad(n,n,n,  0, -h);
+  addRoad(n,n,n,  ROAD.CURVE.EASY,  h);
+  addRoad(n,n,n,  0,  0);
+  addRoad(n,n,n, -ROAD.CURVE.EASY,  h/2);
+  addRoad(n,n,n,  0,  0);
+}
+function addSCurves() {
+  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.EASY,    ROAD.HILL.NONE);
+  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  ROAD.CURVE.MEDIUM,  ROAD.HILL.MEDIUM);
+  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  ROAD.CURVE.EASY,   -ROAD.HILL.LOW);
+  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.EASY,    ROAD.HILL.MEDIUM);
+  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
+}
+function addBumps() {
+  for (const y of [5,-2,-5,8,5,-7,5,-2]) addRoad(10,10,10, 0, y);
+}
+function addDownhillToEnd(n=200) {
+  addRoad(n,n,n, -ROAD.CURVE.EASY, -lastY()/SEGMENT_LENGTH);
+}
+
+// layout del livello 1 (identico a resetRoad del gioco attuale)
+addStraight(ROAD.LENGTH.SHORT);
+addLowRollingHills();
+addSCurves();
+addCurve(ROAD.LENGTH.MEDIUM, ROAD.CURVE.MEDIUM, ROAD.HILL.LOW);
+addBumps();
+addLowRollingHills();
+addCurve(ROAD.LENGTH.LONG*2, ROAD.CURVE.MEDIUM, ROAD.HILL.MEDIUM);
+addStraight();
+addHill(ROAD.LENGTH.MEDIUM, ROAD.HILL.HIGH);
+addSCurves();
+addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, ROAD.HILL.NONE);
+addHill(ROAD.LENGTH.LONG, ROAD.HILL.HIGH);
+addCurve(ROAD.LENGTH.LONG, ROAD.CURVE.MEDIUM, -ROAD.HILL.LOW);
+addBumps();
+addHill(ROAD.LENGTH.LONG, -ROAD.HILL.MEDIUM);
+addStraight();
+addSCurves();
+addDownhillToEnd();
+
+const N = segments.length;
+const TRACK_LENGTH = N * SEGMENT_LENGTH;
+
+//=========================================================================
+// CENTERLINE 3D — qui le curve diventano VERE: integriamo "curve" in un
+// angolo di direzione e costruiamo i punti x,y,z nello spazio
+//=========================================================================
+const pts = [];
+{
+  let x = 0, z = 0, heading = 0;
+  for (const s of segments) {
+    pts.push({ x, y: s.p1y * Y_SCALE, z, heading });
+    heading += s.curve * CURVE_K;
+    x += Math.sin(heading) * SEGMENT_LENGTH;
+    z += Math.cos(heading) * SEGMENT_LENGTH;
+  }
+  pts.push({ x, y: segments[N-1].p2y * Y_SCALE, z, heading });
+}
+
+// (posizione lungo pista, offset laterale normalizzato) → punto nel mondo
+function posToWorld(position, lateralN, out, lookahead) {
+  position = ((position % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
+  const i = Math.floor(position / SEGMENT_LENGTH);
+  const t = (position % SEGMENT_LENGTH) / SEGMENT_LENGTH;
+  const a = pts[i], b = pts[i+1];
+  const h = a.heading + (b.heading - a.heading) * t;
+  const rx =  Math.cos(h), rz = -Math.sin(h);
+  out.x = a.x + (b.x-a.x)*t + rx * lateralN * ROAD_WIDTH;
+  out.y = a.y + (b.y-a.y)*t;
+  out.z = a.z + (b.z-a.z)*t + rz * lateralN * ROAD_WIDTH;
+  if (lookahead) lookahead.heading = h;
+  return out;
+}
+const curveAt = (position) => {
+  position = ((position % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
+  return segments[Math.floor(position / SEGMENT_LENGTH) % N].curve;
+};
+
+//=========================================================================
+// SCENA
+//=========================================================================
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('scene'), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(SKY_COLOR);
+scene.fog = new THREE.Fog(SKY_COLOR, 9000, 75000);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 80, 150000);
+
+scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x5a7b4a, 1.6));
+const sun = new THREE.DirectionalLight(0xfff2d8, 1.6);
+sun.position.set(0.4, 1, 0.3);
+scene.add(sun);
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+//=========================================================================
+// GEOMETRIA PISTA — nastri (ribbon) con vertex colors
+//=========================================================================
+const COL = {
+  ROAD_L:   new THREE.Color(0x737373), ROAD_D:   new THREE.Color(0x616161),
+  GRASS_L:  new THREE.Color(0x10AA10), GRASS_D:  new THREE.Color(0x009A00),
+  RUMBLE_L: new THREE.Color(0x555555), RUMBLE_D: new THREE.Color(0xBBBBBB),
+  LANE:     new THREE.Color(0xCCCCCC),
+  START:    new THREE.Color(0xFFFFFF), FINISH:   new THREE.Color(0x101010),
+};
+const isDark = i => Math.floor(i/RUMBLE_LENGTH) % 2 === 1;
+
+// coda di pista piatta prima del via, così dietro la partenza non c'è il vuoto
+const PRE = 25;
+const ext = [];
+for (let i = PRE; i > 0; i--) ext.push({ x: 0, y: pts[0].y, z: -i * SEGMENT_LENGTH, heading: 0 });
+ext.push(...pts);
+
+// nastro generico lungo la pista; colorOf(i) → THREE.Color o null per saltare il
+// segmento. I nastri NON si sovrappongono mai (niente z-fighting a distanza);
+// le linee di corsia sono decal con polygonOffset.
+function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false }) {
+  const positions = [], colors = [];
+  const edge = (p, off) => {
+    const rx = Math.cos(p.heading), rz = -Math.sin(p.heading);
+    return [ p.x + rx*(centerOff+off), p.y + yOff, p.z + rz*(centerOff+off) ];
+  };
+  for (let i = 0; i < ext.length - 1; i++) {
+    const c = colorOf(i - PRE);
+    if (!c) continue;
+    const a = ext[i], b = ext[i+1];
+    const al = edge(a,-half), ar = edge(a,half), bl = edge(b,-half), br = edge(b,half);
+    positions.push(...al, ...br, ...ar,  ...al, ...bl, ...br);
+    for (let k = 0; k < 6; k++) colors.push(c.r, c.g, c.b);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  if (decal) {
+    mat.polygonOffset = true;
+    mat.polygonOffsetFactor = -4;
+    mat.polygonOffsetUnits = -4;
+    mat.depthWrite = false;
+  }
+  const m = new THREE.Mesh(g, mat);
+  scene.add(m);
+  return m;
+}
+
+const RUMBLE_W   = ROAD_WIDTH * 0.24;
+const GRASS_HALF = ROAD_WIDTH * 30;
+const grassCol  = i => isDark(i) ? COL.GRASS_D  : COL.GRASS_L;
+const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
+
+buildRibbon({ half: ROAD_WIDTH, colorOf: i => {
+  if (i < 0)              return COL.ROAD_D;
+  if (i === 2 || i === 3) return COL.START;
+  if (i >= N - RUMBLE_LENGTH) return COL.FINISH;
+  return isDark(i) ? COL.ROAD_D : COL.ROAD_L;
+}});
+for (const side of [-1, 1]) {
+  buildRibbon({ half: RUMBLE_W/2,  centerOff: side*(ROAD_WIDTH + RUMBLE_W/2),            colorOf: rumbleCol });
+  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF), colorOf: grassCol });
+}
+// linee di corsia tratteggiate (3 corsie come nell'originale) — decal sopra l'asfalto
+for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
+  buildRibbon({ half: ROAD_WIDTH*0.015, yOff: 2, centerOff: off*2, decal: true,
+                colorOf: i => (i >= 0 && !isDark(i)) ? COL.LANE : null });
+
+//=========================================================================
+// ALBERI — vero 3D di contorno (instanced, ~500 alberi)
+//=========================================================================
+{
+  const spots = [];
+  for (let i = 8; i < N; i += 6) {
+    for (const side of [-1, 1]) {
+      if (Math.random() < 0.35) continue;
+      spots.push({ i, lat: side * (1.5 + Math.random()*3.5), s: 0.7 + Math.random()*0.9 });
+    }
+  }
+  const trunkG = new THREE.CylinderGeometry(60, 90, 600, 6);
+  const leafG  = new THREE.ConeGeometry(550, 1900, 8);
+  const trunk  = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x6b4a2b }), spots.length);
+  const leaves = new THREE.InstancedMesh(leafG,  new THREE.MeshLambertMaterial({ color: 0x1e7a1e }), spots.length);
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
+  const tint = new THREE.Color();
+  spots.forEach((sp, k) => {
+    posToWorld(sp.i * SEGMENT_LENGTH, sp.lat, P);
+    S.setScalar(sp.s);
+    M.compose(new THREE.Vector3(P.x, P.y + 300*sp.s, P.z), Q, S);
+    trunk.setMatrixAt(k, M);
+    M.compose(new THREE.Vector3(P.x, P.y + (600 + 950)*sp.s, P.z), Q, S);
+    leaves.setMatrixAt(k, M);
+    leaves.setColorAt(k, tint.setHSL(0.33, 0.5, 0.28 + Math.random()*0.16));
+  });
+  scene.add(trunk, leaves);
+}
+
+//=========================================================================
+// CAVALLI — Opzione A (sprite billboard) vs Opzione B (modello 3D animato)
+//=========================================================================
+const texLoader = new THREE.TextureLoader();
+const frames = [];                  // 8 frame galoppo dal gioco attuale
+let spriteAspect = 0.9;
+const framesReady = Promise.all(
+  Array.from({length: 8}, (_, i) => new Promise((res, rej) => {
+    texLoader.load(`images/horses/PLAYER_STRAIGHT_${i+1}.png`, t => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      frames[i] = t; res();
+    }, undefined, rej);
+  }))
+).then(() => { spriteAspect = frames[0].image.width / frames[0].image.height; });
+
+// ombra finta (blob) sotto ogni cavallo
+const blobTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64,64,8, 64,64,62);
+  grad.addColorStop(0, 'rgba(0,0,0,0.55)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad; g.fillRect(0,0,128,128);
+  return new THREE.CanvasTexture(c);
+})();
+
+let modelTemplate = null, modelClip = null;
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/Horse.glb';
+const modelReady = new Promise((res) => {
+  new GLTFLoader().load(MODEL_URL, gltf => {
+    modelTemplate = gltf.scene;
+    modelClip = gltf.animations[0];
+    res(true);
+  }, undefined, err => { console.warn('Modello 3D non disponibile:', err); res(false); });
+});
+
+class HorseActor {
+  constructor(tintHex = 0xffffff) {
+    this.tint = new THREE.Color(tintHex);
+    this.group = new THREE.Group();
+    scene.add(this.group);
+
+    // ombra
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(HORSE_HEIGHT*1.1, HORSE_HEIGHT*0.6),
+      new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
+    sh.rotation.x = -Math.PI/2; sh.position.y = 8;
+    this.group.add(sh);
+
+    // opzione A — billboard
+    this.spriteMat = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, color: this.tint, side: THREE.DoubleSide });
+    this.billboard = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.spriteMat);
+    this.group.add(this.billboard);
+    this.frame = 0; this.frameClock = 0;
+
+    // opzione B — montata quando il GLB arriva
+    this.model = null; this.mixer = null;
+    this.heading = 0;
+    this.setMode('sprite');
+  }
+  initSprite() {
+    const h = HORSE_HEIGHT, w = h * spriteAspect;
+    this.billboard.scale.set(w, h, 1);
+    this.billboard.position.y = h/2;
+    this.spriteMat.map = frames[0]; this.spriteMat.needsUpdate = true;
+  }
+  initModel() {
+    if (!modelTemplate || this.model) return;
+    this.model = SkeletonUtils.clone(modelTemplate);
+    const box = new THREE.Box3().setFromObject(this.model);
+    const s = HORSE_HEIGHT / (box.max.y - box.min.y);
+    this.model.scale.setScalar(s);
+    this.model.position.y = -box.min.y * s;
+    this.model.traverse(o => {
+      if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(this.tint); }
+    });
+    this.mixer = new THREE.AnimationMixer(this.model);
+    this.mixer.clipAction(modelClip).play();
+    this.group.add(this.model);
+    this.model.visible = (this.mode === 'model');
+  }
+  setMode(mode) {
+    this.mode = mode;
+    this.billboard.visible = (mode === 'sprite');
+    if (this.model) this.model.visible = (mode === 'model');
+  }
+  place(position, lateralN) {
+    const la = {};
+    posToWorld(position, lateralN, this.group.position, la);
+    this.heading = la.heading;
+  }
+  update(dt, speedPct) {
+    if (this.mode === 'sprite') {
+      const fps = 10 + speedPct * 20;
+      this.frameClock += dt * fps;
+      if (this.frameClock >= 1 && frames.length === 8) {
+        this.frame = (this.frame + Math.floor(this.frameClock)) % 8;
+        this.frameClock %= 1;
+        this.spriteMat.map = frames[this.frame];
+      }
+      // billboard cilindrico: ruota verso la camera restando in piedi
+      this.billboard.rotation.y = Math.atan2(camera.position.x - this.group.position.x,
+                                             camera.position.z - this.group.position.z);
+    } else if (this.model) {
+      this.model.rotation.y = this.heading;
+      if (this.mixer) this.mixer.update(dt * (0.2 + speedPct * 1.5));
+    }
+  }
+}
+
+const player = new HorseActor(0xffffff);
+const opponents = [
+  { actor: new HorseActor(0xffc9a3), lat: -0.55, pos: TRACK_LENGTH - 1600, speed: MAX_SPEED*0.80 },
+  { actor: new HorseActor(0xa9c8ff), lat: -0.18, pos: TRACK_LENGTH - 2800, speed: MAX_SPEED*0.86 },
+  { actor: new HorseActor(0xd6ffb3), lat:  0.22, pos: 1800,                speed: MAX_SPEED*0.83 },
+  { actor: new HorseActor(0xffb3d9), lat:  0.60, pos: 3600,                speed: MAX_SPEED*0.90 },
+];
+const allActors = [player, ...opponents.map(o => o.actor)];
+
+//=========================================================================
+// FISICA — porting 1:1 dell'update() originale (posizione + offset laterale)
+//=========================================================================
+const limit  = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const accel  = (v, a, dt) => v + a*dt;
+
+let position = 0, speed = 0, playerX = 0;
+let currentLapTime = 0, lastLapTime = null, started = false;
+const keys = {};
+addEventListener('keydown', e => {
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  keys[e.key.toLowerCase()] = true;
+});
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+const keyLeft   = () => keys['arrowleft']  || keys['a'];
+const keyRight  = () => keys['arrowright'] || keys['d'];
+const keyFaster = () => keys['arrowup']    || keys['w'];
+const keySlower = () => keys['arrowdown']  || keys['s'];
+
+function updatePhysics(dt) {
+  const speedPct = speed / MAX_SPEED;
+  const dx = dt * 2 * speedPct;
+
+  if (keyLeft())  playerX -= dx;
+  if (keyRight()) playerX += dx;
+  playerX -= dx * speedPct * curveAt(position) * CENTRIFUGAL;   // forza centrifuga vera quanto prima
+
+  if      (keyFaster()) speed = accel(speed, ACCEL, dt);
+  else if (keySlower()) speed = accel(speed, BRAKING, dt);
+  else                  speed = accel(speed, DECEL, dt);
+
+  if ((playerX < -1 || playerX > 1) && speed > OFFROAD_LIMIT)
+    speed = accel(speed, OFFROAD_DECEL, dt);
+
+  playerX = limit(playerX, -2.2, 2.2);
+  speed   = limit(speed, 0, MAX_SPEED);
+
+  const prev = position;
+  position += speed * dt;
+  if (speed > 0) started = true;
+  if (started) currentLapTime += dt;
+  if (position >= TRACK_LENGTH) {            // traguardo (per ora punto-a-punto con wrap)
+    position -= TRACK_LENGTH;
+    lastLapTime = currentLapTime;
+    currentLapTime = 0;
+  }
+
+  for (const o of opponents) {
+    o.pos += o.speed * dt;
+    if (o.pos >= TRACK_LENGTH) o.pos -= TRACK_LENGTH;
+  }
+}
+
+//=========================================================================
+// CAMERE — il motivo per cui si fa il 3D vero
+//=========================================================================
+const CAM_MODES = ['chase', 'onboard', 'tv', 'orbit'];
+let camMode = 0, orbitAngle = 0;
+const tvPos = new THREE.Vector3(); let tvAnchor = -1;
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
+
+function updateCamera(dt) {
+  const p = player.group.position;
+  const h = player.heading;
+  const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
+
+  switch (CAM_MODES[camMode]) {
+    case 'chase': {
+      tmpB.copy(p).addScaledVector(fwd, -2300); tmpB.y += 1150;
+      camera.position.lerp(tmpB, 1 - Math.pow(0.0001, dt));
+      tmpB.copy(p).addScaledVector(fwd, 1500); tmpB.y += 600;
+      camera.lookAt(tmpB);
+      break;
+    }
+    case 'onboard': {
+      tmpB.copy(p).addScaledVector(fwd, 350); tmpB.y += 850;
+      camera.position.copy(tmpB);
+      tmpB.copy(p).addScaledVector(fwd, 4000); tmpB.y += 500;
+      camera.lookAt(tmpB);
+      break;
+    }
+    case 'tv': {
+      // postazione fissa a bordo pista; salta avanti quando il giocatore la supera
+      if (tvAnchor < 0 || camera.position.distanceTo(p) > 10000 &&
+          ((position - tvAnchor + TRACK_LENGTH) % TRACK_LENGTH) < TRACK_LENGTH/2) {
+        tvAnchor = (position + 5500) % TRACK_LENGTH;
+        posToWorld(tvAnchor, (Math.random() < 0.5 ? -1 : 1) * 1.9, tvPos);
+        tvPos.y += 1600;
+      }
+      camera.position.copy(tvPos);
+      tmpB.copy(p); tmpB.y += 700;
+      camera.lookAt(tmpB);
+      break;
+    }
+    case 'orbit': {
+      orbitAngle += dt * 0.45;
+      camera.position.set(p.x + Math.sin(orbitAngle)*3800, p.y + 1900, p.z + Math.cos(orbitAngle)*3800);
+      tmpB.copy(p); tmpB.y += 650;
+      camera.lookAt(tmpB);
+      break;
+    }
+  }
+}
+
+//=========================================================================
+// UI
+//=========================================================================
+const $ = id => document.getElementById(id);
+let renderMode = 'sprite';
+
+function setMode(mode) {
+  if (mode === 'model' && !modelTemplate) return;     // GLB non ancora caricato
+  renderMode = mode;
+  allActors.forEach(a => { a.initModel(); a.setMode(mode); });
+  $('btn-sprite').classList.toggle('active', mode === 'sprite');
+  $('btn-model').classList.toggle('active', mode === 'model');
+}
+$('btn-sprite').onclick = () => setMode('sprite');
+$('btn-model').onclick  = () => setMode('model');
+$('btn-camera').onclick = cycleCamera;
+function cycleCamera() {
+  camMode = (camMode + 1) % CAM_MODES.length;
+  tvAnchor = -1;
+  $('btn-camera').textContent = 'Camera: ' + CAM_MODES[camMode];
+}
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
+  if (k === 'c') cycleCamera();
+  if (k === 'r') { position = 0; speed = 0; playerX = 0; currentLapTime = 0; started = false; }
+});
+
+//=========================================================================
+// LOOP
+//=========================================================================
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min((now - last)/1000, 1/20);
+  last = now;
+
+  updatePhysics(dt);
+
+  player.place(position, playerX);
+  player.update(dt, speed/MAX_SPEED);
+  for (const o of opponents) {
+    o.actor.place(o.pos, o.lat);
+    o.actor.update(dt, o.speed/MAX_SPEED);
+  }
+
+  updateCamera(dt);
+  renderer.render(scene, camera);
+
+  $('speed').textContent   = Math.round(speed/60);
+  $('laptime').textContent = currentLapTime.toFixed(1);
+  $('lastlap').textContent = lastLapTime ? lastLapTime.toFixed(1)+'s' : '—';
+}
+
+framesReady
+  .catch(() => { $('loading').innerHTML = '<div class="err">Sprite non trovati: apri questa pagina da un server HTTP nella cartella del progetto (es. <code>npx http-server</code>), non con doppio click sul file.</div>'; throw new Error('sprites'); })
+  .then(() => {
+    allActors.forEach(a => a.initSprite());
+    modelReady.then(ok => { if (!ok) $('btn-model').disabled = true; });
+    $('loading').remove();
+    player.place(0, 0);
+    requestAnimationFrame(frame);
+  });
+</script>
+</body>
+</html>
