@@ -239,11 +239,20 @@ ext.push(...pts);
 // nastro generico lungo la pista; colorOf(i) → THREE.Color o null per saltare il
 // segmento. I nastri NON si sovrappongono mai (niente z-fighting a distanza);
 // le linee di corsia sono decal con polygonOffset.
-function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false }) {
+function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, flatOuter = false }) {
   const positions = [], colors = [];
+  // flatOuter=true: bordo esterno (lontano dalla strada) scende a y=0, evita soffitti verdi sui saliscendi
+  const sideSign = Math.sign(centerOff);
   const edge = (p, off) => {
     const rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
-    return [ p.x + rx*(centerOff+off), p.y + yOff, p.z + rz*(centerOff+off) ];
+    let y;
+    if (flatOuter) {
+      const t = (sideSign * off + half) / (2 * half);  // 0=bordo interno, 1=bordo esterno
+      y = (p.y + yOff) * (1 - t);
+    } else {
+      y = p.y + yOff;
+    }
+    return [ p.x + rx*(centerOff+off), y, p.z + rz*(centerOff+off) ];
   };
   for (let i = 0; i < ext.length - 1; i++) {
     const c = colorOf(i - PRE);
@@ -270,7 +279,18 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false }) 
 }
 
 const RUMBLE_W   = ROAD_WIDTH * 0.24;
-const GRASS_HALF = ROAD_WIDTH * 30;
+const GRASS_HALF = ROAD_WIDTH * 6;     // nastro erboso modesto; oltre c'è il fondale piatto
+
+// fondale erboso piatto che segue la camera: riempie l'orizzonte fino alla nebbia
+// senza generare triangoli-scheggia (era la causa delle righe verdi nel cielo)
+const groundPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(300000, 300000),
+  new THREE.MeshLambertMaterial({ color: 0x0a9a0a })
+);
+groundPlane.rotation.x = -Math.PI/2;
+groundPlane.position.y = -40;
+groundPlane.renderOrder = -1;
+scene.add(groundPlane);
 const grassCol  = i => isDark(i) ? COL.GRASS_D  : COL.GRASS_L;
 const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
 
@@ -282,7 +302,7 @@ buildRibbon({ half: ROAD_WIDTH, colorOf: i => {
 }});
 for (const side of [-1, 1]) {
   buildRibbon({ half: RUMBLE_W/2,  centerOff: side*(ROAD_WIDTH + RUMBLE_W/2),            colorOf: rumbleCol });
-  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF), colorOf: grassCol });
+  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF), colorOf: grassCol, flatOuter: true });
 }
 // linee di corsia tratteggiate (3 corsie come nell'originale) — decal sopra l'asfalto
 for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
@@ -596,6 +616,8 @@ function frame(now) {
   }
 
   updateCamera(dt);
+  groundPlane.position.x = camera.position.x;
+  groundPlane.position.z = camera.position.z;
   renderer.render(scene, camera);
 
   $('speed').textContent   = Math.round(speed/60);
