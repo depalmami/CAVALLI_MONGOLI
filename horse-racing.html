@@ -30,21 +30,143 @@
     };
   </script>
   <style>
-    /* Tailwind Range Slider Styles */
-    input[type=range]::-webkit-slider-runnable-track {
-      background: #E5E7EB;
+    /* ===== Range sliders — rifiniti, cross-browser, con traccia riempita =====
+       L'accent e il riempimento (--range-fill) sono impostati per-slider via JS
+       (enhanceRangeSliders). NB: la larghezza resta gestita dalle classi Tailwind
+       (w-full / w-20 / flex-1), quindi non la tocchiamo qui. */
+    input[type=range] {
+      --range-accent: #6366F1;
+      --range-accent-soft: rgba(99, 102, 241, .35);
+      --range-track: #E5E7EB;
+      --range-fill: 0%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 1.5rem;            /* area di click comoda */
+      background: transparent;
+      cursor: pointer;
+      outline: none;
+      vertical-align: middle;
     }
-    .dark input[type=range]::-webkit-slider-runnable-track {
-      background: #4B5563;
+    .dark input[type=range] { --range-track: #374151; }
+
+    /* WebKit / Blink */
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 8px;
+      border-radius: 9999px;
+      background:
+        linear-gradient(var(--range-accent), var(--range-accent)) 0 / var(--range-fill) 100% no-repeat,
+        var(--range-track);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
     }
     input[type=range]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      background-color: #6366F1;
-      width: 1.25rem;
-      height: 1.25rem;
+      width: 18px;
+      height: 18px;
+      margin-top: -5px;          /* (18 - 8) / 2 → centra il pollice sulla traccia */
       border-radius: 9999px;
-      margin-top: -6px;
+      background: #fff;
+      border: 3px solid var(--range-accent);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    input[type=range]:hover::-webkit-slider-thumb { transform: scale(1.12); }
+    input[type=range]:active::-webkit-slider-thumb {
+      transform: scale(1.22);
+      box-shadow: 0 0 0 6px var(--range-accent-soft);
+    }
+    input[type=range]:focus-visible::-webkit-slider-thumb {
+      box-shadow: 0 0 0 4px var(--range-accent-soft);
+    }
+
+    /* Firefox — il fill è nativo via ::-moz-range-progress */
+    input[type=range]::-moz-range-track {
+      height: 8px;
+      border-radius: 9999px;
+      background: var(--range-track);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, .12);
+    }
+    input[type=range]::-moz-range-progress {
+      height: 8px;
+      border-radius: 9999px;
+      background: var(--range-accent);
+    }
+    input[type=range]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 3px solid var(--range-accent);
+      border-radius: 9999px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    input[type=range]:hover::-moz-range-thumb { transform: scale(1.12); }
+    input[type=range]:active::-moz-range-thumb {
+      transform: scale(1.22);
+      box-shadow: 0 0 0 6px var(--range-accent-soft);
+    }
+
+    /* Checkbox / radio / color con il colore del brand */
+    input[type=checkbox], input[type=radio] { accent-color: #6366F1; cursor: pointer; }
+    input[type=color] { cursor: pointer; }
+
+    /* =========================================================================
+       CONTROLLI UNIFORMI — regole scoped a #control-panel.
+       L'id (specificità 0,1,0,x) batte le utility Tailwind senza !important,
+       così armonizziamo forma / focus / chevron senza riscrivere le classi
+       inline di ogni bottone e select. I COLORI dei bottoni (semantici:
+       primary / danger / neutral) restano gestiti dalle classi esistenti.
+       ========================================================================= */
+    :root { --primary: #6366F1; --primary-soft: rgba(99, 102, 241, .35); }
+
+    /* Bottoni: raggio, transizione, pressione e focus coerenti (escluse le
+       level-btn che hanno già un loro stile dedicato). */
+    #control-panel button:not(.level-btn) {
+      border-radius: 0.5rem;
+      transition: background-color .15s ease, box-shadow .15s ease,
+                  transform .08s ease, opacity .15s ease, color .15s ease;
+    }
+    #control-panel button:not(.level-btn):active { transform: translateY(1px) scale(.99); }
+    #control-panel button:not(.level-btn):disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Focus visibile uniforme su tutti i controlli interattivi */
+    #control-panel button:not(.level-btn):focus-visible,
+    #control-panel select:focus-visible,
+    #control-panel input:focus-visible,
+    #control-panel textarea:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Select: aspetto identico ovunque + chevron custom (no freccia nativa) */
+    #control-panel select {
+      -webkit-appearance: none;
+      appearance: none;
+      border-radius: 0.5rem;
+      border: 1px solid #D1D5DB;                 /* gray-300 */
+      background-color: #fff;
+      color: #111827;                            /* gray-900 */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right .5rem center;
+      background-size: .95rem;
+      padding-right: 1.85rem;                     /* spazio per il chevron */
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    #control-panel select:hover:not(:disabled) { border-color: var(--primary); }
+    #control-panel select:disabled { opacity: .55; cursor: not-allowed; }
+    .dark #control-panel select {
+      border-color: #4B5563;                      /* gray-600 */
+      background-color: #1F2937;                  /* gray-800 */
+      color: #F9FAFB;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239CA3AF' stroke-width='2.5'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+    }
+
+    /* Campi di testo / textarea: raggio e transizione coerenti */
+    #control-panel input[type=text],
+    #control-panel textarea {
+      border-radius: 0.5rem;
+      transition: border-color .15s ease, box-shadow .15s ease;
     }
 
     /* Override common.css fixed dimensions for responsive canvas */
@@ -357,7 +479,7 @@
 <body class="bg-background-light dark:bg-background-dark font-display">
 
   <!-- Modern Control Panel -->
-  <div class="min-h-screen p-6">
+  <div id="control-panel" class="min-h-screen p-6">
     <div class="max-w-7xl mx-auto">
       <!-- Header -->
       <div class="flex justify-between items-center mb-6">
@@ -587,6 +709,7 @@
                 <option value='medium'>Medium (640x480)</option>
                 <option value='low'>Low (480x360)</option>
                 <option value='square'>Square (500x500)</option>
+                <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
               </select>
             </div>
             <div>
@@ -805,11 +928,77 @@
               <span class="material-icons text-base">fullscreen</span>
               Fullscreen Mode
             </button>
+            <div class="space-y-1">
+              <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="detect-screens-btn">
+                <span class="material-icons text-base">screen_share</span>
+                Rileva schermi
+              </button>
+              <select id="game-screen-select" class="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded" disabled>
+                <option>— premi "Rileva schermi" —</option>
+              </select>
+              <div id="screen-detect-info" class="text-[10px] text-gray-500 dark:text-gray-400"></div>
+            </div>
             <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-primary text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="dual-monitor-btn">
               <span class="material-icons text-base">desktop_windows</span>
-              Dual Monitor Mode
+              Gioco su schermo centrale
             </button>
             <div id="dual-monitor-status" class="text-xs text-center text-gray-500 dark:text-gray-400" style="display: none;">Dual monitor active</div>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors" id="dual-monitor-classic-btn">
+              <span class="material-icons text-base">desktop_windows</span>
+              Dual Monitor classico (Full HD)
+            </button>
+            <label class="flex items-center gap-2 py-1 px-1 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" id="matrix-layout-toggle" class="w-4 h-4">
+              Layout matrice 2304×768 (gioco al centro + lati)
+            </label>
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">ON: gioco nella banda centrale 1152px, video iPhone sui lati. OFF: gioco a tutto schermo.</div>
+          </div>
+        </div>
+
+        <!-- Testo laterale verticale -->
+        <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
+          <h3 class="text-md font-bold mb-3 border-b border-gray-200 dark:border-gray-700 pb-2 text-gray-900 dark:text-white">Testo laterale verticale</h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" id="side-scroll-toggle" class="w-4 h-4">
+              Mostra testo verticale sulle bande laterali
+            </label>
+            <textarea id="side-scroll-text" rows="2" maxlength="500"
+              class="w-full px-2 py-1.5 text-sm rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+              placeholder="Testo (lettere impilate in colonna)">CAVALLI MONGOLI</textarea>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600 dark:text-gray-300 w-14">Font</label>
+              <select id="side-scroll-font" class="flex-1 px-2 py-1 text-sm rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"></select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600 dark:text-gray-300 w-14">Palette</label>
+              <select id="side-scroll-palette" class="flex-1 px-2 py-1 text-sm rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white">
+                <option value="random">🎲 Random</option>
+                <option value="gold" selected>🥇 Gold</option>
+                <option value="neon">💚 Neon Green</option>
+                <option value="cyber">💙 Cyber Blue</option>
+                <option value="vapor">💜 Vaporwave</option>
+                <option value="fire">🔥 Fire</option>
+                <option value="toxic">☢️ Toxic</option>
+                <option value="ice">🧊 Ice</option>
+                <option value="voodoo">🩷 Voodoo</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600 dark:text-gray-300 w-14">Dim.</label>
+              <input id="side-scroll-size" type="range" min="20" max="160" step="2" value="64" class="flex-1">
+              <span id="side-scroll-size-val" class="text-xs font-mono text-gray-600 dark:text-gray-300 w-10 text-right">64</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-600 dark:text-gray-300 w-14">Velocità</label>
+              <input id="side-scroll-speed" type="range" min="0" max="300" step="5" value="60" class="flex-1" title="px/sec (0 = ferma)">
+              <span id="side-scroll-speed-val" class="text-xs font-mono text-gray-600 dark:text-gray-300 w-10 text-right">60</span>
+            </div>
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+              <input type="checkbox" id="side-scroll-bounce" class="w-4 h-4" checked>
+              Bounce (usa period/intensità del 🎁 Bonus Flash)
+            </label>
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">Lettere dritte impilate in colonna, scorrono dal basso verso l'alto sopra il video iPhone. Stile e bounce del Bonus Flash.</div>
           </div>
         </div>
 
@@ -859,6 +1048,7 @@
           <option value='medium'>Medium (640x480)</option>
           <option value='low'>Low (480x360)</option>
           <option value='square'>Square (500x500)</option>
+          <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
         </select>
       </td>
     </tr>
@@ -1116,6 +1306,44 @@
 
     // Initialize slider values on load
     window.addEventListener('DOMContentLoaded', updateSliderValues);
+
+    // ===== Rifinitura slider: riempimento traccia + accent per contesto =====
+    // Indipendente dai gestori esistenti (usa addEventListener, non li sostituisce).
+    // Espone window.refreshRangeFills() per risincronizzare dopo set programmatici.
+    (function () {
+      function accentFor(id) {
+        id = id || '';
+        if (/^bonus-flash/.test(id))       return ['#f59e0b', 'rgba(245,158,11,.35)']; // ambra
+        if (/^webcam-distort/.test(id))    return ['#d946ef', 'rgba(217,70,239,.35)']; // fucsia
+        if (/^chroma|^webcam-fx/.test(id)) return ['#a855f7', 'rgba(168,85,247,.35)']; // viola
+        if (/^side-scroll/.test(id))       return ['#14b8a6', 'rgba(20,184,166,.35)']; // teal
+        return ['#6366F1', 'rgba(99,102,241,.35)'];                                    // primary
+      }
+      function paint(el) {
+        var min = parseFloat(el.min); if (isNaN(min)) min = 0;
+        var max = parseFloat(el.max); if (isNaN(max)) max = 100;
+        var val = parseFloat(el.value); if (isNaN(val)) val = min;
+        var pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+        el.style.setProperty('--range-fill', pct + '%');
+      }
+      function enhance() {
+        document.querySelectorAll('input[type=range]').forEach(function (el) {
+          if (!el.dataset.rangeEnhanced) {
+            var a = accentFor(el.id);
+            el.style.setProperty('--range-accent', a[0]);
+            el.style.setProperty('--range-accent-soft', a[1]);
+            el.addEventListener('input', function () { paint(el); });
+            el.addEventListener('change', function () { paint(el); });
+            el.dataset.rangeEnhanced = '1';
+          }
+          paint(el);
+        });
+      }
+      window.refreshRangeFills = enhance;
+      window.addEventListener('DOMContentLoaded', enhance);
+      window.addEventListener('load', enhance);
+      setTimeout(enhance, 800); // ricattura i valori impostati in modo asincrono
+    })();
 
     // Audio File button
     document.getElementById('audio-file-btn').addEventListener('click', function() {
@@ -3019,6 +3247,44 @@
     // Store screen details for reuse
     var cachedScreenDetails = null;
     var targetSecondScreen = null;
+    var gameScreenIndex = null;     // indice schermo scelto per il gioco (centrale)
+
+    // Rileva gli schermi collegati e popola il menù di selezione dello schermo gioco.
+    function detectScreensForGame() {
+      var sel = Dom.get('game-screen-select');
+      var info = Dom.get('screen-detect-info');
+      if (!window.getScreenDetails) {
+        if (info) info.textContent = 'API multi-schermo non disponibile (servi via https).';
+        return;
+      }
+      window.getScreenDetails().then(function(details) {
+        cachedScreenDetails = details;
+        var screens = details.screens;
+        if (sel) {
+          sel.innerHTML = '';
+          screens.forEach(function(s, i) {
+            var label = 'Schermo ' + i + ' — ' + s.width + '×' + s.height +
+              ' @ (' + s.left + ',' + s.top + ')' +
+              (s.isPrimary ? ' [primario]' : '') +
+              (s === details.currentScreen ? ' [questo]' : '');
+            var opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = label;
+            sel.appendChild(opt);
+          });
+          // Default: primo schermo non-primario e non quello corrente
+          var def = screens.findIndex(function(s) { return !s.isPrimary && s !== details.currentScreen; });
+          if (def < 0) def = screens.findIndex(function(s) { return s !== details.currentScreen; });
+          if (def < 0) def = 0;
+          sel.value = def;
+          gameScreenIndex = def;
+          sel.disabled = false;
+        }
+        if (info) info.textContent = screens.length + ' schermi rilevati. Scegli quello centrale per il gioco.';
+      }).catch(function(err) {
+        if (info) info.textContent = 'Errore rilevamento schermi: ' + (err && err.message || err);
+      });
+    }
 
     function openDualMonitorMode() {
       if (isDualMonitorMode) {
@@ -3054,16 +3320,22 @@
             });
           }
 
-          // Find a screen that's not the current one (prefer non-primary)
+          // Se l'utente ha scelto esplicitamente lo schermo centrale del gioco, usalo.
           var currentScreen = screenDetails.currentScreen;
           console.log('Current screen index:', screens.indexOf(currentScreen));
           targetSecondScreen = null;
 
-          for (var i = 0; i < screens.length; i++) {
-            if (screens[i] !== currentScreen) {
-              targetSecondScreen = screens[i];
-              console.log('Found second screen at index:', i);
-              break;
+          if (gameScreenIndex !== null && screens[gameScreenIndex]) {
+            targetSecondScreen = screens[gameScreenIndex];
+            console.log('Using user-selected game screen at index:', gameScreenIndex);
+          } else {
+            // Fallback: primo schermo diverso da quello corrente
+            for (var i = 0; i < screens.length; i++) {
+              if (screens[i] !== currentScreen) {
+                targetSecondScreen = screens[i];
+                console.log('Found second screen at index:', i);
+                break;
+              }
             }
           }
 
@@ -3381,6 +3653,164 @@
       updateDualMonitorUI(false);
 
       console.log('Dual monitor mode deactivated');
+    }
+
+    //=========================================================================
+    // SIDE SCREEN PLACEHOLDERS (zone laterali del layout 2304x768)
+    // Layout:  384 | 192 | 1152(gioco) | 192 | 384  =  2304 x 768
+    // Le zone laterali sono finestre separate da trascinare sugli schermi fisici.
+    // Per ora mostrano solo un placeholder colorato + etichetta (contenuti TBD).
+    //=========================================================================
+
+    var sidePlaceholderWindows = [];   // finestre placeholder aperte
+    var sidePlaceholdersActive = false;
+
+    // Definizione zone laterali (escluso il centro 1152, che è il gioco)
+    var SIDE_PLACEHOLDER_ZONES = [
+      { id: 'sx-ext', name: 'SX esterno', w: 384, h: 768, color: '#1e3a8a' },  // 1x2
+      { id: 'sx-int', name: 'SX interno', w: 192, h: 768, color: '#5b21b6' },  // 0.5x2
+      { id: 'dx-int', name: 'DX interno', w: 192, h: 768, color: '#5b21b6' },  // 0.5x2
+      { id: 'dx-ext', name: 'DX esterno', w: 384, h: 768, color: '#1e3a8a' }   // 1x2
+    ];
+
+    function buildSidePlaceholderHTML(zone) {
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + zone.name + ' (' + zone.w + 'x' + zone.h + ')</title>' +
+        '<style>' +
+        'html,body{margin:0;height:100%;overflow:hidden;background:' + zone.color + ';' +
+        'font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:rgba(255,255,255,.92);cursor:none;}' +
+        '#ph-video{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none;}' +
+        '.wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}' +
+        '.name{font-size:clamp(18px,6vw,64px);font-weight:800;letter-spacing:.04em;}' +
+        '.dim{margin-top:.4em;font-size:clamp(12px,3vw,28px);opacity:.7;font-variant-numeric:tabular-nums;}' +
+        '.hint{position:fixed;bottom:10px;left:0;right:0;font-size:11px;opacity:.45;}' +
+        '</style></head><body>' +
+        '<video id="ph-video" autoplay muted playsinline></video>' +
+        '<div class="wrap">' +
+        '<div class="name">' + zone.name + '</div>' +
+        '<div class="dim">' + zone.w + ' × ' + zone.h + '</div>' +
+        '<div style="margin-top:.8em;font-size:clamp(10px,2vw,16px);opacity:.5;">in attesa del video iPhone…</div>' +
+        '</div><div class="hint">trascina sullo schermo · doppio click per fullscreen</div>' +
+        '<script>document.addEventListener("dblclick",function(){var e=document.documentElement;if(e.requestFullscreen)e.requestFullscreen();});<\/script>' +
+        '</body></html>';
+    }
+
+    // Propaga il MediaStream dell'iPhone (webcamVideo.srcObject) a tutte le finestre laterali.
+    // Same-origin popup → si può condividere lo stesso oggetto MediaStream.
+    function pushStreamToSidePlaceholders() {
+      var stream = (webcamVideo && webcamVideo.srcObject) ? webcamVideo.srcObject : null;
+      sidePlaceholderWindows.forEach(function(w) {
+        if (!w || w.closed) return;
+        try {
+          var v = w.document.getElementById('ph-video');
+          var wrap = w.document.querySelector('.wrap');
+          if (!v) return;
+          if (stream) {
+            if (v.srcObject !== stream) {
+              v.srcObject = stream;
+              v.play().catch(function() {});
+            }
+            v.style.display = 'block';
+            if (wrap) wrap.style.display = 'none';
+          } else {
+            v.srcObject = null;
+            v.style.display = 'none';
+            if (wrap) wrap.style.display = 'flex';
+          }
+        } catch (e) { /* finestra non ancora pronta */ }
+      });
+    }
+
+    function openSidePlaceholders() {
+      if (sidePlaceholdersActive) {
+        closeSidePlaceholders();
+        return;
+      }
+
+      // Posiziona le finestre a cascata sul primario; l'utente le trascina sugli schermi.
+      // Se la Window Management API è disponibile, prova a distribuirle sugli schermi
+      // disponibili ESCLUDENDO lo schermo del gioco e quello di controllo (corrente).
+      var openZones = function(details) {
+        var candidates = [];
+        if (details && details.screens) {
+          details.screens.forEach(function(s, idx) {
+            if (idx === gameScreenIndex) return;          // salta schermo gioco
+            if (s === details.currentScreen) return;      // salta schermo di controllo
+            candidates.push(s);
+          });
+        }
+        var startX = 60, startY = 60, offset = 40;
+        SIDE_PLACEHOLDER_ZONES.forEach(function(zone, i) {
+          var s = candidates[i] || null;
+          var feat;
+          if (s) {
+            feat = 'left=' + s.availLeft + ',top=' + s.availTop +
+                   ',width=' + Math.min(s.availWidth, zone.w) +
+                   ',height=' + Math.min(s.availHeight, zone.h);
+          } else {
+            feat = 'left=' + (startX + i * offset) + ',top=' + (startY + i * offset) +
+                   ',width=' + zone.w + ',height=' + zone.h;
+          }
+          feat += ',menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes';
+
+          var win = window.open('', 'SidePlaceholder_' + zone.id, feat);
+          if (!win) {
+            alert('Consenti i popup per i placeholder laterali!');
+            return;
+          }
+          win.document.write(buildSidePlaceholderHTML(zone));
+          win.document.close();
+          if (s) {
+            try { win.moveTo(s.left, s.top); } catch (e) {}
+          }
+          sidePlaceholderWindows.push(win);
+        });
+
+        sidePlaceholdersActive = sidePlaceholderWindows.length > 0;
+        updateSidePlaceholdersUI(sidePlaceholdersActive);
+
+        // Aggancia subito il video iPhone se già attivo; riprova qualche volta
+        // perché il DOM dei popup può non essere pronto nell'istante esatto.
+        var tries = 0;
+        var hook = setInterval(function() {
+          pushStreamToSidePlaceholders();
+          if (++tries >= 10 || !sidePlaceholdersActive) clearInterval(hook);
+        }, 300);
+
+        // Auto-cleanup se l'utente chiude le finestre a mano
+        var checkClosed = setInterval(function() {
+          if (!sidePlaceholdersActive) { clearInterval(checkClosed); return; }
+          var allClosed = sidePlaceholderWindows.every(function(w) { return !w || w.closed; });
+          if (allClosed) { clearInterval(checkClosed); closeSidePlaceholders(); }
+        }, 1000);
+      };
+
+      if (window.getScreenDetails) {
+        window.getScreenDetails().then(function(d) { openZones(d); })
+          .catch(function() { openZones(null); });
+      } else {
+        openZones(null);
+      }
+    }
+
+    function closeSidePlaceholders() {
+      sidePlaceholderWindows.forEach(function(w) {
+        if (w && !w.closed) w.close();
+      });
+      sidePlaceholderWindows = [];
+      sidePlaceholdersActive = false;
+      updateSidePlaceholdersUI(false);
+    }
+
+    function updateSidePlaceholdersUI(active) {
+      var btn = Dom.get('side-placeholders-btn');
+      if (!btn) return;
+      if (active) {
+        btn.innerHTML = '<span class="material-icons text-base">close</span> Chiudi schermi laterali';
+        btn.style.background = '#f44336';
+      } else {
+        btn.innerHTML = '<span class="material-icons text-base">view_column</span> Schermi laterali (placeholder)';
+        btn.style.background = '';
+      }
     }
 
     //=========================================================================
@@ -3985,6 +4415,18 @@
       if (!currentFlashStyle && flashStyles.length > 0) {
         currentFlashStyle = flashStyles[0];
       }
+
+      // Popola il menù font del testo laterale con gli stessi font del FLASH
+      var sideFontSel = document.getElementById('side-scroll-font');
+      if (sideFontSel && !sideFontSel.options.length) {
+        flashStyles.forEach(function(st) {
+          var opt = document.createElement('option');
+          opt.value = st.font;
+          opt.textContent = st.font;
+          if (st.font === sideScrollFont) opt.selected = true;
+          sideFontSel.appendChild(opt);
+        });
+      }
     }
 
     function updateHud(key, value) {
@@ -4094,6 +4536,186 @@
       }
     }
 
+    //=========================================================================
+    // LAYOUT MATRICE (single-display 2304x768 → 5 pannelli)
+    // Bande in unità base su 2304:  384 | 192 | 1152(gioco) | 192 | 384
+    //=========================================================================
+    var matrixLayoutMode = false;   // se true, il dual-monitor compone gioco+lati
+    var MATRIX_BASE_W = 2304;
+    var MATRIX_CENTER = { x: 576, w: 1152 };   // banda centrale = gioco
+    var MATRIX_SIDE_ZONES = [
+      { x: 0,    w: 384, zone: SIDE_PLACEHOLDER_ZONES[0] },  // SX esterno
+      { x: 384,  w: 192, zone: SIDE_PLACEHOLDER_ZONES[1] },  // SX interno
+      { x: 1728, w: 192, zone: SIDE_PLACEHOLDER_ZONES[2] },  // DX interno
+      { x: 1920, w: 384, zone: SIDE_PLACEHOLDER_ZONES[3] }   // DX esterno
+    ];
+
+    function computeMatrixLayout(dw, dh) {
+      var s = dw / MATRIX_BASE_W;   // scala alla larghezza reale della matrice
+      return {
+        scale: s,
+        center: { x: Math.round(MATRIX_CENTER.x * s), y: 0, w: Math.round(MATRIX_CENTER.w * s), h: dh },
+        sides: MATRIX_SIDE_ZONES.map(function(z) {
+          return { x: Math.round(z.x * s), y: 0, w: Math.round(z.w * s), h: dh, zone: z.zone };
+        })
+      };
+    }
+
+    //=========================================================================
+    // TESTO LATERALE VERTICALE (overlay sulle bande, sopra il video iPhone)
+    // Lettere dritte impilate una sotto l'altra, scorrimento verticale in loop.
+    // Stile "carino" + bounce ripresi dal BONUS FLASH (palette + squash/stretch).
+    //=========================================================================
+    var sideScrollEnabled = false;
+    var sideScrollText    = 'CAVALLI MONGOLI';
+    var sideScrollFont    = 'Impact';
+    var sideScrollSize    = 64;       // px in unità base (768 di altezza)
+    var sideScrollSpeed   = 60;       // px/sec in unità base (0 = ferma)
+    var sideScrollPaletteKey = 'gold';// chiave BONUS_FLASH_PALETTES o 'random'
+    var sideScrollPaletteObj = null;  // palette risolta (per 'random' fissata una volta)
+    var sideScrollBounce  = true;     // usa il bounce del bonus flash (period/intensity)
+    var _sideRowsCache    = {};       // text -> array di righe (1 char per riga, '' = gap)
+    var _glyphCache       = {};       // glifo pre-renderizzato: key -> {canvas,w,h}
+
+    // Pre-renderizza UNA VOLTA la lettera (halo+gradient+stroke) in un canvas offscreen.
+    // Nel loop si fa solo drawImage → niente shadowBlur/gradient per frame (era il lag).
+    function getSideGlyph(ch, font, fontSize, palKey, pal) {
+      var key = ch + '|' + font + '|' + Math.round(fontSize) + '|' + palKey;
+      var g = _glyphCache[key];
+      if (g) return g;
+      var fs = Math.round(fontSize);
+      var fontStr = '900 ' + fs + 'px "' + font + '", "Impact", "Arial Black", sans-serif';
+      var meas = document.createElement('canvas').getContext('2d');
+      meas.font = fontStr;
+      var tw = Math.ceil(meas.measureText(ch).width) || fs;
+      var blur = Math.max(6, fs * 0.28);
+      var pad = Math.ceil(blur + fs * 0.12 + 4);
+      var cw = tw + pad * 2;
+      var chh = Math.ceil(fs * 1.3) + pad * 2;
+      var oc = document.createElement('canvas');
+      oc.width = cw; oc.height = chh;
+      var gx = oc.getContext('2d');
+      gx.font = fontStr;
+      gx.textAlign = 'center';
+      gx.textBaseline = 'middle';
+      var ccx = cw / 2, ccy = chh / 2;
+      gx.shadowColor = pal.halo;
+      gx.shadowBlur  = blur;
+      gx.fillStyle   = pal.halo;
+      gx.fillText(ch, ccx, ccy);
+      gx.shadowBlur  = 0;
+      var grad = gx.createLinearGradient(0, ccy - fs / 2, 0, ccy + fs / 2);
+      grad.addColorStop(0,   pal.grad[0]);
+      grad.addColorStop(0.5, pal.grad[1]);
+      grad.addColorStop(1,   pal.grad[2]);
+      gx.fillStyle = grad;
+      gx.fillText(ch, ccx, ccy);
+      gx.lineWidth   = Math.max(1.5, fs * 0.05);
+      gx.strokeStyle = pal.stroke;
+      gx.strokeText(ch, ccx, ccy);
+      g = { canvas: oc, w: cw, h: chh };
+      _glyphCache[key] = g;
+      return g;
+    }
+
+    function resolveSidePalette() {
+      if (sideScrollPaletteKey === 'random') {
+        if (!sideScrollPaletteObj) sideScrollPaletteObj = pickBonusPalette('random');
+        return sideScrollPaletteObj;
+      }
+      return BONUS_FLASH_PALETTES[sideScrollPaletteKey] || BONUS_FLASH_PALETTES.gold;
+    }
+
+    // Spezza il testo in righe verticali: 1 carattere per riga; spazi e a-capo
+    // diventano righe vuote (gap). Aggiunge un gap finale per separare il loop.
+    function buildVerticalRows(text) {
+      if (_sideRowsCache[text]) return _sideRowsCache[text];
+      var rows = [];
+      for (var i = 0; i < text.length; i++) {
+        var ch = text[i];
+        rows.push((ch === '\n' || ch === ' ' || ch === '\t') ? '' : ch);
+      }
+      rows.push(''); rows.push(''); rows.push('');   // gap di loop
+      _sideRowsCache[text] = rows;
+      return rows;
+    }
+
+    // Disegna la colonna verticale scorrevole, clippata alla banda, con lo stile
+    // del bonus flash (halo + gradient verticale 3 colori + stroke) e bounce.
+    function drawSideScroll(c, r, s, now) {
+      if (!sideScrollEnabled || !sideScrollText.trim()) return;
+      var fontSize = Math.max(10, sideScrollSize * s);
+      var rowH = fontSize * 1.1;
+      var rows = buildVerticalRows(sideScrollText);
+      var contentH = rows.length * rowH;
+      if (contentH <= 0) return;
+      var pal = resolveSidePalette();
+
+      // Bounce condiviso col BONUS FLASH (stesso period e intensità)
+      var sx2 = 1, sy2 = 1, bob = 0;
+      if (sideScrollBounce) {
+        var period = (bonusFlashSyncBpm && bpmInterval > 0) ? bpmInterval : bonusFlashBounceMs;
+        if (period < 80) period = 80;
+        var phase = (now % period) / period;
+        var inAir = Math.abs(Math.sin(phase * Math.PI));
+        var landing = 1 - inAir;
+        var k = bonusFlashIntensity;
+        sy2 = 1 + 0.18 * k * inAir - 0.10 * k * landing;
+        sx2 = 1 - 0.12 * k * inAir + 0.08 * k * landing;
+        bob = -inAir * rowH * 0.22 * k;
+      }
+
+      var speed = sideScrollSpeed * s;
+      var p = -(((now / 1000) * speed) % contentH);
+      var cx = r.x + r.w / 2;
+
+      c.save();
+      c.beginPath();
+      c.rect(r.x, r.y, r.w, r.h);
+      c.clip();
+
+      var copies = Math.ceil(r.h / contentH) + 2;
+      for (var kk = 0; kk < copies; kk++) {
+        var yBase = r.y + p + kk * contentH;
+        for (var i = 0; i < rows.length; i++) {
+          var ch = rows[i];
+          if (!ch) continue;
+          var cy = yBase + (i + 0.5) * rowH + bob;
+          if (cy < r.y - rowH || cy > r.y + r.h + rowH) continue;   // solo visibili
+          var glyph = getSideGlyph(ch, sideScrollFont, fontSize, sideScrollPaletteKey, pal);
+          var dw2 = glyph.w * sx2, dh2 = glyph.h * sy2;
+          c.drawImage(glyph.canvas, cx - dw2 / 2, cy - dh2 / 2, dw2, dh2);
+        }
+      }
+      c.restore();
+    }
+
+    // Disegna il feed iPhone (object-fit: cover) in una banda laterale; se non c'è
+    // ancora video, mostra il placeholder colorato con etichetta. Poi sovrappone
+    // l'eventuale testo scorrevole.
+    function drawMatrixSide(c, r, s, now) {
+      if (webcamVideo && webcamVideo.readyState >= 2 && webcamVideo.videoWidth) {
+        var vw = webcamVideo.videoWidth, vh = webcamVideo.videoHeight;
+        var scale = Math.max(r.w / vw, r.h / vh);   // cover
+        var sw = r.w / scale, sh = r.h / scale;
+        var sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+        c.drawImage(webcamVideo, sx, sy, sw, sh, r.x, r.y, r.w, r.h);
+      } else if (!sideScrollEnabled) {
+        c.fillStyle = r.zone.color;
+        c.fillRect(r.x, r.y, r.w, r.h);
+        c.fillStyle = 'rgba(255,255,255,0.85)';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.font = '600 ' + Math.max(12, Math.round(r.h * 0.05)) + 'px -apple-system,sans-serif';
+        c.fillText(r.zone.name, r.x + r.w / 2, r.y + r.h / 2);
+      } else {
+        // niente video ma testo attivo → fondo scuro per leggibilità
+        c.fillStyle = '#0a0a0a';
+        c.fillRect(r.x, r.y, r.w, r.h);
+      }
+      drawSideScroll(c, r, s, now);
+    }
+
     function render() {
 
       // Render to main canvas (level filter applied via canvas.style.filter)
@@ -4102,20 +4724,30 @@
       // Render titles on overlay canvas (no filter)
       renderTitleOverlay();
 
-      // Copy main canvas to dual monitor canvas (identical mirror)
+      // Copy main canvas to dual monitor canvas
       if (isDualMonitorMode && dualMonitorCanvas && dualMonitorCtx) {
-        // Clear the dual monitor canvas
+        var dw = dualMonitorCanvas.width, dh = dualMonitorCanvas.height;
+        dualMonitorCtx.filter = 'none';
         dualMonitorCtx.fillStyle = '#000';
-        dualMonitorCtx.fillRect(0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
+        dualMonitorCtx.fillRect(0, 0, dw, dh);
 
-        // Draw the main canvas content scaled to fit the second screen
-        dualMonitorCtx.drawImage(canvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
-
-        // Draw titles on dual monitor (from title overlay canvas)
-        dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, 0, 0, dualMonitorCanvas.width, dualMonitorCanvas.height);
-
-        // Draw HUD on dual monitor
-        renderHudOnDualMonitor();
+        if (matrixLayoutMode) {
+          // --- LAYOUT MATRICE: gioco al centro, video/placeholder sui lati ---
+          var L = computeMatrixLayout(dw, dh);
+          var nowTs = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+          dualMonitorCtx.save();
+          L.sides.forEach(function(r) { drawMatrixSide(dualMonitorCtx, r, L.scale, nowTs); });
+          dualMonitorCtx.restore();
+          dualMonitorCtx.filter = 'none';
+          var c = L.center;
+          dualMonitorCtx.drawImage(canvas,      0, 0, width, height, c.x, c.y, c.w, c.h);
+          dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, c.x, c.y, c.w, c.h);
+        } else {
+          // --- MIRROR classico: gioco a tutto schermo ---
+          dualMonitorCtx.drawImage(canvas,      0, 0, width, height, 0, 0, dw, dh);
+          dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, 0, 0, dw, dh);
+          renderHudOnDualMonitor();
+        }
       }
     }
 
@@ -5235,6 +5867,7 @@
         case 'medium': w = 640;  h = 480;  ratio=w/width; break;
         case 'low':    w = 480;  h = 360;  ratio=w/width; break;
         case 'square': w = 500;  h = 500;  ratio=w/width; break;
+        case 'game32': w = 1152; h = 768;  ratio=w/width; break;  // render nativo 3:2 per banda centrale live
       }
       reset({ width: w, height: h })
       Dom.blur(ev);
@@ -5335,6 +5968,7 @@
       Dom.get('currentFieldOfView').innerHTML    = Dom.get('fieldOfView').value    = fieldOfView;
       Dom.get('currentFogDensity').innerHTML     = Dom.get('fogDensity').value     = fogDensity;
       Dom.get('currentShakeIntensity').innerHTML = Dom.get('shakeIntensity').value = shakeIntensity;
+      if (window.refreshRangeFills) window.refreshRangeFills();
     }
 
     //=========================================================================
@@ -5453,6 +6087,42 @@
 
     // Attach click handler to dual monitor button
     Dom.on('dual-monitor-btn', 'click', openDualMonitorMode);
+    Dom.on('matrix-layout-toggle', 'change', function(ev) {
+      matrixLayoutMode = ev.target.checked;
+    });
+
+    // Dual Monitor classico: mirror a tutto schermo in Full HD (layout matrice OFF)
+    Dom.on('dual-monitor-classic-btn', 'click', function() {
+      matrixLayoutMode = false;
+      var mt = Dom.get('matrix-layout-toggle'); if (mt) mt.checked = false;
+      reset({ width: 1920, height: 1080 });
+      var rs = Dom.get('resolution'); if (rs) rs.value = 'fullhd';
+      if (!isDualMonitorMode) openDualMonitorMode();
+    });
+
+    // --- Testo laterale verticale ---
+    Dom.on('side-scroll-toggle', 'change', function(ev) { sideScrollEnabled = ev.target.checked; });
+    Dom.on('side-scroll-text', 'input', function(ev) { sideScrollText = ev.target.value; });
+    Dom.on('side-scroll-font', 'change', function(ev) { sideScrollFont = ev.target.value; _glyphCache = {}; });
+    Dom.on('side-scroll-palette', 'change', function(ev) {
+      sideScrollPaletteKey = ev.target.value;
+      sideScrollPaletteObj = null;   // forza nuova scelta se 'random'
+      _glyphCache = {};              // ricostruisci glifi con la nuova palette
+    });
+    Dom.on('side-scroll-bounce', 'change', function(ev) { sideScrollBounce = ev.target.checked; });
+    Dom.on('side-scroll-size', 'input', function(ev) {
+      sideScrollSize = Util.toInt(ev.target.value, sideScrollSize);
+      var v = Dom.get('side-scroll-size-val'); if (v) v.textContent = sideScrollSize;
+      _glyphCache = {};              // dimensione cambiata → rigenera glifi
+    });
+    Dom.on('side-scroll-speed', 'input', function(ev) {
+      sideScrollSpeed = Util.toInt(ev.target.value, sideScrollSpeed);
+      var v = Dom.get('side-scroll-speed-val'); if (v) v.textContent = sideScrollSpeed;
+    });
+    Dom.on('detect-screens-btn', 'click', detectScreensForGame);
+    Dom.on('game-screen-select', 'change', function(ev) {
+      gameScreenIndex = Util.toInt(ev.target.value, null);
+    });
 
     // Scorciatoia F per fullscreen RIMOSSA: catturava la digitazione in input/textarea
     // (es. campo "Testo bonus flash"). Usa il pulsante "Fullscreen Mode" nel pannello;
@@ -5800,6 +6470,7 @@
         webcamVideo.srcObject = stream;
         await webcamVideo.play();
         webcamActive = true;
+        pushStreamToSidePlaceholders();
         var sel = document.getElementById('webcam-device-select');
         var label = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : 'Camera';
         setWebcamStatus(label.replace(/^★\s*/, ''), true);
@@ -6095,6 +6766,7 @@
           webcamVideo.srcObject = e.streams[0];
           webcamVideo.play().then(function() {
             webcamActive = true;
+            pushStreamToSidePlaceholders();
             setWebcamStatus('Phone attiva', true);
             setRtcStatus('stream attivo', 'ok');
             console.log('WebRTC: webcam stream active');
