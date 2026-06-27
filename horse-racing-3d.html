@@ -20,6 +20,7 @@
            font-size:14px; cursor:pointer; margin:2px 0 2px 6px; }
   button.active { background:#38a169; }
   button:hover { filter:brightness(1.15); }
+  input[type=range] { vertical-align:middle; width:150px; accent-color:#38a169; cursor:pointer; }
 
   #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
              flex-direction:column; gap:12px; background:#1a202c; color:#fff; font-size:20px; z-index:10; }
@@ -53,16 +54,29 @@
   <div>
     <button id="btn-camera">Camera: chase</button>
   </div>
+  <div>
+    <button id="btn-tap">🎉 Tap tempo</button>
+    <span id="party-info" style="font-size:13px; margin-left:4px;">spento</span>
+  </div>
+  <div style="font-size:13px; margin-top:4px; text-align:right;">
+    Intensità festa: <b><span id="gain-val">600%</span></b><br>
+    <input type="range" id="party-gain" min="0" max="1500" step="25" value="600">
+  </div>
 </div>
 
 <div id="hud-help" class="panel">
-  ↑↓/WS accelera-frena · ←→/AD sterza · <b>B</b> sprite/modello · <b>C</b> camera · <b>R</b> riparti
+  ↑↓/WS accelera-frena · ←→/AD sterza · <b>B</b> sprite/modello · <b>C</b> camera · <b>T</b> tap tempo · <b>P</b> party · <b>R</b> riparti
 </div>
 
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { Sky } from 'three/addons/objects/Sky.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -200,22 +214,70 @@ const curveAt = (position) => {
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('scene'), antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;   // resa cinematografica (S-curve)
+renderer.toneMappingExposure = 0.85;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;     // ombre morbide
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(SKY_COLOR);
-scene.fog = new THREE.Fog(SKY_COLOR, 9000, 75000);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 80, 600000);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 80, 150000);
+// CIELO ATMOSFERICO vero (Rayleigh/Mie scattering), non più un colore piatto
+const sky = new Sky();
+sky.scale.setScalar(450000);
+scene.add(sky);
+const skyU = sky.material.uniforms;
+skyU.turbidity.value        = 9;
+skyU.rayleigh.value         = 2.6;     // cielo più ricco, orizzonte caldo
+skyU.mieCoefficient.value   = 0.006;
+skyU.mieDirectionalG.value  = 0.92;    // alone del sole più marcato
 
-scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x5a7b4a, 1.6));
-const sun = new THREE.DirectionalLight(0xfff2d8, 1.6);
-sun.position.set(0.4, 1, 0.3);
-scene.add(sun);
+// direzione del sole (elevazione/azimut) → usata da cielo, luce e ombre
+const sunDir = new THREE.Vector3();
+{
+  const elevation = 17, azimuth = 165;  // tardo pomeriggio dorato, sole frontale-laterale
+  const phi = THREE.MathUtils.degToRad(90 - elevation);
+  const theta = THREE.MathUtils.degToRad(azimuth);
+  sunDir.setFromSphericalCoords(1, phi, theta);
+  skyU.sunPosition.value.copy(sunDir);
+}
+
+// nebbia tinta come l'orizzonte caldo, così la pista lontana si fonde nel cielo
+scene.fog = new THREE.Fog(0xe7d8bf, 26000, 150000);
+
+// luce ambientale dal cielo/terra + sole direzionale caldo che proietta ombre morbide
+const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6a5436, 0.85);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xffdca6, 3.0);
+sun.position.copy(sunDir).multiplyScalar(20000);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+const SHADOW_R = 7000;                                 // mezzo lato dell'area ombreggiata attorno al giocatore
+const sc = sun.shadow.camera;
+sc.left = -SHADOW_R; sc.right = SHADOW_R; sc.top = SHADOW_R; sc.bottom = -SHADOW_R;
+sc.near = 2000; sc.far = 60000;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 40;
+scene.add(sun, sun.target);
+
+// POST-PROCESSING: bloom dorato sulle alte luci (sole, riga di partenza, riflessi)
+// pipeline moderna: RenderPass (HDR lineare) → bloom → OutputPass (tone map + sRGB)
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
+  innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }   // 4× MSAA dentro al composer
+));
+composer.addPass(new RenderPass(scene, camera));
+// strength contenuta + soglia alta: solo le ALTE LUCI HDR (sole, cielo, riga via) fioriscono, non i mezzitoni
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.3, 1.1);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloom.setSize(innerWidth, innerHeight);
 });
 
 //=========================================================================
@@ -223,12 +285,29 @@ addEventListener('resize', () => {
 //=========================================================================
 const COL = {
   ROAD_L:   new THREE.Color(0x737373), ROAD_D:   new THREE.Color(0x616161),
-  GRASS_L:  new THREE.Color(0x10AA10), GRASS_D:  new THREE.Color(0x009A00),
+  GRASS_L:  new THREE.Color(0x4f9e3a), GRASS_D:  new THREE.Color(0x438c30),   // strisce morbide, verde naturale
   RUMBLE_L: new THREE.Color(0x555555), RUMBLE_D: new THREE.Color(0xBBBBBB),
   LANE:     new THREE.Color(0xCCCCCC),
   START:    new THREE.Color(0xFFFFFF), FINISH:   new THREE.Color(0x101010),
 };
 const isDark = i => Math.floor(i/RUMBLE_LENGTH) % 2 === 1;
+
+// texture PBR CC0 (ambientCG): Color+Normal+Roughness, ripetute nello spazio mondo
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+function loadPBR(base) {
+  const tl = new THREE.TextureLoader();
+  const map = tl.load(base + '_Color.jpg');
+  const normalMap = tl.load(base + '_NormalGL.jpg');
+  const roughnessMap = tl.load(base + '_Roughness.jpg');
+  map.colorSpace = THREE.SRGBColorSpace;
+  for (const t of [map, normalMap, roughnessMap]) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = maxAniso;
+  }
+  return { map, normalMap, roughnessMap };
+}
+const asphaltTex = loadPBR('assets/textures/Asphalt014/Asphalt014_1K-JPG');
+const grassTex   = loadPBR('assets/textures/Grass004/Grass004_1K-JPG');
 
 // coda di pista piatta prima del via, così dietro la partenza non c'è il vuoto
 const PRE = 25;
@@ -239,8 +318,8 @@ ext.push(...pts);
 // nastro generico lungo la pista; colorOf(i) → THREE.Color o null per saltare il
 // segmento. I nastri NON si sovrappongono mai (niente z-fighting a distanza);
 // le linee di corsia sono decal con polygonOffset.
-function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, flatOuter = false }) {
-  const positions = [], colors = [];
+function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, flatOuter = false, roughness = 1, tex = null, uvTile = 2000 }) {
+  const positions = [], colors = [], uvs = [];
   // flatOuter=true: bordo esterno (lontano dalla strada) scende a y=0, evita soffitti verdi sui saliscendi
   const sideSign = Math.sign(centerOff);
   const edge = (p, off) => {
@@ -254,6 +333,9 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, fl
     }
     return [ p.x + rx*(centerOff+off), y, p.z + rz*(centerOff+off) ];
   };
+  // UV planari nel frame della pista (laterale L, longitudinale D), tile in unità mondo:
+  // continue tra nastri adiacenti e lungo la lunghezza → tiling senza stiramenti
+  const uL = (centerOff - half)/uvTile, uR = (centerOff + half)/uvTile;
   for (let i = 0; i < ext.length - 1; i++) {
     const c = colorOf(i - PRE);
     if (!c) continue;
@@ -261,12 +343,17 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, fl
     const al = edge(a,-half), ar = edge(a,half), bl = edge(b,-half), br = edge(b,half);
     positions.push(...al, ...ar, ...br,  ...al, ...br, ...bl);
     for (let k = 0; k < 6; k++) colors.push(c.r, c.g, c.b);
+    const vA = (i*SEGMENT_LENGTH)/uvTile, vB = ((i+1)*SEGMENT_LENGTH)/uvTile;
+    uvs.push(uL,vA, uR,vA, uR,vB,  uL,vA, uR,vB, uL,vB);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   g.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs, 2));
   g.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const matOpts = { vertexColors: true, roughness, metalness: 0 };
+  if (tex) Object.assign(matOpts, tex);
+  const mat = new THREE.MeshStandardMaterial(matOpts);
   if (decal) {
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -4;
@@ -274,6 +361,7 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, fl
     mat.depthWrite = false;
   }
   const m = new THREE.Mesh(g, mat);
+  m.receiveShadow = !decal;
   scene.add(m);
   return m;
 }
@@ -281,28 +369,47 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, fl
 const RUMBLE_W   = ROAD_WIDTH * 0.24;
 const GRASS_HALF = ROAD_WIDTH * 6;     // nastro erboso modesto; oltre c'è il fondale piatto
 
-// fondale erboso piatto che segue la camera: riempie l'orizzonte fino alla nebbia
-// senza generare triangoli-scheggia (era la causa delle righe verdi nel cielo)
+// fondale erboso: piano enorme e STATICO (texture world-locked, niente swimming) che
+// riempie l'orizzonte fino alla nebbia senza generare triangoli-scheggia
+const GROUND_SIZE = 1500000, GROUND_TILE = 3500;
+const groundGrass = {
+  map: grassTex.map.clone(), normalMap: grassTex.normalMap.clone(), roughnessMap: grassTex.roughnessMap.clone(),
+};
+for (const k in groundGrass) {
+  const t = groundGrass[k];
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(GROUND_SIZE/GROUND_TILE, GROUND_SIZE/GROUND_TILE);
+  t.needsUpdate = true;
+}
+groundGrass.map.colorSpace = THREE.SRGBColorSpace;
 const groundPlane = new THREE.Mesh(
-  new THREE.PlaneGeometry(300000, 300000),
-  new THREE.MeshLambertMaterial({ color: 0x0a9a0a })
+  new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
+  new THREE.MeshStandardMaterial({ color: 0xc8d0b0, roughness: 1, metalness: 0, ...groundGrass })
 );
 groundPlane.rotation.x = -Math.PI/2;
 groundPlane.position.y = -40;
 groundPlane.renderOrder = -1;
+groundPlane.receiveShadow = true;
 scene.add(groundPlane);
-const grassCol  = i => isDark(i) ? COL.GRASS_D  : COL.GRASS_L;
 const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
+// con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
+const roadPre   = new THREE.Color(0.78,0.78,0.78);
+const roadBase  = new THREE.Color(0.92,0.92,0.92);
+const roadStart = new THREE.Color(2.6,2.6,2.6);     // riga di partenza chiara
+const roadFin   = new THREE.Color(0.05,0.05,0.05);  // traguardo scuro
+const grassA    = new THREE.Color(1,1,1);
+const grassB    = new THREE.Color(0.93,0.97,0.9);   // striscia tenue per il senso di velocità
 
-buildRibbon({ half: ROAD_WIDTH, colorOf: i => {
-  if (i < 0)              return COL.ROAD_D;
-  if (i === 2 || i === 3) return COL.START;
-  if (i >= N - RUMBLE_LENGTH) return COL.FINISH;
-  return isDark(i) ? COL.ROAD_D : COL.ROAD_L;
+buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, colorOf: i => {
+  if (i < 0)              return roadPre;
+  if (i === 2 || i === 3) return roadStart;
+  if (i >= N - RUMBLE_LENGTH) return roadFin;
+  return roadBase;
 }});
 for (const side of [-1, 1]) {
   buildRibbon({ half: RUMBLE_W/2,  centerOff: side*(ROAD_WIDTH + RUMBLE_W/2),            colorOf: rumbleCol });
-  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF), colorOf: grassCol, flatOuter: true });
+  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF),
+               colorOf: i => isDark(i) ? grassB : grassA, tex: grassTex, uvTile: 3500, flatOuter: true });
 }
 // linee di corsia tratteggiate (3 corsie come nell'originale) — decal sopra l'asfalto
 for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
@@ -310,33 +417,78 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
                 colorOf: i => (i >= 0 && !isDark(i)) ? COL.LANE : null });
 
 //=========================================================================
-// ALBERI — vero 3D di contorno (instanced, ~500 alberi)
+// ALBERI — vero 3D di contorno (instanced, ~500 alberi). Esposto pulse() per
+// il "party mode" a tempo: rimbalzano ingrandendosi in modo elastico/comico.
 //=========================================================================
-{
+const trees = (() => {
   const spots = [];
   for (let i = 8; i < N; i += 6) {
     for (const side of [-1, 1]) {
-      if (Math.random() < 0.35) continue;
+      if (Math.random() < 0.32) continue;
       // mai dentro l'escursione laterale del giocatore (playerX max ±2.2)
-      spots.push({ i, lat: side * (2.8 + Math.random()*3.5), s: 0.7 + Math.random()*0.9 });
+      spots.push({ i, lat: side * (2.8 + Math.random()*4.0), s: 0.65 + Math.random()*1.05,
+                   yaw: Math.random()*Math.PI*2, hue: 0.30 + Math.random()*0.08,
+                   light: 0.24 + Math.random()*0.16 });
     }
   }
-  const trunkG = new THREE.CylinderGeometry(60, 90, 600, 6);
-  const leafG  = new THREE.ConeGeometry(550, 1900, 8);
-  const trunk  = new THREE.InstancedMesh(trunkG, new THREE.MeshLambertMaterial({ color: 0x6b4a2b }), spots.length);
-  const leaves = new THREE.InstancedMesh(leafG,  new THREE.MeshLambertMaterial({ color: 0x1e7a1e }), spots.length);
-  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3();
-  const tint = new THREE.Color();
+  // abete a due chiome: tronco + cono basso largo + cono alto stretto
+  const trunkG = new THREE.CylinderGeometry(55, 95, 620, 6);
+  const lowG   = new THREE.ConeGeometry(640, 1250, 9);
+  const topG   = new THREE.ConeGeometry(440, 1450, 9);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.95 });
+  const leafMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }); // tinta per-istanza
+  const trunk = new THREE.InstancedMesh(trunkG, trunkMat, spots.length);
+  const low   = new THREE.InstancedMesh(lowG,   leafMat,  spots.length);
+  const top   = new THREE.InstancedMesh(topG,   leafMat,  spots.length);
+  for (const m of [trunk, low, top]) { m.castShadow = true; m.receiveShadow = true; }
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), S = new THREE.Vector3(),
+        up = new THREE.Vector3(0,1,0), tint = new THREE.Color();
+  const data = [];                                   // base per-istanza, per il pulse
   spots.forEach((sp, k) => {
     posToWorld(sp.i * SEGMENT_LENGTH, sp.lat, P);
-    S.setScalar(sp.s);
-    M.compose(new THREE.Vector3(P.x, P.y + 300*sp.s, P.z), Q, S);
-    trunk.setMatrixAt(k, M);
-    M.compose(new THREE.Vector3(P.x, P.y + (600 + 950)*sp.s, P.z), Q, S);
-    leaves.setMatrixAt(k, M);
-    leaves.setColorAt(k, tint.setHSL(0.33, 0.5, 0.28 + Math.random()*0.16));
+    const q = new THREE.Quaternion().setFromAxisAngle(up, sp.yaw + (Math.random()-0.5)*0.3);
+    data.push({ x: P.x, y: P.y, z: P.z, s: sp.s, q, phase: Math.random() });
+    tint.setHSL(sp.hue, 0.55, sp.light);
+    low.setColorAt(k, tint); top.setColorAt(k, tint);
   });
-  scene.add(trunk, leaves);
+  scene.add(trunk, low, top);
+  const OFF = { trunk: 310, low: 1245, top: 1770 };  // centri verticali (×scala) delle 3 parti
+  // sxzMul/syMul: moltiplicatori di scala (1 = normale). I conetti crescono dalla base.
+  function pulse(sxzMul, syMul) {
+    for (let k = 0; k < data.length; k++) {
+      const d = data[k];
+      S.set(d.s*sxzMul, d.s*syMul, d.s*sxzMul);
+      P.set(d.x, d.y + OFF.trunk*d.s*syMul, d.z); M.compose(P, d.q, S); trunk.setMatrixAt(k, M);
+      P.set(d.x, d.y + OFF.low  *d.s*syMul, d.z); M.compose(P, d.q, S); low.setMatrixAt(k, M);
+      P.set(d.x, d.y + OFF.top  *d.s*syMul, d.z); M.compose(P, d.q, S); top.setMatrixAt(k, M);
+    }
+    trunk.instanceMatrix.needsUpdate = low.instanceMatrix.needsUpdate = top.instanceMatrix.needsUpdate = true;
+  }
+  pulse(1, 1);                                       // posa iniziale a riposo
+  return { pulse };
+})();
+
+//=========================================================================
+// PALETTI A BORDO PISTA — feel da circuito + forte parallasse di velocità
+//=========================================================================
+{
+  const slots = [];
+  for (let i = 6; i < N - RUMBLE_LENGTH; i += 4)
+    for (const side of [-1, 1]) slots.push({ i, side });
+  const posts = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(70, 760, 70),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
+    slots.length);
+  posts.castShadow = posts.receiveShadow = true;
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(),
+        S = new THREE.Vector3(1,1,1), red = new THREE.Color(0xd23b2e), white = new THREE.Color(0xf2f2f2);
+  slots.forEach((p, k) => {
+    posToWorld(p.i * SEGMENT_LENGTH, p.side * 1.18, P);   // appena oltre il bordo strada
+    M.compose(new THREE.Vector3(P.x, P.y + 380, P.z), Q, S);
+    posts.setMatrixAt(k, M);
+    posts.setColorAt(k, (Math.floor(p.i/4) % 2 === 0) ? red : white);
+  });
+  scene.add(posts);
 }
 
 //=========================================================================
@@ -369,15 +521,47 @@ const blobTex = (() => {
   return new THREE.CanvasTexture(c);
 })();
 
-let modelTemplate = null, modelClip = null;
-const MODEL_URL = 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/Horse.glb';
+let modelTemplate = null, modelClip = null, modelClips = [], MODEL_YAW = 0;
+// ┌─ MODELLO CAVALLO ───────────────────────────────────────────────────────┐
+// │ Per usare il TUO modello: salva il file come                             │
+// │   assets/models/horse-custom.glb   (formato .glb o .gltf, meglio se      │
+// │ riggato + animato col galoppo). Viene usato in automatico.               │
+// │ Se il cavallo corre girato, cambia 'yaw' della prima voce:               │
+// │   0 = guarda avanti · Math.PI = al contrario · ±Math.PI/2 = di lato.     │
+// │ La scala e l'altezza da terra sono calcolate da sole. Le andature        │
+// │ cercano clip che finiscono in Gallop/Walk/Idle; se mancano, usa la prima.│
+// └──────────────────────────────────────────────────────────────────────────┘
+const MODEL_SOURCES = [
+  { url: 'assets/models/horse-custom.glb',     yaw: 0 },               // ← il TUO modello (se presente)
+  { url: 'assets/models/horse-quaternius.glb', yaw: 0 },               // fallback CC0 animato
+  { url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/Horse.glb', yaw: 0 }, // fallback CDN
+];
 const modelReady = new Promise((res) => {
-  new GLTFLoader().load(MODEL_URL, gltf => {
-    modelTemplate = gltf.scene;
-    modelClip = gltf.animations[0];
-    res(true);
-  }, undefined, err => { console.warn('Modello 3D non disponibile:', err); res(false); });
+  const loader = new GLTFLoader();
+  const tryLoad = (idx) => {
+    if (idx >= MODEL_SOURCES.length) { console.warn('Nessun modello 3D disponibile'); return res(false); }
+    const src = MODEL_SOURCES[idx];
+    loader.load(src.url, gltf => {
+      modelTemplate = gltf.scene;
+      modelClips = gltf.animations || [];
+      modelClip = modelClips.find(a => /(^|\|)Gallop$/i.test(a.name)) || modelClips[0];  // galoppo dedicato
+      MODEL_YAW = src.yaw || 0;
+      console.log('Modello caricato:', src.url, '· animazioni:', modelClips.map(a => a.name).join(', ') || '(nessuna)');
+      res(true);
+    }, undefined, () => tryLoad(idx + 1));
+  };
+  tryLoad(0);
 });
+
+// LOCOMOZIONE realistica: andature legate alla velocità (niente "pattinamento" dei piedi),
+// inclinazione in curva, imbardata in sterzata, beccheggio in accelerazione/frenata
+const GALLOP_STRIDE = HORSE_HEIGHT * 4.0;   // unità mondo percorse in un ciclo di galoppo
+const WALK_STRIDE   = HORSE_HEIGHT * 1.8;
+const BANK_K  = 0.06;                        // rollio in curva (per unità di curve × velocità)
+const BANK_MAX = 0.32;
+const STEER_K = 0.9;                         // quanto il cavallo "punta" verso dove sterza
+const PITCH_K = 0.18;                        // beccheggio su accel/frenata
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); };
 
 class HorseActor {
   constructor(tintHex = 0xffffff) {
@@ -390,6 +574,7 @@ class HorseActor {
       new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }));
     sh.rotation.x = -Math.PI/2; sh.position.y = 8;
     this.group.add(sh);
+    this.blob = sh;
 
     // opzione A — billboard
     this.spriteMat = new THREE.MeshBasicMaterial({ transparent: true, alphaTest: 0.4, color: this.tint, side: THREE.DoubleSide });
@@ -399,7 +584,9 @@ class HorseActor {
 
     // opzione B — montata quando il GLB arriva
     this.model = null; this.mixer = null;
-    this.heading = 0;
+    this.heading = 0; this.bank = 0; this.steerYaw = 0; this.pitch = 0;
+    this.actGallop = this.actWalk = this.actIdle = null;
+    this.w = { idle: 1, walk: 0, gallop: 0 };   // pesi andature smussati (parte da fermo)
     this.setMode('sprite');
   }
   initSprite() {
@@ -411,21 +598,41 @@ class HorseActor {
   initModel() {
     if (!modelTemplate || this.model) return;
     this.model = SkeletonUtils.clone(modelTemplate);
-    const box = new THREE.Box3().setFromObject(this.model);
-    const s = HORSE_HEIGHT / (box.max.y - box.min.y);
+    this.model.updateWorldMatrix(true, true);
+    // dimensione REALE renderizzata: per i modelli skinnati il box della geometria
+    // ignora la scala dell'armatura (qui ×100) → misurare dalle ossa dello scheletro
+    let skinned = null;
+    this.model.traverse(o => { if (o.isSkinnedMesh && !skinned) skinned = o; });
+    const box = new THREE.Box3();
+    if (skinned && skinned.skeleton && skinned.skeleton.bones.length) {
+      const v = new THREE.Vector3();
+      for (const b of skinned.skeleton.bones) { b.getWorldPosition(v); box.expandByPoint(v); }
+    } else {
+      box.setFromObject(this.model);                     // Horse.glb (morph): box geometrico ok
+    }
+    const s = HORSE_HEIGHT / ((box.max.y - box.min.y) || 1);
     this.model.scale.setScalar(s);
     this.model.position.y = -box.min.y * s;
+    this.model.rotation.order = 'YXZ';     // imbardata attorno al su-mondo, poi beccheggio/rollio locali
     this.model.traverse(o => {
-      if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(this.tint); }
+      if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(this.tint); o.castShadow = true; }
     });
     this.mixer = new THREE.AnimationMixer(this.model);
-    this.mixer.clipAction(modelClip).play();
+    const byName = re => modelClips.find(a => re.test(a.name));
+    const cG = byName(/gallop|run|canter/i) || modelClip;     // tollerante ai nomi-clip del tuo modello
+    let   cW = byName(/walk|trot/i);  if (cW === cG) cW = null;
+    let   cI = byName(/idle|stand/i); if (cI === cG) cI = null;
+    this.durG = cG.duration || 0.6;  this.durW = (cW && cW.duration) || 1;
+    this.actGallop = this.mixer.clipAction(cG); this.actGallop.play();
+    if (cW) { this.actWalk = this.mixer.clipAction(cW); this.actWalk.play(); }
+    if (cI) { this.actIdle = this.mixer.clipAction(cI); this.actIdle.play(); }
     this.group.add(this.model);
     this.model.visible = (this.mode === 'model');
   }
   setMode(mode) {
     this.mode = mode;
     this.billboard.visible = (mode === 'sprite');
+    this.blob.visible = (mode === 'sprite');   // ombra finta solo per sprite; il modello proietta ombra vera
     if (this.model) this.model.visible = (mode === 'model');
   }
   place(position, lateralN) {
@@ -446,8 +653,28 @@ class HorseActor {
       this.billboard.rotation.y = Math.atan2(camera.position.x - this.group.position.x,
                                              camera.position.z - this.group.position.z);
     } else if (this.model) {
-      this.model.rotation.y = this.heading;
-      if (this.mixer) this.mixer.update(dt * (0.2 + speedPct * 1.5));
+      // assetto: imbardata pista + sterzo, rollio in curva, beccheggio
+      this.model.rotation.y = this.heading + MODEL_YAW + this.steerYaw;
+      this.model.rotation.z = this.bank;
+      this.model.rotation.x = this.pitch;
+      if (this.mixer) {
+        // pesi andatura per velocità (idle→walk→gallop) con transizione morbida
+        const gW = smooth(0.22, 0.55, speedPct);
+        const wW = (1 - gW) * smooth(0.02, 0.16, speedPct);
+        const iW = (1 - gW) - wW;
+        const k = 1 - Math.pow(0.0001, dt);
+        this.w.gallop += (gW - this.w.gallop) * k;
+        this.w.walk   += (wW - this.w.walk)   * k;
+        this.w.idle   += (iW - this.w.idle)   * k;
+        this.actGallop.setEffectiveWeight(this.w.gallop);
+        if (this.actWalk) this.actWalk.setEffectiveWeight(this.w.walk);
+        if (this.actIdle) this.actIdle.setEffectiveWeight(this.w.idle);
+        // passi sincronizzati alla velocità al suolo → i piedi non "pattinano"
+        const sp = speedPct * MAX_SPEED;
+        this.actGallop.timeScale = (sp / GALLOP_STRIDE) * this.durG;
+        if (this.actWalk) this.actWalk.timeScale = (sp / WALK_STRIDE) * this.durW;
+        this.mixer.update(dt);
+      }
     }
   }
 }
@@ -585,6 +812,12 @@ function setMode(mode) {
 $('btn-sprite').onclick = () => setMode('sprite');
 $('btn-model').onclick  = () => setMode('model');
 $('btn-camera').onclick = cycleCamera;
+$('btn-tap').onclick    = () => party.tap();
+$('party-gain').oninput = e => {           // slider intensità: 100% = base, 600% ≈ +500%
+  const pct = +e.target.value;
+  party.setGain(pct / 100);
+  $('gain-val').textContent = pct + '%';
+};
 function cycleCamera() {
   camMode = (camMode + 1) % CAM_MODES.length;
   tvAnchor = -1;
@@ -594,31 +827,177 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 'c') cycleCamera();
-  if (k === 'r') { position = 0; speed = 0; playerX = 0; currentLapTime = 0; started = false; }
+  if (k === 't') party.tap();        // tap tempo
+  if (k === 'p') party.toggle();     // accende/spegne il party mode
+  if (k === 'r') { position = prevPosition = 0; speed = 0; playerX = prevPlayerX = 0; currentLapTime = 0; started = false; acc = 0; }
 });
 
 //=========================================================================
-// LOOP
+// POLVERE sotto gli zoccoli — pool di sprite che si gonfiano e svaniscono
 //=========================================================================
-let last = performance.now();
+const dust = (() => {
+  const tex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32,32,0, 32,32,32);
+    grad.addColorStop(0,   'rgba(255,255,255,0.9)');
+    grad.addColorStop(0.45,'rgba(255,255,255,0.32)');
+    grad.addColorStop(1,   'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const POOL = 56, puffs = [];
+  for (let i = 0; i < POOL; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xcdb892,
+      transparent: true, opacity: 0, depthWrite: false }));
+    s.visible = false; scene.add(s);
+    puffs.push({ s, age: 0, life: 1, vx: 0, vy: 0, vz: 0, size0: 0 });
+  }
+  let cursor = 0, emitClock = 0;
+  function emit(x, y, z) {
+    const p = puffs[cursor]; cursor = (cursor + 1) % POOL;
+    p.age = 0; p.life = 0.55 + Math.random()*0.45;
+    p.s.position.set(x + (Math.random()-0.5)*340, y + 60, z + (Math.random()-0.5)*340);
+    p.vx = (Math.random()-0.5)*500; p.vy = 240 + Math.random()*320; p.vz = (Math.random()-0.5)*500;
+    p.size0 = 520 + Math.random()*420; p.s.visible = true;
+  }
+  function update(dt, fx, fy, fz, speedPct, moving) {
+    if (moving && speedPct > 0.12) {
+      emitClock += dt;
+      const interval = 0.028 / (0.3 + speedPct);   // più veloce = più polvere
+      while (emitClock > interval) { emitClock -= interval; emit(fx, fy, fz); }
+    }
+    for (const p of puffs) {
+      if (!p.s.visible) continue;
+      p.age += dt;
+      const t = p.age / p.life;
+      if (t >= 1) { p.s.visible = false; continue; }
+      p.s.position.x += p.vx*dt; p.s.position.y += p.vy*dt; p.s.position.z += p.vz*dt;
+      p.vy -= 240*dt;                               // gravità leggera
+      const sz = p.size0 * (0.6 + t*1.7);
+      p.s.scale.set(sz, sz, 1);
+      p.s.material.opacity = 0.5 * (1-t) * (1-t);
+    }
+  }
+  return { update };
+})();
+
+//=========================================================================
+// PARTY MODE a tempo — TAP TEMPO che fa rimbalzare alberi e luce in modo comico
+//=========================================================================
+const party = (() => {
+  const SUN_I = sun.intensity, HEMI_I = hemi.intensity, EXPO = renderer.toneMappingExposure, BLOOM = bloom.strength;
+  let on = false, bpm = 120, period = 0.5, nextBeat = 0;
+  let s = 0, v = 0, taps = [];          // s,v = molla (offset elastico); taps = tempi dei tap
+  let gain = 6;                          // intensità (1 = base; 6 ≈ +500%), regolata dallo slider
+  const $i = document.getElementById('party-info');
+  function setHud() { if ($i) $i.textContent = on ? `🎉 ${bpm} BPM` : 'spento'; }
+  function kick() { s = 1; v = 0; }      // SCATTO a pieno sul beat (poi la molla lo riporta giù con rimbalzo)
+  function tap() {
+    const now = performance.now()/1000;
+    if (taps.length && now - taps[taps.length-1] > 2) taps = [];   // pausa lunga = nuova battuta
+    taps.push(now); if (taps.length > 6) taps.shift();
+    if (taps.length >= 2) {
+      let sum = 0; for (let i = 1; i < taps.length; i++) sum += taps[i]-taps[i-1];
+      bpm = Math.max(40, Math.min(240, Math.round(60 / (sum/(taps.length-1)))));
+      period = 60/bpm;
+    }
+    on = true; nextBeat = now + period; kick(); setHud();
+  }
+  function toggle() { on = !on; if (on) nextBeat = performance.now()/1000 + period; setHud(); }
+  function update(dt) {
+    const now = performance.now()/1000;
+    if (on) while (now >= nextBeat) { nextBeat += period; kick(); }
+    const h = Math.min(dt, 0.033);       // molla sotto-critica che riporta lo scatto a 0 con rimbalzo
+    v += (-55*s - 9*v) * h; s += v * h;
+    if (!on && Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) return;    // a riposo: nessun lavoro extra
+    // DISTORSIONE alberi: scala piena con l'intensità (effetto molto marcato)
+    const ts = (s >= 0 ? s : s*0.45) * gain;   // sbilancia verso l'INGRANDIMENTO
+    trees.pulse(Math.min(20, Math.max(0.12, 1 + ts*0.6)),
+                Math.min(20, Math.max(0.12, 1 + ts*1.1)));          // squash&stretch comico
+    // LUCE: curva più dolce + tetti, così lampeggia forte senza sbiancare tutto
+    const ls = (s >= 0 ? s : s*0.6) * gain;
+    sun.intensity  = SUN_I  * Math.min(3.2, Math.max(0.1, 1 + ls*0.18));
+    hemi.intensity = HEMI_I * Math.min(2.6, Math.max(0.1, 1 + ls*0.14));
+    renderer.toneMappingExposure = EXPO * Math.min(1.6, Math.max(0.45, 1 + ls*0.05));
+    bloom.strength = Math.min(2.0, BLOOM * (1 + Math.max(0, s*gain)*0.9));
+  }
+  return { tap, toggle, update, setGain(g) { gain = g; } };
+})();
+
+//=========================================================================
+// LOOP — fixed timestep + interpolazione (moto identico e fluido a 60/120/144Hz)
+//=========================================================================
+const FIXED_DT = 1/120;                 // passo fisico fisso
+let acc = 0, last = performance.now();
+let prevPosition = 0, prevPlayerX = 0, prevSpeed = 0;  // stato precedente per interpolare/derivare
+
+// interpola una posizione lungo pista gestendo il wrap al traguardo
+function interpWrap(prev, cur, alpha) {
+  let d = cur - prev;
+  if (d < -TRACK_LENGTH/2) d += TRACK_LENGTH;        // ha superato il traguardo
+  else if (d > TRACK_LENGTH/2) d -= TRACK_LENGTH;
+  return prev + d * alpha;                            // posToWorld applica il modulo
+}
+
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min((now - last)/1000, 1/20);
+  let frameDt = (now - last)/1000;
   last = now;
+  if (frameDt > 0.25) frameDt = 0.25;                // dopo un tab in background non rincorrere
 
-  updatePhysics(dt);
-
-  player.place(position, playerX);
-  player.update(dt, speed/MAX_SPEED);
-  for (const o of opponents) {
-    o.actor.place(o.pos, o.lat);
-    o.actor.update(dt, o.speed/MAX_SPEED);
+  // avanza la fisica a passi fissi; accumula il tempo reale trascorso
+  acc += frameDt;
+  while (acc >= FIXED_DT) {
+    prevPosition = position;
+    prevPlayerX  = playerX;
+    for (const o of opponents) o.prevPos = o.pos ?? o.prevPos;
+    updatePhysics(FIXED_DT);
+    acc -= FIXED_DT;
   }
+  const alpha = acc / FIXED_DT;                        // frazione tra stato precedente e corrente
 
-  updateCamera(dt);
-  groundPlane.position.x = camera.position.x;
-  groundPlane.position.z = camera.position.z;
-  renderer.render(scene, camera);
+  const kk = 1 - Math.pow(0.0005, frameDt);   // smussatura assetto, framerate-independent
+  const sp = speed / MAX_SPEED;
+
+  // rendering interpolato: cavalli posizionati tra i due ultimi stati fisici
+  player.place(interpWrap(prevPosition, position, alpha),
+               prevPlayerX + (playerX - prevPlayerX) * alpha);
+  // assetto realistico del giocatore: rollio in curva, imbardata verso lo sterzo, beccheggio
+  {
+    const bankTarget  = limit(-curveAt(position) * sp * BANK_K, -BANK_MAX, BANK_MAX);
+    const latRate     = (playerX - prevPlayerX) / FIXED_DT;            // unità playerX/sec
+    const steerTarget = Math.atan2(latRate * ROAD_WIDTH, Math.max(speed, 1)) * STEER_K;
+    const accel       = (speed - prevSpeed) / Math.max(frameDt, 1e-3);
+    const pitchTarget = limit(-accel / MAX_SPEED * PITCH_K, -0.12, 0.12);
+    player.bank     += (bankTarget  - player.bank)     * kk;
+    player.steerYaw += (steerTarget - player.steerYaw) * kk;
+    player.pitch    += (pitchTarget - player.pitch)    * kk;
+  }
+  player.update(frameDt, sp);                         // animazioni avanzano col tempo reale
+  prevSpeed = speed;
+  // polvere ai piedi del giocatore, un po' dietro lungo la direzione di marcia
+  {
+    const pp = player.group.position, ph = player.heading;
+    dust.update(frameDt, pp.x - Math.sin(ph)*300, pp.y, pp.z - Math.cos(ph)*300, sp, speed > 0);
+  }
+  for (const o of opponents) {
+    o.actor.place(interpWrap(o.prevPos ?? o.pos, o.pos, alpha), o.lat);
+    const ob = limit(-curveAt(o.pos) * (o.speed/MAX_SPEED) * BANK_K, -BANK_MAX, BANK_MAX);
+    o.actor.bank += (ob - o.actor.bank) * kk;
+    o.actor.update(frameDt, o.speed/MAX_SPEED);
+  }
+  party.update(frameDt);                 // party mode: alberi e luce a tempo
+
+  updateCamera(frameDt);
+  // FOV dinamico: si allarga con la velocità → forte senso di velocità
+  const fovTarget = 66 + (speed/MAX_SPEED) * 16;
+  camera.fov += (fovTarget - camera.fov) * (1 - Math.pow(0.02, frameDt));
+  camera.updateProjectionMatrix();
+  // sole + frustum d'ombra seguono il giocatore: ombre sempre nitide attorno a lui
+  sun.target.position.copy(player.group.position);
+  sun.position.copy(player.group.position).addScaledVector(sunDir, 20000);
+  composer.render();
 
   $('speed').textContent   = Math.round(speed/60);
   $('laptime').textContent = currentLapTime.toFixed(1);
