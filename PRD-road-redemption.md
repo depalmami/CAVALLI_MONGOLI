@@ -135,7 +135,31 @@ obiettivo aggiornato in `#combat-obj`, vittoria→shop, morte→game over→nuov
 - Tutte le 4 fasi (combat/nitro/armi/roguelike) + SHOW LIVE + scritta 3D sono committate in blocco
   su `3d-experiment` (commit successivo a `1b749e6`). Prossimi lavori: vedi backlog §10.
 
+## 9.1 Bug reali trovati dal primo playtest utente e corretti (2026-07-19, commit `29b69fa`)
+Il "funziona" della Fase 4 era solo strutturale (transizioni di schermata); testando la
+partita vera sono emersi 3 bug concreti, diagnosticati con `window.cm3d` (handle di debug
+esposto a fine file, ora con `opponents/gapTo/playerAttack/camera/...`) via Puppeteer:
+- **Gara troppo corta**: `eventFor().dist` era un placeholder (45000) mai ricalibrato sul
+  vero `TRACK_LENGTH` (~1.341.000 unità) → l'evento 0 durava ~7s reali (3.36% del giro).
+  Fix: `dist = 380000 + i*70000` (evento 0 ora ~30-35s reali).
+- **Rivali ammassati sul giocatore**: in `updateAI`, il rivale che si affianca per colpire
+  puntava a `targetLat = playerX` — la STESSA posizione laterale del giocatore, non una
+  accanto. Risultato: i cavalli si sovrapponevano al modello del giocatore invece di
+  affiancarlo, rendendo illeggibili nomi/barre-vita/colpi. Fix: `targetLat = playerX +
+  (o.lat>=playerX?1:-1)*0.6` (resta dentro `LAT_RANGE=0.95` per l'hit-check, ma visivamente
+  di lato). Residuo minore: due rivali possono ancora scegliere lo stesso lato e sovrapporsi
+  un po' tra loro (non col giocatore) — non ancora risolto, vedi backlog.
+- **Nessun feedback visivo 3D sul colpo**: solo popup testuale nel groviglio. Aggiunto
+  `HorseActor.flashHit()` — impulso emissivo rosso sul modello GLB (o tinta sul billboard
+  sprite) agganciato a `hitOpponent`/`playerKick`/contrattacco AI sul giocatore.
+Verificato con screenshot headless prima/dopo (scratchpad di sessione) + regressione
+Fase 4 (10/10) ancora verde.
+
 ## 10. Backlog / idee future (post-Fase 4)
+- Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
+  e si sovrappongano tra loro — vedi §9.1).
+- Evitare sovrapposizione di etichette/barre-vita quando due rivali sono vicini in schermo
+  (offset verticale se le proiezioni X sono troppo vicine).
 - Grab/lotta (guidi il cavallo del rivale e lo schianti), boss di fine ciclo, cop/inseguitori.
 - Armi: proiettili visibili per l'arco, effetti impatto (scintille/slow-mo sul takedown), combo counter.
 - Multischermo del 2D (banda centrale + testo verticale laterale) e flash-immagine.
