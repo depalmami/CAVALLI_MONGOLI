@@ -647,6 +647,7 @@ class HorseActor {
     this.heading = 0; this.bank = 0; this.steerYaw = 0; this.pitch = 0;
     this.actGallop = this.actWalk = this.actIdle = null;
     this.w = { idle: 1, walk: 0, gallop: 0 };   // pesi andature smussati (parte da fermo)
+    this.hitFlash = 0;                          // impulso emissivo rosso quando il cavallo viene colpito
     this.setMode('sprite');
   }
   initSprite() {
@@ -700,7 +701,19 @@ class HorseActor {
     posToWorld(position, lateralN, this.group.position, la);
     this.heading = la.heading;
   }
+  flashHit() { this.hitFlash = 1; }             // impulso rosso visibile in 3D quando incassa un colpo
   update(dt, speedPct) {
+    if (this.hitFlash > 0) {
+      this.hitFlash = Math.max(0, this.hitFlash - dt*2.5);
+      if (this.mode === 'sprite') {
+        this.spriteMat.color.copy(this.tint).lerp(new THREE.Color(0xff2020), this.hitFlash);
+      } else if (this.model) {
+        this.model.traverse(o => { if (o.isMesh) {
+          o.material.emissive.setRGB(this.hitFlash, 0, 0);
+          o.material.emissiveIntensity = this.hitFlash * 1.6;
+        } });
+      }
+    }
     if (this.mode === 'sprite') {
       const fps = 10 + speedPct * 20;
       this.frameClock += dt * fps;
@@ -844,13 +857,13 @@ function playerKick() {
   if (!best) return;
   const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
   best.targetLat = best.lat + dir*1.2; best.lat += dir*0.35;
-  best.health -= 10; best.flash = 1; shake = Math.max(shake, 0.4);
+  best.health -= 10; best.flash = 1; best.actor.flashHit(); shake = Math.max(shake, 0.4);
   nitro = Math.min(MAX_NITRO, nitro + 3);
   addPopup(best, 900, '💥', '#fff');
   if (Math.abs(best.lat) > 1.05 || best.health <= 0) wipe(best, 'kick');
 }
 function hitOpponent(o, dmg, label) {
-  o.health -= dmg; o.flash = 1; shake = Math.max(shake, 0.35);
+  o.health -= dmg; o.flash = 1; o.actor.flashHit(); shake = Math.max(shake, 0.35);
   nitro = Math.min(MAX_NITRO, nitro + 4);          // l'aggressività carica il nitro
   addPopup(o, 900, label || ('-' + Math.round(dmg)), '#ffe08a');
   if (o.health <= 0) wipe(o, 'takedown');
@@ -883,15 +896,18 @@ function updateAI(dt) {
       o.laneCd = (o.laneCd || 0) - dt;
       if (o.laneCd <= 0) {
         o.laneCd = 1.4 + Math.random()*2.4;
-        o.targetLat = (Math.abs(g) < ATK_RANGE && Math.random() < 0.6) ? playerX   // affianca per colpire
-                                                                        : Math.random()*1.6 - 0.8;
+        // affianca per colpire: si porta ACCANTO al giocatore (dentro LAT_RANGE), non ADDOSSO —
+        // altrimenti i cavalli si ammassano sul modello del giocatore invece di affiancarlo a vista
+        o.targetLat = (Math.abs(g) < ATK_RANGE && Math.random() < 0.6)
+          ? playerX + (o.lat >= playerX ? 1 : -1) * 0.6
+          : Math.random()*1.6 - 0.8;
       }
       o.lat = limit(o.lat + (o.targetLat - o.lat) * Math.min(1, dt*1.2), -1.0, 1.0);
       o.atkCd -= dt;
       if (Math.abs(g) < ATK_RANGE && Math.abs(o.lat - playerX) < LAT_RANGE && o.atkCd <= 0) {
         o.atkCd = 1.2 + Math.random();
         if (blocking) { critical = true; addPopup(o, 900, 'PARATA!', '#8ff'); }
-        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; shake = Math.max(shake, 0.5);
+        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); shake = Math.max(shake, 0.5);
                addPopup(o, 900, '⚔', '#ff6b6b'); if (pHealth <= 0) { pHealth = 0; onPlayerDown(); } }
       }
     }
@@ -1410,7 +1426,9 @@ function applyUpgrades() {
 function eventFor(i) {
   const cyc = ['race', 'takedown', 'survival', 'time'];
   const type = i === 0 ? 'race' : cyc[i % cyc.length];
-  const dist = 45000 + i*9000, need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
+  // dist scalata sul giro reale (TRACK_LENGTH ~1.34M unità): l'evento 0 dura ~30-35s reali,
+  // non i ~7s che si ottenevano coi vecchi placeholder (45000 = solo il 3% del giro)
+  const dist = 380000 + i*70000, need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
   const title = { race:'🏁 GARA', takedown:'⚔️ RAZZIA', survival:'🛡️ SOPRAVVIVENZA', time:'⏱️ CONTRO IL TEMPO' }[type];
   const desc = { race:'Taglia il traguardo davanti a tutti.', takedown:'Abbatti '+need+' rivali prima del traguardo.',
                  survival:'Arriva vivo al traguardo: i rivali sono più aggressivi.', time:'Raggiungi il traguardo prima che scada il tempo.' }[type];
@@ -1513,7 +1531,10 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { game };                     // handle di debug/test (headless)
+window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+  eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
+  get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
+  get kills(){return kills}, get score(){return score}, get money(){return money} };  // handle debug/test (headless)
 onKill = () => { game.killsThisEvent++; };
 onPlayerDown = () => loseEvent('Sei caduto in battaglia!');
 
