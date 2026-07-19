@@ -650,6 +650,9 @@ class HorseActor {
     this.hitFlash = 0;                          // impulso emissivo rosso quando il cavallo viene colpito
     this.punch = 0; this.punchDir = 0;          // affondo di chi attacca (scatto verso il bersaglio e ritorno)
     this.knock = 0; this.knockDir = 0;          // rinculo di chi viene colpito (spinto di lato e ritorno)
+    this.basePos = new THREE.Vector3();         // posizione "pulita" pre-wobble: la camera insegue QUESTA,
+                                                 // non group.position (altrimenti il lookAt insegue anche
+                                                 // l'affondo del giocatore e lo annulla visivamente)
     this.setMode('sprite');
   }
   initSprite() {
@@ -701,6 +704,7 @@ class HorseActor {
   place(position, lateralN) {
     const la = {};
     posToWorld(position, lateralN, this.group.position, la);
+    this.basePos.copy(this.group.position);   // valore pulito prima che update() aggiunga il wobble
     this.heading = la.heading;
   }
   flashHit() { this.hitFlash = 1; }             // impulso rosso visibile in 3D quando incassa un colpo
@@ -761,14 +765,14 @@ class HorseActor {
       if (this.punch > 0) {
         this.punch = Math.max(0, this.punch - dt*3.4);
         const k = Math.sin(this.punch * Math.PI);          // 0→1→0 mentre punch scende da 1 a 0
-        this.group.position.x += (rgtX*this.punchDir*110 + fwdX*70) * k;
-        this.group.position.z += (rgtZ*this.punchDir*110 + fwdZ*70) * k;
+        this.group.position.x += (rgtX*this.punchDir*260 + fwdX*160) * k;
+        this.group.position.z += (rgtZ*this.punchDir*260 + fwdZ*160) * k;
       }
       if (this.knock > 0) {
         this.knock = Math.max(0, this.knock - dt*3.8);
         const k = Math.sin(this.knock * Math.PI);
-        this.group.position.x += rgtX*this.knockDir*190 * k;
-        this.group.position.z += rgtZ*this.knockDir*190 * k;
+        this.group.position.x += rgtX*this.knockDir*380 * k;
+        this.group.position.z += rgtZ*this.knockDir*380 * k;
       }
     }
   }
@@ -844,6 +848,8 @@ function addPopup(who, off, text, color) { popups.push({ who, off, text, color, 
 function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   if (pAtkCd > 0) return;
   pAtkCd = curWeapon.ranged ? 0.42 : 0.26;
+  player.lunge(side);      // il giocatore scatta SEMPRE all'input di attacco, anche se va a vuoto —
+                            // altrimenti un colpo senza bersaglio in range non produce nessun feedback
   const latR = LAT_RANGE * (curWeapon.reach || 1);
   let best = null, bestAbs = 1e9;
   for (const o of opponents) {
@@ -864,12 +870,12 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   const dmg = (curWeapon.oneShot ? 999 : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
   critical = false;
   if (curWeapon.stun) best.atkCd = Math.max(best.atkCd, 2.4);   // la mazza stordisce
-  player.lunge(side);                                            // il giocatore scatta verso il colpo
   hitOpponent(best, dmg, curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null));
   if (isFinite(curWeapon.uses) && --curWeapon.uses <= 0) equipWeapon('fists');   // arma esaurita
 }
 function playerKick() {
   if (pAtkCd > 0) return; pAtkCd = 0.34;
+  player.lunge(0);          // il calcio è un affondo in avanti, sempre visibile anche a vuoto
   let best = null, bestAbs = 1e9;
   for (const o of opponents) {
     if (o.state !== 'race') continue;
@@ -881,7 +887,6 @@ function playerKick() {
   const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
   best.targetLat = best.lat + dir*1.2; best.lat += dir*0.35;
   best.health -= 10; best.flash = 1; best.actor.flashHit(); best.actor.knockback(dir);
-  player.lunge(0);                                               // il calcio è un affondo in avanti
   shake = Math.max(shake, 0.4);
   nitro = Math.min(MAX_NITRO, nitro + 3);
   addPopup(best, 900, '💥', '#fff');
@@ -1037,7 +1042,9 @@ const tvPos = new THREE.Vector3(); let tvAnchor = -1;
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
 
 function updateCamera(dt) {
-  const p = player.group.position;
+  // basePos, non group.position: altrimenti il lookAt insegue anche l'affondo/rinculo
+  // del giocatore e lo cancella visivamente (il colpo si vede sui rivali ma mai su di sé)
+  const p = player.basePos;
   const h = player.heading;
   const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
 
