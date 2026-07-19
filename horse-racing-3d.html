@@ -9,12 +9,25 @@
   html, body { margin:0; padding:0; overflow:hidden; background:#000; font-family:-apple-system, 'Segoe UI', sans-serif; }
   #scene { position:fixed; inset:0; display:block; }
 
-  .panel { position:fixed; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8);
+  .panel { position:fixed; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8); z-index:20;
            background:rgba(0,0,0,.45); border-radius:10px; padding:10px 14px; backdrop-filter:blur(4px); }
   #hud-left  { top:12px; left:12px; font-size:15px; line-height:1.5; }
   #hud-left b { font-size:26px; }
   #hud-right { top:12px; right:12px; text-align:right; }
   #hud-help  { bottom:12px; left:50%; transform:translateX(-50%); font-size:13px; white-space:nowrap; }
+  #hud-live  { bottom:12px; left:12px; font-size:13px; line-height:1.7; max-width:230px; }
+  #hud-live label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+  #hud-live input[type=text] { width:100%; box-sizing:border-box; margin-top:3px; padding:4px 6px;
+           border-radius:6px; border:0; font-size:13px; }
+  #hud-live select { width:100%; margin-top:3px; padding:3px; border-radius:6px; border:0; font-size:13px; }
+  #hud-live input[type=range] { width:100%; }
+  #hud-live b.head { display:block; font-size:12px; letter-spacing:.08em; opacity:.75; margin-bottom:4px; }
+  #hud-combat { top:12px; left:50%; transform:translateX(-50%); min-width:280px; text-align:center; }
+  .cbar { display:flex; align-items:center; gap:7px; margin:3px 0; }
+  .cbar-lbl { width:18px; text-align:center; }
+  .cbar-track { flex:1; height:13px; background:rgba(255,255,255,.16); border-radius:7px; overflow:hidden; box-shadow:inset 0 0 4px rgba(0,0,0,.4); }
+  .cbar-fill { height:100%; width:100%; border-radius:7px; transition:width .1s linear; }
+  #combat-stats { font-size:15px; margin-top:4px; }
 
   button { background:#2b6cb0; color:#fff; border:0; border-radius:8px; padding:8px 12px;
            font-size:14px; cursor:pointer; margin:2px 0 2px 6px; }
@@ -26,6 +39,19 @@
              flex-direction:column; gap:12px; background:#1a202c; color:#fff; font-size:20px; z-index:10; }
   #loading small { opacity:.6; }
   .err { color:#feb2b2; max-width:600px; text-align:center; font-size:15px; }
+
+  #screen { position:fixed; inset:0; z-index:25; display:none; align-items:center; justify-content:center;
+            background:rgba(8,10,18,.84); backdrop-filter:blur(6px); color:#fff; text-align:center;
+            font-family:-apple-system,'Segoe UI',sans-serif; }
+  #screen .box { max-width:560px; padding:22px 28px; }
+  #screen h1 { font-size:36px; margin:0 0 4px; letter-spacing:.02em; }
+  #screen h2 { font-size:19px; opacity:.85; margin:0 0 14px; font-weight:500; }
+  #screen p  { opacity:.85; margin:8px 0; }
+  #screen .shopgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0; }
+  #screen button { font-size:15px; padding:11px 14px; width:100%; }
+  #screen button:disabled { opacity:.4; cursor:default; }
+  #screen .big { font-size:18px; padding:13px 24px; margin-top:14px; background:#38a169; }
+  #screen .amber { background:#c98a3a; }
 </style>
 <script type="importmap">
 {
@@ -46,6 +72,13 @@
   Giro: <span id="laptime">0.0</span>s &nbsp; Ultimo: <span id="lastlap">—</span>
 </div>
 
+<div id="hud-combat" class="panel">
+  <div class="cbar"><span class="cbar-lbl">❤️</span><div class="cbar-track"><div id="bar-health" class="cbar-fill" style="background:#e23b3b"></div></div></div>
+  <div class="cbar"><span class="cbar-lbl">⚡</span><div class="cbar-track"><div id="bar-nitro" class="cbar-fill" style="background:#3bb0e2"></div></div></div>
+  <div id="combat-stats">🗡 <b id="stat-kills">0</b> &nbsp; 🏆 <b id="stat-score">0</b> &nbsp; 💰 <b id="stat-money">0</b> &nbsp; <span id="stat-weapon" style="opacity:.85">👊 Pugni</span></div>
+  <div id="combat-obj" style="font-size:12px; opacity:.8; margin-top:2px;"></div>
+</div>
+
 <div id="hud-right" class="panel">
   <div>
     <button id="btn-sprite" class="active">Opzione A — Sprite</button>
@@ -64,9 +97,34 @@
   </div>
 </div>
 
-<div id="hud-help" class="panel">
-  ↑↓/WS accelera-frena · ←→/AD sterza · <b>B</b> sprite/modello · <b>C</b> camera · <b>T</b> tap tempo · <b>P</b> party · <b>R</b> riparti
+<div id="hud-live" class="panel">
+  <b class="head">✨ SHOW LIVE (a tempo)</b>
+  <label><input type="checkbox" id="live-flash"> ⚡ Flash strobo <span style="opacity:.6">(F)</span></label>
+  <label><input type="checkbox" id="live-bonus"> 💬 Scritta lampeggiante <span style="opacity:.6">(G)</span></label>
+  <input type="text" id="live-text" value="CAVALLI MONGOLI" maxlength="24" placeholder="Testo…">
+  <select id="live-palette">
+    <option value="gold">🟡 Gold</option>
+    <option value="neon">💚 Neon</option>
+    <option value="cyber">🔵 Cyber</option>
+    <option value="vapor">💗 Vapor</option>
+    <option value="fire">🔥 Fire</option>
+    <option value="toxic">🟢 Toxic</option>
+    <option value="ice">🧊 Ice</option>
+    <option value="voodoo">🟣 Voodoo</option>
+    <option value="random">🎲 Random</option>
+  </select>
+  <label style="margin-top:3px;"><input type="checkbox" id="live-cycle"> 🌈 Colore a ogni beat</label>
+  <label><input type="checkbox" id="live-3d"> 🧊 Scritta in 3D <span style="opacity:.6">(H)</span></label>
+  <div style="margin-top:2px;">Distorsione scritta: <span id="live-int-val">120%</span>
+    <input type="range" id="live-int" min="0" max="200" step="10" value="120"></div>
+  <div style="opacity:.6; margin-top:4px;">Dai il tempo con <b>T</b>.</div>
 </div>
+
+<div id="hud-help" class="panel">
+  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>T/P/F/G/H</b> show · <b>R</b> riparti
+</div>
+
+<div id="screen"><div class="box" id="screen-box"></div></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -77,6 +135,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -680,12 +740,20 @@ class HorseActor {
 }
 
 const player = new HorseActor(0xffffff);
-const opponents = [
-  { actor: new HorseActor(0xffc9a3), lat: -0.55, pos: TRACK_LENGTH - 1600, speed: MAX_SPEED*0.80 },
-  { actor: new HorseActor(0xa9c8ff), lat: -0.18, pos: TRACK_LENGTH - 2800, speed: MAX_SPEED*0.86 },
-  { actor: new HorseActor(0xd6ffb3), lat:  0.22, pos: 1800,                speed: MAX_SPEED*0.83 },
-  { actor: new HorseActor(0xffb3d9), lat:  0.60, pos: 3600,                speed: MAX_SPEED*0.90 },
+// RIVALI — guerrieri mongoli con salute e AND che combattono (stile Road Redemption)
+const RIVAL_DEFS = [
+  { tint: 0xffc9a3, name: 'Batu',    skill: 0.82, pos: 1500 },
+  { tint: 0xa9c8ff, name: 'Ganzo',   skill: 0.88, pos: 2600 },
+  { tint: 0xd6ffb3, name: 'Temujin', skill: 0.85, pos: -900 },
+  { tint: 0xffb3d9, name: 'Altan',   skill: 0.92, pos: 3400 },
 ];
+const opponents = RIVAL_DEFS.map((d, i) => ({
+  actor: new HorseActor(d.tint), name: d.name, skill: d.skill, tint: d.tint,
+  pos: ((d.pos % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
+  lat: (i % 2 ? 0.45 : -0.45), targetLat: (i % 2 ? 0.45 : -0.45),
+  spd0: MAX_SPEED * d.skill, speed: MAX_SPEED * d.skill,
+  health: 100, hp0: 100, state: 'race', wipeT: 0, atkCd: 1 + i*0.4, laneCd: Math.random()*2, flash: 0,
+}));
 const allActors = [player, ...opponents.map(o => o.actor)];
 
 //=========================================================================
@@ -707,26 +775,193 @@ const keyRight  = () => keys['arrowright'] || keys['d'];
 const keyFaster = () => keys['arrowup']    || keys['w'];
 const keySlower = () => keys['arrowdown']  || keys['s'];
 
+//=========================================================================
+// COMBATTIMENTO stile Road Redemption — salute, attacchi, takedown, AI rivali
+//=========================================================================
+let MAX_HEALTH = 100, MAX_NITRO = 100;   // aumentabili con gli upgrade permanenti (Fase 4)
+const ATK_RANGE = 3200;      // "affiancati" lungo pista (unità mondo)
+const LAT_RANGE = 0.95;      // affiancati lateralmente (unità playerX)
+let pHealth = MAX_HEALTH, nitro = 0, money = 0, score = 0, kills = 0;
+let blocking = false, critical = false, boosting = false;
+let pAtkCd = 0, shake = 0, dmgFlash = 0, hitFlash = 0, strengthMul = 1;
+// ARMI a tema mongolo (Fase 3). reach = moltiplicatore raggio laterale; uses = colpi prima di esaurirsi
+const WEAPONS = {
+  fists: { name: 'Pugni',    icon: '👊', dmg: 20, reach: 1,   oneShot: false, ranged: false, stun: false, uses: Infinity, color: 0xdddddd },
+  whip:  { name: 'Frusta',   icon: '🪢', dmg: 16, reach: 1.8, oneShot: false, ranged: false, stun: false, uses: 16, color: 0xc98a3a },
+  mace:  { name: 'Mazza',    icon: '🔨', dmg: 40, reach: 1,   oneShot: false, ranged: false, stun: true,  uses: 8,  color: 0x9aa0a6 },
+  saber: { name: 'Sciabola', icon: '🗡', dmg: 60, reach: 1.15,oneShot: true,  ranged: false, stun: false, uses: 5,  color: 0xdfe6ff },
+  bow:   { name: 'Arco',     icon: '🏹', dmg: 30, reach: 1,   oneShot: false, ranged: true,  stun: false, uses: 6,  color: 0x8a5a2a },
+};
+function equipWeapon(key) { curWeapon = { ...WEAPONS[key], key }; }
+let curWeapon = { ...WEAPONS.fists, key: 'fists' };
+const popups = [];           // testi volanti {who, off, text, color, age, life}
+let onKill = () => {};       // hook per gli eventi (Fase 4)
+let onPlayerDown = () => { pHealth = MAX_HEALTH; };   // Fase 4 lo rende permadeath
+
+// distanza segnata lungo pista dal giocatore all'avversario (+ = davanti)
+function gapTo(oppPos) {
+  let d = oppPos - position;
+  d = ((d % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
+  return d > TRACK_LENGTH/2 ? d - TRACK_LENGTH : d;
+}
+function addPopup(who, off, text, color) { popups.push({ who, off, text, color, age: 0, life: 1.1 }); }
+
+function playerAttack(side) {                 // side: -1 sinistra, +1 destra
+  if (pAtkCd > 0) return;
+  pAtkCd = curWeapon.ranged ? 0.42 : 0.26;
+  const latR = LAT_RANGE * (curWeapon.reach || 1);
+  let best = null, bestAbs = 1e9;
+  for (const o of opponents) {
+    if (o.state !== 'race') continue;
+    const g = gapTo(o.pos);
+    if (curWeapon.ranged) {
+      if (g < 0 || g > 18000) continue;       // arco: solo davanti, entro gittata
+    } else {
+      if (Math.abs(g) > ATK_RANGE) continue;
+      const dl = o.lat - playerX;
+      if (Math.abs(dl) > latR) continue;
+      if (side < 0 && dl > 0.15) continue;    // deve stare sul lato indicato
+      if (side > 0 && dl < -0.15) continue;
+    }
+    if (Math.abs(g) < bestAbs) { bestAbs = Math.abs(g); best = o; }
+  }
+  if (!best) return;
+  const dmg = (curWeapon.oneShot ? 999 : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
+  critical = false;
+  if (curWeapon.stun) best.atkCd = Math.max(best.atkCd, 2.4);   // la mazza stordisce
+  hitOpponent(best, dmg, curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null));
+  if (isFinite(curWeapon.uses) && --curWeapon.uses <= 0) equipWeapon('fists');   // arma esaurita
+}
+function playerKick() {
+  if (pAtkCd > 0) return; pAtkCd = 0.34;
+  let best = null, bestAbs = 1e9;
+  for (const o of opponents) {
+    if (o.state !== 'race') continue;
+    const g = gapTo(o.pos); if (Math.abs(g) > ATK_RANGE) continue;
+    if (Math.abs(o.lat - playerX) > LAT_RANGE) continue;
+    if (Math.abs(g) < bestAbs) { bestAbs = Math.abs(g); best = o; }
+  }
+  if (!best) return;
+  const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
+  best.targetLat = best.lat + dir*1.2; best.lat += dir*0.35;
+  best.health -= 10; best.flash = 1; shake = Math.max(shake, 0.4);
+  nitro = Math.min(MAX_NITRO, nitro + 3);
+  addPopup(best, 900, '💥', '#fff');
+  if (Math.abs(best.lat) > 1.05 || best.health <= 0) wipe(best, 'kick');
+}
+function hitOpponent(o, dmg, label) {
+  o.health -= dmg; o.flash = 1; shake = Math.max(shake, 0.35);
+  nitro = Math.min(MAX_NITRO, nitro + 4);          // l'aggressività carica il nitro
+  addPopup(o, 900, label || ('-' + Math.round(dmg)), '#ffe08a');
+  if (o.health <= 0) wipe(o, 'takedown');
+}
+function wipe(o, cause) {
+  if (o.state !== 'race') return;
+  o.state = 'wipe'; o.wipeT = 3.5; o.health = 0;
+  kills++; const cash = 40 + ((Math.random()*40)|0);
+  money += cash; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
+  addPopup(o, 1200, '+$' + cash, '#7fffa0'); shake = Math.max(shake, 0.7);
+  onKill(o);
+}
+
+// AI dei rivali: rubber-band per restare nel gruppo, cambio corsia, contrattacco
+function updateAI(dt) {
+  for (const o of opponents) {
+    if (o.flash > 0) o.flash -= dt*3;
+    if (o.state === 'wipe') {
+      o.speed = Math.max(MAX_SPEED*0.15, accel(o.speed, DECEL*1.6, dt));
+      o.lat += (Math.sign(o.lat) || 1) * 0.5 * dt;
+      o.wipeT -= dt;
+      if (o.wipeT <= 0) { o.state = 'race'; o.health = o.hp0*0.7; o.targetLat = limit(o.lat, -0.7, 0.7); }
+    } else {
+      const g = gapTo(o.pos);                       // + davanti al giocatore
+      // rubber-band FORTE attorno al giocatore: match della sua velocità + chiusura del gap
+      // → il gruppo resta AFFIANCATO (g≈0) e il combattimento è continuo, come in Road Redemption
+      let target = speed - g*0.7 + (o.skill - 0.86)*MAX_SPEED*0.35;
+      target = limit(target, MAX_SPEED*0.3, MAX_SPEED*1.7);
+      o.speed += (target - o.speed) * Math.min(1, dt*2.4);
+      o.laneCd = (o.laneCd || 0) - dt;
+      if (o.laneCd <= 0) {
+        o.laneCd = 1.4 + Math.random()*2.4;
+        o.targetLat = (Math.abs(g) < ATK_RANGE && Math.random() < 0.6) ? playerX   // affianca per colpire
+                                                                        : Math.random()*1.6 - 0.8;
+      }
+      o.lat = limit(o.lat + (o.targetLat - o.lat) * Math.min(1, dt*1.2), -1.0, 1.0);
+      o.atkCd -= dt;
+      if (Math.abs(g) < ATK_RANGE && Math.abs(o.lat - playerX) < LAT_RANGE && o.atkCd <= 0) {
+        o.atkCd = 1.2 + Math.random();
+        if (blocking) { critical = true; addPopup(o, 900, 'PARATA!', '#8ff'); }
+        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; shake = Math.max(shake, 0.5);
+               addPopup(o, 900, '⚔', '#ff6b6b'); if (pHealth <= 0) { pHealth = 0; onPlayerDown(); } }
+      }
+    }
+    o.pos += o.speed * dt;
+    o.pos = ((o.pos % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
+  }
+}
+
+// PICKUP ARMI — casse luminose che ruotano/ondeggiano lungo la pista
+const pickups = [];
+{
+  const KEYS = ['whip', 'mace', 'saber', 'bow'];
+  const boxG = new THREE.BoxGeometry(520, 520, 520);
+  for (let i = 0; i < 12; i++) {
+    const key = KEYS[i % KEYS.length], w = WEAPONS[key];
+    const m = new THREE.Mesh(boxG, new THREE.MeshStandardMaterial(
+      { color: w.color, emissive: w.color, emissiveIntensity: 0.7, metalness: 0.3, roughness: 0.4 }));
+    m.castShadow = true; scene.add(m);
+    pickups.push({ key, mesh: m, pos: ((i+1) * (TRACK_LENGTH/13)) % TRACK_LENGTH,
+                   lat: Math.random()*1.2 - 0.6, active: true, respawnT: 0 });
+  }
+}
+function updatePickups(dt) {
+  for (const p of pickups) {
+    if (!p.active) { p.respawnT -= dt; if (p.respawnT <= 0) { p.active = true; p.mesh.visible = true; } continue; }
+    posToWorld(p.pos, p.lat, p.mesh.position);
+    p.mesh.position.y += 700 + Math.sin(performance.now()/280 + p.pos)*120;
+    p.mesh.rotation.y += dt*2.2;
+    if (Math.abs(gapTo(p.pos)) < 1700 && Math.abs(p.lat - playerX) < 0.6) {   // raccolta
+      equipWeapon(p.key);
+      addPopup(player, 1500, WEAPONS[p.key].icon + ' ' + WEAPONS[p.key].name + '!', '#ffd700');
+      shake = Math.max(shake, 0.3);
+      p.active = false; p.mesh.visible = false; p.respawnT = 12;
+    }
+  }
+}
+
 function updatePhysics(dt) {
   const speedPct = speed / MAX_SPEED;
   const dx = dt * 2 * speedPct;
+
+  blocking = !!keys['i'];                       // parata (tieni premuto)
+  boosting = !!keys['shift'] && nitro > 0;      // boost (tieni premuto, consuma nitro)
 
   if (keyLeft())  playerX -= dx;
   if (keyRight()) playerX += dx;
   playerX -= dx * speedPct * curveAt(position) * CENTRIFUGAL;   // forza centrifuga vera quanto prima
 
-  if      (keyFaster()) speed = accel(speed, ACCEL, dt);
-  else if (keySlower()) speed = accel(speed, BRAKING, dt);
-  else                  speed = accel(speed, DECEL, dt);
+  // BOOST/nitro: scatto sopra la velocità massima finché c'è nitro
+  const boostActive = boosting && nitro > 0;
+  const cap = boostActive ? MAX_SPEED * 1.35 : MAX_SPEED;
+  if      (boostActive)  { speed = accel(speed, ACCEL*1.6, dt); nitro = Math.max(0, nitro - dt*32); if (nitro <= 0) boosting = false; }
+  else if (keyFaster())  speed = accel(speed, ACCEL, dt);
+  else if (keySlower())  speed = accel(speed, BRAKING, dt);
+  else                   speed = accel(speed, DECEL, dt);
 
   if ((playerX < -1 || playerX > 1) && speed > OFFROAD_LIMIT)
     speed = accel(speed, OFFROAD_DECEL, dt);
 
   playerX = limit(playerX, -2.2, 2.2);
-  speed   = limit(speed, 0, MAX_SPEED);
+  speed   = limit(speed, 0, cap);
+  pAtkCd  = Math.max(0, pAtkCd - dt);
+  // sfiora i paletti a bordo pista ad alta velocità = carica nitro (rischio/ricompensa)
+  if (speed > MAX_SPEED*0.5 && Math.abs(playerX) > 1.03 && Math.abs(playerX) < 1.32)
+    nitro = Math.min(MAX_NITRO, nitro + dt*14);
 
   const prev = position;
   position += speed * dt;
+  game.dist += speed * dt;                   // avanzamento verso l'obiettivo dell'evento
+  if (game.type === 'time') game.timeLeft -= dt;
   if (speed > 0) started = true;
   if (started) currentLapTime += dt;
   if (position >= TRACK_LENGTH) {            // traguardo (per ora punto-a-punto con wrap)
@@ -735,10 +970,10 @@ function updatePhysics(dt) {
     currentLapTime = 0;
   }
 
-  for (const o of opponents) {
-    o.pos += o.speed * dt;
-    if (o.pos >= TRACK_LENGTH) o.pos -= TRACK_LENGTH;
-  }
+  updateAI(dt);                    // rivali: rubber-band, cambio corsia, contrattacco
+  if (shake > 0)   shake   = Math.max(0, shake   - dt*2.2);
+  if (dmgFlash > 0) dmgFlash = Math.max(0, dmgFlash - dt*2.5);
+  if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt*4);
 }
 
 //=========================================================================
@@ -818,6 +1053,14 @@ $('party-gain').oninput = e => {           // slider intensità: 100% = base, 60
   party.setGain(pct / 100);
   $('gain-val').textContent = pct + '%';
 };
+// SHOW LIVE — flash strobo + scritta lampeggiante (sincronizzati al tap tempo)
+$('live-flash').onchange   = e => live.setFlash(e.target.checked);
+$('live-bonus').onchange   = e => live.setBonus(e.target.checked);
+$('live-text').oninput     = e => live.setText(e.target.value);
+$('live-palette').onchange = e => live.setPalette(e.target.value);
+$('live-cycle').onchange   = e => live.setCycle(e.target.checked);
+$('live-3d').onchange       = e => live.setMode3d(e.target.checked);
+$('live-int').oninput      = e => { live.setIntensity(+e.target.value/100); $('live-int-val').textContent = e.target.value + '%'; };
 function cycleCamera() {
   camMode = (camMode + 1) % CAM_MODES.length;
   tvAnchor = -1;
@@ -828,8 +1071,14 @@ addEventListener('keydown', e => {
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 'c') cycleCamera();
   if (k === 't') party.tap();        // tap tempo
-  if (k === 'p') party.toggle();     // accende/spegne il party mode
-  if (k === 'r') { position = prevPosition = 0; speed = 0; playerX = prevPlayerX = 0; currentLapTime = 0; started = false; acc = 0; }
+  if (k === 'p') party.toggle();     // distorsione alberi+luce
+  if (k === 'f') { const el = $('live-flash'); el.checked = !el.checked; live.setFlash(el.checked); }  // flash strobo
+  if (k === 'g') { const el = $('live-bonus'); el.checked = !el.checked; live.setBonus(el.checked); }  // scritta lampeggiante
+  if (k === 'h') { const el = $('live-3d');    el.checked = !el.checked; live.setMode3d(el.checked); } // scritta 2D/3D
+  if (k === 'j') playerAttack(-1);   // attacca a sinistra
+  if (k === 'l') playerAttack(1);    // attacca a destra
+  if (k === 'k') playerKick();       // calcio (butta fuori)
+  if (k === 'r') startEvent();               // riavvia pulito l'evento corrente
 });
 
 //=========================================================================
@@ -887,12 +1136,14 @@ const dust = (() => {
 //=========================================================================
 const party = (() => {
   const SUN_I = sun.intensity, HEMI_I = hemi.intensity, EXPO = renderer.toneMappingExposure, BLOOM = bloom.strength;
-  let on = false, bpm = 120, period = 0.5, nextBeat = 0;
+  let fxOn = false, clockOn = false, bpm = 120, period = 0.5, nextBeat = 0;
   let s = 0, v = 0, taps = [];          // s,v = molla (offset elastico); taps = tempi dei tap
   let gain = 6;                          // intensità (1 = base; 6 ≈ +500%), regolata dallo slider
+  const beatCbs = [];                    // callback eseguite ad ogni beat (flash/scritte live)
   const $i = document.getElementById('party-info');
-  function setHud() { if ($i) $i.textContent = on ? `🎉 ${bpm} BPM` : 'spento'; }
-  function kick() { s = 1; v = 0; }      // SCATTO a pieno sul beat (poi la molla lo riporta giù con rimbalzo)
+  function setHud() { if ($i) $i.textContent = clockOn ? `🎉 ${bpm} BPM${fxOn ? '' : ' · alberi off'}` : 'spento'; }
+  // beat: notifica i sottoscrittori (flash/testo) e, se la distorsione è attiva, dà lo SCATTO a molla
+  function beat() { for (const f of beatCbs) f(); if (fxOn) { s = 1; v = 0; } }
   function tap() {
     const now = performance.now()/1000;
     if (taps.length && now - taps[taps.length-1] > 2) taps = [];   // pausa lunga = nuova battuta
@@ -902,15 +1153,15 @@ const party = (() => {
       bpm = Math.max(40, Math.min(240, Math.round(60 / (sum/(taps.length-1)))));
       period = 60/bpm;
     }
-    on = true; nextBeat = now + period; kick(); setHud();
+    clockOn = true; fxOn = true; nextBeat = now + period; beat(); setHud();
   }
-  function toggle() { on = !on; if (on) nextBeat = performance.now()/1000 + period; setHud(); }
+  function toggle() { fxOn = !fxOn; setHud(); }   // P: accende/spegne SOLO la distorsione alberi+luce
   function update(dt) {
     const now = performance.now()/1000;
-    if (on) while (now >= nextBeat) { nextBeat += period; kick(); }
+    if (clockOn) while (now >= nextBeat) { nextBeat += period; beat(); }
     const h = Math.min(dt, 0.033);       // molla sotto-critica che riporta lo scatto a 0 con rimbalzo
     v += (-55*s - 9*v) * h; s += v * h;
-    if (!on && Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) return;    // a riposo: nessun lavoro extra
+    if (Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) return;          // a riposo: nessun lavoro extra
     // DISTORSIONE alberi: scala piena con l'intensità (effetto molto marcato)
     const ts = (s >= 0 ? s : s*0.45) * gain;   // sbilancia verso l'INGRANDIMENTO
     trees.pulse(Math.min(20, Math.max(0.12, 1 + ts*0.6)),
@@ -922,8 +1173,349 @@ const party = (() => {
     renderer.toneMappingExposure = EXPO * Math.min(1.6, Math.max(0.45, 1 + ls*0.05));
     bloom.strength = Math.min(2.0, BLOOM * (1 + Math.max(0, s*gain)*0.9));
   }
-  return { tap, toggle, update, setGain(g) { gain = g; } };
+  return { tap, toggle, update, setGain(g) { gain = g; },
+           onBeat(fn) { beatCbs.push(fn); }, bpmNow: () => bpm, periodNow: () => period,
+           isClock: () => clockOn };
 })();
+
+//=========================================================================
+// LIVE VISUALS — overlay 2D a tempo (portato dal gioco 2D usato nei live):
+// flash strobo full-screen + scritta gigante lampeggiante (palette/halo/rimbalzo)
+//=========================================================================
+// SCRITTA 3D vera: geometria estrusa che galleggia davanti alla camera, glow neon
+// (emissive → il bloom la accende), rimbalza a tempo. Alternativa 3D all'overlay 2D.
+const text3d = (() => {
+  const group = new THREE.Group(); group.visible = false; scene.add(group);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, emissive: 0xffffff,
+    emissiveIntensity: 1.4, metalness: 0.2, roughness: 0.35 });
+  let font = null, mesh = null, curText = '', ready = false;
+  new FontLoader().load(
+    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json',
+    f => { font = f; ready = true; if (curText) rebuild(); },
+    undefined, () => console.warn('Font 3D non disponibile (resto sulla scritta 2D)'));
+  function rebuild() {
+    if (!font || !curText) return;
+    if (mesh) { group.remove(mesh); mesh.geometry.dispose(); }
+    const g = new TextGeometry(curText, { font, size: 520, height: 130, curveSegments: 5,
+      bevelEnabled: true, bevelThickness: 34, bevelSize: 20, bevelSegments: 3 });
+    g.center();
+    mesh = new THREE.Mesh(g, mat); group.add(mesh);
+  }
+  const fwd = new THREE.Vector3(), wob = new THREE.Quaternion(), wobE = new THREE.Euler();
+  return {
+    isReady: () => ready,
+    setText(t) { curText = t; rebuild(); },
+    setPalette(p) { if (p) { mat.color.set(p.grad[1]); mat.emissive.set(p.halo); } },
+    show(b) { group.visible = b; },
+    // posiziona davanti alla camera (in alto), rivolta verso di essa + dondolio che
+    // rivela i fianchi estrusi (fa "sentire" il 3D); squash&stretch + glow pulsante
+    pose(scaleX, scaleY, emis) {
+      camera.getWorldDirection(fwd);
+      group.position.copy(camera.position).addScaledVector(fwd, 6200);
+      group.position.y += 2000;
+      group.quaternion.copy(camera.quaternion);
+      const t = performance.now()/1000;
+      wobE.set(Math.sin(t*0.9)*0.09, Math.sin(t*0.6)*0.28, 0);
+      group.quaternion.multiply(wob.setFromEuler(wobE));
+      group.scale.set(scaleX, scaleY, 1);
+      mat.emissiveIntensity = emis;
+    },
+  };
+})();
+
+const live = (() => {
+  // palette identiche al 2D: halo (aura), grad (gradiente verticale 3 colori), stroke (contorno)
+  const PALETTES = {
+    gold:   { halo:'#FFD700', grad:['#FFF6A5','#FF9F1C','#E63946'], stroke:'#2D0014' },
+    neon:   { halo:'#39FF14', grad:['#CCFFCC','#39FF14','#007F0E'], stroke:'#00190A' },
+    cyber:  { halo:'#00E5FF', grad:['#A8F1FF','#00B4FF','#0050FF'], stroke:'#001A33' },
+    vapor:  { halo:'#FF71CE', grad:['#FFE0FA','#FF71CE','#9C00FF'], stroke:'#2A0033' },
+    fire:   { halo:'#FF6A00', grad:['#FFE600','#FF3300','#7A0000'], stroke:'#1A0000' },
+    toxic:  { halo:'#C7FF00', grad:['#F0FF99','#A4FF00','#4D7A00'], stroke:'#1F2900' },
+    ice:    { halo:'#CFEFFF', grad:['#FFFFFF','#9FE7FF','#1E78B4'], stroke:'#001A33' },
+    voodoo: { halo:'#FF008C', grad:['#FFDDF1','#FF008C','#3D0026'], stroke:'#1A000F' },
+  };
+  const NAMES = Object.keys(PALETTES);
+  const randPal = () => PALETTES[NAMES[(Math.random()*NAMES.length)|0]];
+
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:6;';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0, dirty = false;
+  function resize() { const w = innerWidth, h = innerHeight; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
+  resize(); addEventListener('resize', resize);
+
+  let flashOn = false, flashUntil = 0;
+  let bonusOn = false, bonusStart = 0, bonusText = 'CAVALLI MONGOLI';
+  let paletteKey = 'gold', cycle = false, intensity = 1.2, pal = PALETTES.gold;
+  let mode3d = false, lastBeatMs = -9999;
+  function resolvePal() { pal = paletteKey === 'random' ? randPal() : (PALETTES[paletteKey] || PALETTES.gold); text3d.setPalette(pal); }
+
+  // ad ogni beat: colpo di strobo + (se attivo) cambio colore + impulso glow 3D
+  party.onBeat(() => {
+    lastBeatMs = performance.now();
+    if (flashOn) flashUntil = lastBeatMs + 80;
+    if (bonusOn && cycle) { pal = randPal(); text3d.setPalette(pal); }
+  });
+
+  function update(now) {
+    resize();
+    const flashing = now < flashUntil;
+    if (!bonusOn && !flashing) { if (dirty) { ctx.clearRect(0,0,W,H); dirty = false; } return; }
+    ctx.clearRect(0,0,W,H); dirty = true;
+
+    // FLASH strobo full-screen
+    if (flashing) { ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.fillRect(0,0,W,H); }
+
+    // SCRITTA lampeggiante che rimbalza a tempo (squash&stretch + bob)
+    if (bonusOn) {
+      const elapsed = now - bonusStart;
+      const periodMs = Math.max(80, party.periodNow()*1000);
+      const phase = (elapsed % periodMs) / periodMs;
+      const inAir = Math.abs(Math.sin(phase*Math.PI)), landing = 1 - inAir, k = intensity;
+      const scaleY = 1 + 0.18*k*inAir - 0.10*k*landing;
+      const scaleX = 1 - 0.12*k*inAir + 0.08*k*landing;
+
+      // --- MODALITÀ 3D: scritta estrusa in scena, glow neon pulsante col beat ---
+      if (mode3d && text3d.isReady()) {
+        const glow = 1.2 + Math.exp(-(now - lastBeatMs)/110) * 2.8;   // impulso emissivo sul beat
+        text3d.pose(scaleX, scaleY, glow);
+        text3d.show(true);
+        return;                                                       // niente disegno 2D
+      }
+      text3d.show(false);
+
+      // --- MODALITÀ 2D (overlay canvas) ---
+      const bobY = -inAir * H * 0.06 * k;
+      const alpha = elapsed < 200 ? elapsed/200 : 1;   // pop-in
+      ctx.save(); ctx.globalAlpha = Math.max(0, alpha);
+      const bcx = W/2, bcy = H/2 + bobY;
+      const bannerH = H * 0.28 * scaleY;               // banner scuro per leggibilità
+      const bg = ctx.createLinearGradient(0, bcy-bannerH/2, 0, bcy+bannerH/2);
+      bg.addColorStop(0,'rgba(0,0,0,0)'); bg.addColorStop(0.5,'rgba(0,0,0,0.55)'); bg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle = bg; ctx.fillRect(0, bcy-bannerH/2, W, bannerH);
+      ctx.translate(bcx, bcy); ctx.scale(scaleX, scaleY);
+      let fs = Math.floor(H*0.16);
+      ctx.font = '900 '+fs+'px Impact, "Arial Black", sans-serif';
+      while (ctx.measureText(bonusText).width > W*0.9/Math.max(scaleX,0.1) && fs > 20) {
+        fs -= 4; ctx.font = '900 '+fs+'px Impact, "Arial Black", sans-serif';
+      }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.shadowColor = pal.halo; ctx.shadowBlur = 28; ctx.fillStyle = pal.halo; ctx.fillText(bonusText,0,0); ctx.shadowBlur = 0;
+      const tg = ctx.createLinearGradient(0, -fs/2, 0, fs/2);
+      tg.addColorStop(0, pal.grad[0]); tg.addColorStop(0.5, pal.grad[1]); tg.addColorStop(1, pal.grad[2]);
+      ctx.fillStyle = tg; ctx.fillText(bonusText,0,0);
+      ctx.lineWidth = 3; ctx.strokeStyle = pal.stroke; ctx.strokeText(bonusText,0,0);
+      ctx.restore();
+    }
+  }
+  return {
+    update,
+    setFlash(b) { flashOn = b; },
+    setBonus(b) { bonusOn = b; if (b) { bonusStart = performance.now(); resolvePal(); } else text3d.show(false); },
+    setText(t) { bonusText = (t || '').toUpperCase() || 'CAVALLI MONGOLI'; text3d.setText(bonusText); },
+    setPalette(key) { paletteKey = key; resolvePal(); },
+    setCycle(b) { cycle = b; },
+    setIntensity(v) { intensity = v; },
+    setMode3d(b) { mode3d = b; if (!b) text3d.show(false); else { text3d.setText(bonusText); text3d.setPalette(pal); } },
+  };
+})();
+
+//=========================================================================
+// HUD COMBATTIMENTO — barre vita nemici proiettate, popup, vignetta danno
+//=========================================================================
+const combatHud = (() => {
+  const cv = document.createElement('canvas');
+  cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:5;';
+  document.body.appendChild(cv);
+  const ctx = cv.getContext('2d');
+  let W = 0, H = 0;
+  function resize() { const w = innerWidth, h = innerHeight; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
+  resize(); addEventListener('resize', resize);
+  const v = new THREE.Vector3();
+  function project(worldPos, yOff) {
+    v.copy(worldPos); v.y += yOff; v.project(camera);
+    return { x: (v.x*0.5+0.5)*W, y: (-v.y*0.5+0.5)*H, vis: v.z < 1 };
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  const $ = id => document.getElementById(id);
+  function draw(dt) {
+    resize(); ctx.clearRect(0,0,W,H);
+    for (const o of opponents) {
+      if (Math.abs(gapTo(o.pos)) > 26000) continue;              // solo rivali vicini
+      const p = project(o.actor.group.position, HORSE_HEIGHT*1.7);
+      if (!p.vis) continue;
+      const bw = 92, bh = 9, x = p.x - bw/2, y = p.y;
+      ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(x-2, y-2, bw+4, bh+4, 4); ctx.fill();
+      const hp = Math.max(0, o.health) / o.hp0;
+      ctx.fillStyle = o.state === 'wipe' ? '#888' : (hp > 0.5 ? '#3fd66b' : hp > 0.25 ? '#e2c53b' : '#e23b3b');
+      ctx.fillRect(x, y, bw*hp, bh);
+      if (o.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,'+Math.min(0.7,o.flash)+')'; ctx.fillRect(x, y, bw, bh); }
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(o.state === 'wipe' ? o.name + ' 💀' : o.name, p.x, y - 4);
+    }
+    for (let i = popups.length-1; i >= 0; i--) {
+      const pu = popups[i]; pu.age += dt;
+      if (pu.age >= pu.life) { popups.splice(i, 1); continue; }
+      const wp = (pu.who && pu.who.actor) ? pu.who.actor.group.position : player.group.position;
+      const p = project(wp, HORSE_HEIGHT*1.4 + pu.off + pu.age*450);
+      if (!p.vis) continue;
+      ctx.globalAlpha = 1 - pu.age/pu.life;
+      ctx.font = '900 26px Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineWidth = 4; ctx.strokeText(pu.text, p.x, p.y);
+      ctx.fillStyle = pu.color; ctx.fillText(pu.text, p.x, p.y);
+      ctx.globalAlpha = 1;
+    }
+    if (dmgFlash > 0) {
+      const gr = ctx.createRadialGradient(W/2, H/2, H*0.28, W/2, H/2, H*0.78);
+      gr.addColorStop(0, 'rgba(190,0,0,0)'); gr.addColorStop(1, 'rgba(190,0,0,'+(0.55*dmgFlash)+')');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
+    }
+    if (boosting) {                                  // alone blu durante il boost
+      const gb = ctx.createRadialGradient(W/2, H/2, H*0.22, W/2, H/2, H*0.9);
+      gb.addColorStop(0, 'rgba(70,160,255,0)'); gb.addColorStop(1, 'rgba(70,160,255,0.26)');
+      ctx.fillStyle = gb; ctx.fillRect(0, 0, W, H);
+    }
+    $('bar-health').style.width = Math.max(0, pHealth)/MAX_HEALTH*100 + '%';
+    $('bar-nitro').style.width  = nitro/MAX_NITRO*100 + '%';
+    $('stat-kills').textContent = kills;
+    $('stat-score').textContent = score;
+    $('stat-money').textContent = money;
+    $('stat-weapon').textContent = (curWeapon.icon || '👊') + ' ' + curWeapon.name +
+      (isFinite(curWeapon.uses) ? ' ×' + curWeapon.uses : '');
+  }
+  return { draw };
+})();
+
+//=========================================================================
+// META / ROGUELIKE — eventi, obiettivi, shop tra un evento e l'altro, permadeath
+//=========================================================================
+const game = { state: 'boot', eventIndex: 0, dist: 0, target: 1, type: 'race',
+               need: 0, time: 0, timeLeft: 0, xp: 0, up: { strength: 0, health: 0, nitro: 0 }, killsThisEvent: 0 };
+const $screen = document.getElementById('screen');
+const $sbox   = document.getElementById('screen-box');
+const D = id => document.getElementById(id);
+function showScreen(html) { $sbox.innerHTML = html; $screen.style.display = 'flex'; }
+function hideScreen() { $screen.style.display = 'none'; }
+
+function applyUpgrades() {
+  MAX_HEALTH  = 100 + game.up.health*30;
+  MAX_NITRO   = 100 + game.up.nitro*30;
+  strengthMul = 1 + game.up.strength*0.25;
+}
+function eventFor(i) {
+  const cyc = ['race', 'takedown', 'survival', 'time'];
+  const type = i === 0 ? 'race' : cyc[i % cyc.length];
+  const dist = 45000 + i*9000, need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
+  const title = { race:'🏁 GARA', takedown:'⚔️ RAZZIA', survival:'🛡️ SOPRAVVIVENZA', time:'⏱️ CONTRO IL TEMPO' }[type];
+  const desc = { race:'Taglia il traguardo davanti a tutti.', takedown:'Abbatti '+need+' rivali prima del traguardo.',
+                 survival:'Arriva vivo al traguardo: i rivali sono più aggressivi.', time:'Raggiungi il traguardo prima che scada il tempo.' }[type];
+  return { type, dist, need, time, title, desc };
+}
+function respawnRivals(i) {
+  opponents.forEach((o, k) => {
+    o.state = 'race'; o.hp0 = 100 + i*18; o.health = o.hp0;
+    o.spd0 = MAX_SPEED * (o.skill + Math.min(0.22, i*0.025));
+    o.speed = o.spd0; o.atkCd = 1 + k*0.4; o.laneCd = Math.random()*2; o.flash = 0;
+    o.pos = ((800 + k*650) % TRACK_LENGTH + TRACK_LENGTH) % TRACK_LENGTH;
+    o.lat = o.targetLat = (k % 2 ? 0.45 : -0.45);
+  });
+}
+function startEvent() {
+  const ev = eventFor(game.eventIndex);
+  Object.assign(game, { type: ev.type, target: ev.dist, need: ev.need, time: ev.time, timeLeft: ev.time,
+                        dist: 0, killsThisEvent: 0, state: 'racing' });
+  position = prevPosition = 0; playerX = prevPlayerX = 0; speed = 0; started = true;
+  respawnRivals(game.eventIndex); hideScreen();
+}
+function objectiveText() {
+  const pct = Math.min(100, Math.round(game.dist / game.target * 100));
+  if (game.type === 'takedown') return `⚔️ abbatti ${game.killsThisEvent}/${game.need} · traguardo ${pct}%`;
+  if (game.type === 'time')     return `⏱️ ${Math.max(0, game.timeLeft).toFixed(1)}s · traguardo ${pct}%`;
+  if (game.type === 'survival') return `🛡️ sopravvivi · traguardo ${pct}%`;
+  return `🏁 traguardo ${pct}%`;
+}
+function checkGame() {
+  if (game.state !== 'racing') return;
+  D('combat-obj').textContent = objectiveText();
+  if (game.type === 'takedown') {
+    if (game.killsThisEvent >= game.need) return winEvent();
+    if (game.dist >= game.target) return loseEvent('Non hai abbattuto abbastanza rivali!');
+  } else if (game.type === 'time') {
+    if (game.dist >= game.target) return winEvent();
+    if (game.timeLeft <= 0) return loseEvent('⏱️ Tempo scaduto!');
+  } else if (game.dist >= game.target) return winEvent();
+}
+function winEvent() {
+  game.state = 'won';
+  money += 30 + game.eventIndex*10; game.xp += 3 + game.eventIndex;
+  renderShop();
+}
+function renderShop() {
+  const nx = eventFor(game.eventIndex + 1);
+  showScreen(`
+    <h1>✅ VITTORIA</h1>
+    <h2>Evento ${game.eventIndex + 1} superato · punteggio ${score}</h2>
+    <p>💰 $<b>${money}</b> &nbsp; ⭐ <b>${game.xp}</b> XP &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH}</p>
+    <div class="shopgrid">
+      <button id="b-heal">❤️ Cura +60 · $40</button>
+      <button id="b-nitro">⚡ Nitro pieno · $25</button>
+      <button id="b-saber">🗡 Sciabola · $60</button>
+      <button id="b-str">💪 +Forza · 2⭐</button>
+      <button id="b-hp">❤️ +Salute max · 3⭐</button>
+      <button id="b-nt">⚡ +Nitro max · 2⭐</button>
+    </div>
+    <p style="opacity:.75">Prossimo: <b>${nx.title}</b> — ${nx.desc}</p>
+    <button class="big" id="b-next">VIA! →</button>`);
+  D('b-heal').disabled  = money < 40 || pHealth >= MAX_HEALTH;
+  D('b-nitro').disabled = money < 25 || nitro >= MAX_NITRO;
+  D('b-saber').disabled = money < 60;
+  D('b-str').disabled   = game.xp < 2;
+  D('b-hp').disabled    = game.xp < 3;
+  D('b-nt').disabled    = game.xp < 2;
+  D('b-heal').onclick  = () => { money -= 40; pHealth = Math.min(MAX_HEALTH, pHealth + 60); renderShop(); };
+  D('b-nitro').onclick = () => { money -= 25; nitro = MAX_NITRO; renderShop(); };
+  D('b-saber').onclick = () => { money -= 60; equipWeapon('saber'); renderShop(); };
+  D('b-str').onclick   = () => { game.xp -= 2; game.up.strength++; applyUpgrades(); renderShop(); };
+  D('b-hp').onclick    = () => { game.xp -= 3; game.up.health++; applyUpgrades(); pHealth += 30; renderShop(); };
+  D('b-nt').onclick    = () => { game.xp -= 2; game.up.nitro++; applyUpgrades(); renderShop(); };
+  D('b-next').onclick  = () => { game.eventIndex++; startEvent(); };
+}
+function loseEvent(reason) {
+  game.state = 'dead';
+  showScreen(`
+    <h1>💀 FINE CORSA</h1>
+    <h2>${reason}</h2>
+    <p>Eventi superati: <b>${game.eventIndex}</b> &nbsp; Punteggio: <b>${score}</b> &nbsp; Takedown totali: <b>${kills}</b></p>
+    <p>⭐ XP accumulato: <b>${game.xp}</b> — resta per la prossima corsa (upgrade permanenti)</p>
+    <button class="big amber" id="b-restart">🔄 NUOVA CORSA</button>`);
+  D('b-restart').onclick = () => resetRun();
+}
+function resetRun() {
+  game.eventIndex = 0; money = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
+  applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
+}
+function showBriefing() {
+  game.state = 'briefing';
+  const ev = eventFor(game.eventIndex);
+  showScreen(`
+    <h1>${ev.title}</h1>
+    <h2>${ev.desc}</h2>
+    <p>Evento ${game.eventIndex + 1} &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; ⭐ ${game.xp} XP</p>
+    <p style="opacity:.7"><b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost · raccogli le casse-arma 📦</p>
+    <button class="big" id="b-go">VIA! →</button>`);
+  D('b-go').onclick = () => startEvent();
+}
+function begin() {                          // primo avvio, a caricamento finito
+  applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
+}
+window.cm3d = { game };                     // handle di debug/test (headless)
+onKill = () => { game.killsThisEvent++; };
+onPlayerDown = () => loseEvent('Sei caduto in battaglia!');
 
 //=========================================================================
 // LOOP — fixed timestep + interpolazione (moto identico e fluido a 60/120/144Hz)
@@ -947,14 +1539,18 @@ function frame(now) {
   if (frameDt > 0.25) frameDt = 0.25;                // dopo un tab in background non rincorrere
 
   // avanza la fisica a passi fissi; accumula il tempo reale trascorso
-  acc += frameDt;
-  while (acc >= FIXED_DT) {
-    prevPosition = position;
-    prevPlayerX  = playerX;
-    for (const o of opponents) o.prevPos = o.pos ?? o.prevPos;
-    updatePhysics(FIXED_DT);
-    acc -= FIXED_DT;
-  }
+  // (la simulazione gira solo durante l'evento: briefing/shop/game-over la congelano)
+  if (game.state === 'racing') {
+    acc += frameDt;
+    while (acc >= FIXED_DT) {
+      prevPosition = position;
+      prevPlayerX  = playerX;
+      for (const o of opponents) o.prevPos = o.pos ?? o.prevPos;
+      updatePhysics(FIXED_DT);
+      acc -= FIXED_DT;
+    }
+  } else { acc = 0; }
+  checkGame();
   const alpha = acc / FIXED_DT;                        // frazione tra stato precedente e corrente
 
   const kk = 1 - Math.pow(0.0005, frameDt);   // smussatura assetto, framerate-independent
@@ -987,6 +1583,7 @@ function frame(now) {
     o.actor.bank += (ob - o.actor.bank) * kk;
     o.actor.update(frameDt, o.speed/MAX_SPEED);
   }
+  updatePickups(frameDt);                // casse-arma: rotazione, bob, raccolta
   party.update(frameDt);                 // party mode: alberi e luce a tempo
 
   updateCamera(frameDt);
@@ -994,10 +1591,14 @@ function frame(now) {
   const fovTarget = 66 + (speed/MAX_SPEED) * 16;
   camera.fov += (fovTarget - camera.fov) * (1 - Math.pow(0.02, frameDt));
   camera.updateProjectionMatrix();
+  // scuotimento camera sui colpi/takedown
+  if (shake > 0) { const s = shake*300; camera.position.x += (Math.random()-0.5)*s; camera.position.y += (Math.random()-0.5)*s; }
   // sole + frustum d'ombra seguono il giocatore: ombre sempre nitide attorno a lui
   sun.target.position.copy(player.group.position);
   sun.position.copy(player.group.position).addScaledVector(sunDir, 20000);
   composer.render();
+  live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
+  combatHud.draw(frameDt);               // barre vita nemici, popup, vignetta danno
 
   $('speed').textContent   = Math.round(speed/60);
   $('laptime').textContent = currentLapTime.toFixed(1);
@@ -1039,6 +1640,7 @@ Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
   setMode(sOK ? 'sprite' : 'model');
   $('loading').remove();
   player.place(0, 0);
+  begin();
   requestAnimationFrame(frame);
 });
 </script>
