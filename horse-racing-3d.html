@@ -648,6 +648,8 @@ class HorseActor {
     this.actGallop = this.actWalk = this.actIdle = null;
     this.w = { idle: 1, walk: 0, gallop: 0 };   // pesi andature smussati (parte da fermo)
     this.hitFlash = 0;                          // impulso emissivo rosso quando il cavallo viene colpito
+    this.punch = 0; this.punchDir = 0;          // affondo di chi attacca (scatto verso il bersaglio e ritorno)
+    this.knock = 0; this.knockDir = 0;          // rinculo di chi viene colpito (spinto di lato e ritorno)
     this.setMode('sprite');
   }
   initSprite() {
@@ -702,6 +704,8 @@ class HorseActor {
     this.heading = la.heading;
   }
   flashHit() { this.hitFlash = 1; }             // impulso rosso visibile in 3D quando incassa un colpo
+  lunge(dir) { this.punch = 1; this.punchDir = dir; }     // dir: -1 sinistra, +1 destra, 0 = dritto (calcio)
+  knockback(dir) { this.knock = 1; this.knockDir = dir || (Math.random() < 0.5 ? -1 : 1); }
   update(dt, speedPct) {
     if (this.hitFlash > 0) {
       this.hitFlash = Math.max(0, this.hitFlash - dt*2.5);
@@ -747,6 +751,24 @@ class HorseActor {
         this.actGallop.timeScale = (sp / GALLOP_STRIDE) * this.durG;
         if (this.actWalk) this.actWalk.timeScale = (sp / WALK_STRIDE) * this.durW;
         this.mixer.update(dt);
+      }
+    }
+    // affondo/rinculo del combattimento: scatto laterale che va e torna (funziona sia su
+    // sprite sia su modello perché sposta il group, non ruota una parte specifica)
+    if (this.punch > 0 || this.knock > 0) {
+      const rgtX = -Math.cos(this.heading), rgtZ = Math.sin(this.heading);
+      const fwdX =  Math.sin(this.heading), fwdZ = Math.cos(this.heading);
+      if (this.punch > 0) {
+        this.punch = Math.max(0, this.punch - dt*3.4);
+        const k = Math.sin(this.punch * Math.PI);          // 0→1→0 mentre punch scende da 1 a 0
+        this.group.position.x += (rgtX*this.punchDir*110 + fwdX*70) * k;
+        this.group.position.z += (rgtZ*this.punchDir*110 + fwdZ*70) * k;
+      }
+      if (this.knock > 0) {
+        this.knock = Math.max(0, this.knock - dt*3.8);
+        const k = Math.sin(this.knock * Math.PI);
+        this.group.position.x += rgtX*this.knockDir*190 * k;
+        this.group.position.z += rgtZ*this.knockDir*190 * k;
       }
     }
   }
@@ -842,6 +864,7 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   const dmg = (curWeapon.oneShot ? 999 : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
   critical = false;
   if (curWeapon.stun) best.atkCd = Math.max(best.atkCd, 2.4);   // la mazza stordisce
+  player.lunge(side);                                            // il giocatore scatta verso il colpo
   hitOpponent(best, dmg, curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null));
   if (isFinite(curWeapon.uses) && --curWeapon.uses <= 0) equipWeapon('fists');   // arma esaurita
 }
@@ -857,15 +880,23 @@ function playerKick() {
   if (!best) return;
   const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
   best.targetLat = best.lat + dir*1.2; best.lat += dir*0.35;
-  best.health -= 10; best.flash = 1; best.actor.flashHit(); shake = Math.max(shake, 0.4);
+  best.health -= 10; best.flash = 1; best.actor.flashHit(); best.actor.knockback(dir);
+  player.lunge(0);                                               // il calcio è un affondo in avanti
+  shake = Math.max(shake, 0.4);
   nitro = Math.min(MAX_NITRO, nitro + 3);
   addPopup(best, 900, '💥', '#fff');
+  { const bp = best.actor.group.position;
+    hitSpark.burst(bp.x, bp.y + HORSE_HEIGHT*0.8, bp.z, 0xd9c9a3, 14, 700); }
   if (Math.abs(best.lat) > 1.05 || best.health <= 0) wipe(best, 'kick');
 }
 function hitOpponent(o, dmg, label) {
-  o.health -= dmg; o.flash = 1; o.actor.flashHit(); shake = Math.max(shake, 0.35);
+  o.health -= dmg; o.flash = 1; o.actor.flashHit();
+  o.actor.knockback(Math.sign(o.lat - playerX) || 1);
+  shake = Math.max(shake, 0.35);
   nitro = Math.min(MAX_NITRO, nitro + 4);          // l'aggressività carica il nitro
   addPopup(o, 900, label || ('-' + Math.round(dmg)), '#ffe08a');
+  const op = o.actor.group.position;
+  hitSpark.burst(op.x, op.y + HORSE_HEIGHT*1.0, op.z, curWeapon.color, 10);
   if (o.health <= 0) wipe(o, 'takedown');
 }
 function wipe(o, cause) {
@@ -906,9 +937,14 @@ function updateAI(dt) {
       o.atkCd -= dt;
       if (Math.abs(g) < ATK_RANGE && Math.abs(o.lat - playerX) < LAT_RANGE && o.atkCd <= 0) {
         o.atkCd = 1.2 + Math.random();
-        if (blocking) { critical = true; addPopup(o, 900, 'PARATA!', '#8ff'); }
-        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); shake = Math.max(shake, 0.5);
-               addPopup(o, 900, '⚔', '#ff6b6b'); if (pHealth <= 0) { pHealth = 0; onPlayerDown(); } }
+        const atkDir = Math.sign(playerX - o.lat) || 1;   // il rivale scatta verso il giocatore
+        o.actor.lunge(atkDir);
+        if (blocking) { critical = true; o.actor.knockback(-atkDir); addPopup(o, 900, 'PARATA!', '#8ff'); }
+        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); player.knockback(atkDir);
+               shake = Math.max(shake, 0.5); addPopup(o, 900, '⚔', '#ff6b6b');
+               const pp = player.group.position;
+               hitSpark.burst(pp.x, pp.y + HORSE_HEIGHT*1.0, pp.z, 0xff4444, 10);
+               if (pHealth <= 0) { pHealth = 0; onPlayerDown(); } }
       }
     }
     o.pos += o.speed * dt;
@@ -1145,6 +1181,56 @@ const dust = (() => {
     }
   }
   return { update };
+})();
+
+// SCINTILLE D'IMPATTO — burst di particelle nel punto del colpo (a differenza di `dust`,
+// che emette in continuo, qui si spara un gruppo tutto insieme e sparisce in fretta)
+const hitSpark = (() => {
+  const tex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const grad = g.createRadialGradient(32,32,0, 32,32,32);
+    grad.addColorStop(0,    'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.85)');
+    grad.addColorStop(1,    'rgba(255,255,255,0)');
+    g.fillStyle = grad; g.fillRect(0,0,64,64);
+    return new THREE.CanvasTexture(c);
+  })();
+  const POOL = 48, sparks = [];
+  for (let i = 0; i < POOL; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xffffff,
+      transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    s.visible = false; scene.add(s);
+    sparks.push({ s, age: 0, life: 1, vx: 0, vy: 0, vz: 0, size0: 0 });
+  }
+  let cursor = 0;
+  function burst(x, y, z, colorHex = 0xffe08a, count = 10, speed = 900) {
+    for (let n = 0; n < count; n++) {
+      const p = sparks[cursor]; cursor = (cursor + 1) % POOL;
+      p.age = 0; p.life = 0.2 + Math.random()*0.14;
+      p.s.position.set(x, y, z);
+      const a = Math.random()*Math.PI*2, up = Math.random()*0.7;
+      const sp = speed * (0.5 + Math.random()*0.7);
+      p.vx = Math.cos(a)*sp; p.vz = Math.sin(a)*sp; p.vy = up*sp*0.6 + 120;
+      p.size0 = 140 + Math.random()*160;
+      p.s.material.color.setHex(colorHex);
+      p.s.visible = true;
+    }
+  }
+  function update(dt) {
+    for (const p of sparks) {
+      if (!p.s.visible) continue;
+      p.age += dt;
+      const t = p.age / p.life;
+      if (t >= 1) { p.s.visible = false; continue; }
+      p.s.position.x += p.vx*dt; p.s.position.y += p.vy*dt; p.s.position.z += p.vz*dt;
+      p.vy -= 500*dt;
+      const sz = p.size0 * (1 - t*0.5);
+      p.s.scale.set(sz, sz, 1);
+      p.s.material.opacity = (1-t);
+    }
+  }
+  return { burst, update };
 })();
 
 //=========================================================================
@@ -1605,6 +1691,7 @@ function frame(now) {
     o.actor.update(frameDt, o.speed/MAX_SPEED);
   }
   updatePickups(frameDt);                // casse-arma: rotazione, bob, raccolta
+  hitSpark.update(frameDt);              // scintille d'impatto sui colpi
   party.update(frameDt);                 // party mode: alberi e luce a tempo
 
   updateCamera(frameDt);
