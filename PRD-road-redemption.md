@@ -170,6 +170,26 @@ di §9.1) — il cavallo non ha un cavaliere separato, quindi si lavora sul corp
 Verificato: screenshot headless mostra il rivale colpito chiaramente separato dal
 gruppo (non più solo tinto rosso fermo), regressione Fase 4 ancora 10/10.
 
+## 9.3 Il proprio affondo era invisibile: bug di camera-tracking (2026-07-19, commit `4e6054b`)
+L'utente ha segnalato "non vedo ancora movimento d'attacco" DOPO §9.2. Causa reale (non
+ampiezza insufficiente): la camera `'chase'` (default) in `updateCamera()` legge
+`player.group.position` sia per la propria posizione sia per `camera.lookAt(...)` — la
+STESSA proprietà su cui `HorseActor.update()` applica l'offset di `punch`/`knock`. La
+camera insegue e ri-punta istantaneamente sul giocatore ogni frame, quindi il PROPRIO
+affondo veniva quasi del tutto cancellato visivamente (misurato via proiezione a schermo:
+~12px su 1280 di spostamento). Il rinculo di un RIVALE restava visibile perché la camera
+non lo insegue — ecco perché §9.2 sembrava funzionare negli screenshot (che mostravano
+rivali colpiti) ma non "si sentiva" giocando in prima persona.
+Fix: `HorseActor.basePos` — copia della posizione "pulita" impostata in `place()` PRIMA
+che `update()` aggiunga il wobble di combattimento. `updateCamera()` ora legge
+`player.basePos` invece di `player.group.position`. Inoltre: ampiezza affondo/rinculo
+più che raddoppiata (260/160 e 380, prima 110/70 e 190) e `player.lunge()` spostato
+PRIMA del controllo del bersaglio in `playerAttack`/`playerKick` — prima un colpo a
+vuoto (bersaglio fuori range/non allineato) non produceva ALCUN feedback, il che è
+comune dati i range di aggancio stretti (`ATK_RANGE`/`LAT_RANGE`).
+Verificato con proiezione a schermo via Puppeteer (prima/durante/dopo un attacco) +
+screenshot. Regressione Fase 4 ancora 10/10.
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).
