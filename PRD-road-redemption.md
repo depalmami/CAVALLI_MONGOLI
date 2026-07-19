@@ -155,6 +155,21 @@ esposto a fine file, ora con `opponents/gapTo/playerAttack/camera/...`) via Pupp
 Verificato con screenshot headless prima/dopo (scratchpad di sessione) + regressione
 Fase 4 (10/10) ancora verde.
 
+## 9.2 Animazioni di combattimento (2026-07-19, commit `e32afc4`)
+Su richiesta dell'utente, aggiunto MOVIMENTO reale ai colpi (non solo il flash statico
+di §9.1) — il cavallo non ha un cavaliere separato, quindi si lavora sul corpo intero:
+- `HorseActor.lunge(dir)`: chi attacca scatta verso il lato colpito (o in avanti per il
+  calcio, `dir=0`) e torna, curva `sin(t*π)` su `punch` che decade da 1 a 0.
+- `HorseActor.knockback(dir)`: chi viene colpito è respinto lateralmente e torna,
+  stessa curva su `knock`. Convenzione segno: `dir` punta SEMPRE da chi colpisce verso
+  chi subisce, continuato verso l'esterno (vedi i 3 call-site in `hitOpponent`/
+  `playerKick`/contrattacco AI per l'esempio di calcolo `Math.sign(target.lat - attacker.lat)`).
+- Nuovo modulo `hitSpark` (accanto a `dust`, stesso pattern a pool di sprite ma a burst
+  invece che continuo): scintille colorate nel punto d'impatto — colore dell'arma sui
+  fendenti, polveroso sul calcio, rosso sul colpo subito dal giocatore.
+Verificato: screenshot headless mostra il rivale colpito chiaramente separato dal
+gruppo (non più solo tinto rosso fermo), regressione Fase 4 ancora 10/10.
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).
