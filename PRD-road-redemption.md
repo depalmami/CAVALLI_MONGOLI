@@ -495,9 +495,20 @@ a raffica ogni frame. Fallback a scansione degli indici perché su iOS l'evento
 
 Comandi: `O` pilota automatico, più le caselle nella sezione 🤖 REGIA della console.
 
+## 9.10 Persistenza della console (2026-08-05)
+
+La console si ricorda com'era: in un live non si rifà il setup a ogni riavvio del browser.
+Salva **solo i valori dei controlli** e li riapplica **scatenando gli stessi eventi
+dell'interazione umana** — così non esiste una seconda strada per applicare uno stato, e non
+può divergere da quella vera. Il test lo verifica sul serio: dopo il ricaricamento controlla
+non solo che il menù *mostri* 1152×768, ma che la tela della scena sia larga davvero 1152.
+
+La finestra di proiezione **non** si riapre da sola: aprire un popup senza un gesto
+dell'utente viene bloccato dal browser, e sarebbe pure una sorpresa sgradita.
+
 ### Cosa resta del 2D da portare
 ~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
-`localStorage persistence` · `level system` (livelli tematici + sprite per livello) ·
+~~`localStorage persistence`~~ (§9.10) · `level system` (livelli tematici + sprite per livello) ·
 `custom background` · `asset editor` · `intro/title screens` · `WebRTC webcam` (Livello 7).
 
 ## 10. Backlog / idee future (post-Fase 4)

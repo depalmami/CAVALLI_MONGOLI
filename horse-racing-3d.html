@@ -1890,6 +1890,53 @@ $('party-gain').oninput = e => {           // slider intensità: 100% = base, 60
   party.setGain(pct / 100);
   $('gain-val').textContent = pct + '%';
 };
+//=========================================================================
+// PREFERENZE — la console si ricorda com'era. In un live non si rifà il setup
+// a ogni riavvio del browser. Salva SOLO i valori dei controlli e li riapplica
+// scatenando gli stessi eventi dell'interazione umana: così non esiste una
+// seconda strada per applicare uno stato, e non può divergere da quella vera.
+// La finestra di proiezione NON si riapre da sola: aprire un popup senza un
+// gesto dell'utente viene bloccato dal browser, e sarebbe pure una sorpresa.
+//=========================================================================
+const preferenze = (() => {
+  const CHIAVE = 'cm3d.console.v1';
+  const CAMPI = ['live-flash','live-bonus','live-text','live-palette','live-cycle','live-3d','live-int',
+                 'ap-on','proj-mode','proj-res','proj-hud',
+                 'side-on','side-text','side-speed','side-size','party-gain'];
+  let rinvio = null;
+  function salva() {
+    clearTimeout(rinvio);
+    rinvio = setTimeout(() => {
+      try {
+        const dati = {};
+        for (const id of CAMPI) {
+          const e = document.getElementById(id);
+          if (e) dati[id] = (e.type === 'checkbox') ? e.checked : e.value;
+        }
+        localStorage.setItem(CHIAVE, JSON.stringify(dati));
+      } catch {}          // quota piena o storage negato: il gioco va avanti lo stesso
+    }, 250);
+  }
+  function carica() {
+    let dati;
+    try { dati = JSON.parse(localStorage.getItem(CHIAVE) || 'null'); } catch {}
+    if (dati) {
+      for (const id of CAMPI) {
+        const e = document.getElementById(id);
+        if (!e || !(id in dati)) continue;
+        if (e.type === 'checkbox') e.checked = !!dati[id]; else e.value = dati[id];
+        e.dispatchEvent(new Event(e.type === 'range' || e.type === 'text' ? 'input' : 'change'));
+      }
+    }
+    // da qui in poi ogni tocco ai controlli viene ricordato
+    for (const id of CAMPI) {
+      const e = document.getElementById(id);
+      if (e) { e.addEventListener('change', salva); e.addEventListener('input', salva); }
+    }
+  }
+  return { carica, salva, dimentica() { try { localStorage.removeItem(CHIAVE); } catch {} } };
+})();
+
 // SHOW LIVE — flash strobo + scritta lampeggiante (sincronizzati al tap tempo)
 $('live-flash').onchange   = e => live.setFlash(e.target.checked);
 $('live-bonus').onchange   = e => live.setBonus(e.target.checked);
@@ -2631,7 +2678,7 @@ function begin() {                          // primo avvio, a caricamento finito
 }
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
-  setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione,
+  setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
@@ -2790,6 +2837,7 @@ Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
   setMode(sOK ? 'sprite' : 'model');
   $('loading').remove();
   ridimensiona();          // fissa la vista ora che le tele overlay esistono tutte
+  preferenze.carica();     // ripristina la console com'era all'ultima volta
   player.place(0, 0);
   begin();
   requestAnimationFrame(frame);
