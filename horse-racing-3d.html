@@ -1017,6 +1017,9 @@ const BANK_MAX     = 0.40;   // ~23°: alzato da 0.32 perché ora i due contribu
 const STEER_K      = 1.0;    // 1.0 = il corpo punta ESATTAMENTE lungo la velocità → deriva nulla
 const PITCH_K      = 0.18;   // beccheggio su accel/frenata
 const BODY_TURN_K  = 1.6;    // quanto la sterzata piega collo/schiena/coda
+// MANOPOLA UNICA per l'ampiezza della piega del corpo: 1.0 = testa a 14° a piena
+// curva e 7° allo sterzo normale. Alza o abbassa questo, non i singoli guadagni.
+const BODY_BEND    = 1.0;
 // 0.09 e non di più: con 0.22 una curva HARD da sola saturava la piega a 1 e il
 // cavallo teneva la testa girata di 43° per tutta la curva. Così una HARD dà 0.54,
 // una MEDIUM 0.36, e il massimo resta riservato a curva stretta + sterzata insieme.
@@ -1099,23 +1102,27 @@ class HorseActor {
     // ── ossa da piegare in curva ────────────────────────────────────────────
     // Il rig Quaternius ha spina segmentata (Torso*), collo (Neck*), testa e coda:
     // il "sembra un'auto" NON è colpa del low-poly, è che queste ossa non le usavamo.
-    // I guadagni sono piccoli perché le ossa sono IN CATENA e le rotazioni si sommano:
-    // a piena curva la testa arriva a ~25° rispetto al corpo.
-    // Tarati misurando, non a occhio: col primo set (0.05…0.10) la testa si spostava
-    // di 62 unità su un cavallo alto 1300, cioè spariva dentro il movimento del galoppo,
-    // che da solo la muove di centinaia. A piena curva ora la testa arriva a ~43°.
-    // La coda ha guadagno NEGATIVO e più forte del torace, altrimenti verrebbe solo
-    // trascinata verso l'interno dalla piega della schiena invece di uscire all'esterno.
-    // [nome, guadagno, pendolo]. Schiena/collo/testa IMBARDANO attorno alla verticale.
-    // La coda no: misurata, pende verso il basso (componente verticale -0.87 su Tail1→Tail7),
-    // e ruotarla attorno alla verticale la farebbe girare su se stessa senza spostarla.
-    // Va mossa a PENDOLO attorno all'asse di marcia, così esce davvero all'esterno.
+    // [nome, guadagno, pendolo]. Schiena/collo/testa IMBARDANO attorno alla verticale;
+    // le ossa sono IN CATENA, quindi i guadagni si SOMMANO lungo il collo.
+    //
+    // AMPIEZZA tarata misurando l'angolo vero dell'osso, non a occhio. Un primo set
+    // portava la testa a 43° a piena curva: misurato, è imbardata pulita (asse verticale
+    // 1.00, nessuna torsione o deformazione) — ma 43° un cavallo al galoppo non li fa, e
+    // il risultato era da film dell'orrore. Ora il totale è ~14° a piena curva e ~7° allo
+    // sterzo normale: si legge che guarda dentro la curva senza stravolgersi. Il grosso
+    // sta sulla TESTA e non sulla base del collo, che è la parte che rendeva innaturale
+    // la posa.
+    //
+    // La coda va a PENDOLO attorno all'asse di marcia, non in imbardata: misurata, pende
+    // verso il basso (componente verticale -0.87 su Tail1→Tail7), e ruotarla attorno alla
+    // verticale la farebbe girare su se stessa senza spostarla. Guadagno NEGATIVO, o la
+    // piega della schiena la trascinerebbe verso l'INTERNO invece che all'esterno.
     const FLESSIONE = [
-      [/^Torso2$/i, 0.08], [/^Torso3$/i, 0.10],                       // la schiena arcua
-      [/^Neck1$/i, 0.14], [/^Neck2$/i, 0.14], [/^Neck3$/i, 0.12],     // il collo porta la testa
-      [/^Head$/i, 0.17],                                              // …che guarda dove sta andando
-      [/^Tail1$/i, -0.16, true], [/^Tail2$/i, -0.18, true],           // la coda esce all'ESTERNO
-      [/^Tail3$/i, -0.18, true], [/^Tail4$/i, -0.16, true],
+      [/^Torso2$/i, 0.020], [/^Torso3$/i, 0.025],                     // la schiena arcua appena
+      [/^Neck1$/i, 0.030], [/^Neck2$/i, 0.035], [/^Neck3$/i, 0.045],  // il collo accompagna
+      [/^Head$/i, 0.090],                                             // la testa guarda dove va
+      [/^Tail1$/i, -0.10, true], [/^Tail2$/i, -0.11, true],           // la coda esce all'ESTERNO
+      [/^Tail3$/i, -0.11, true], [/^Tail4$/i, -0.10, true],
     ];
     // quali ossa le muove già l'animazione? Quelle sì le posso premoltiplicare ogni
     // frame (il mixer le riscrive), le altre vanno ripartite dalla posa a riposo,
@@ -1126,7 +1133,7 @@ class HorseActor {
     this.model.traverse(o => {
       if (!o.isBone) return;
       const f = FLESSIONE.find(([re]) => re.test(o.name));
-      if (f) this.shape.push({ bone: o, gain: f[1], pendolo: !!f[2],
+      if (f) this.shape.push({ bone: o, gain: f[1] * BODY_BEND, pendolo: !!f[2],
                                animata: animata(o.name), base: o.quaternion.clone() });
     });
     this.group.add(this.model);

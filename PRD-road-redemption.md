@@ -384,9 +384,25 @@ che gira si inclina sempre.
 - `ROAD_TURN_K` tenuto a 0.09: con 0.22 una curva HARD da sola saturava la piega e il cavallo
   teneva la testa girata di 43° per tutta la curva.
 
+**Correzione dell'ampiezza (stessa giornata, dopo playtest utente).** Segnalato che «il collo
+si gira in maniera quasi horror», col promemoria di valutare il MODELLO 3D e non lo sprite —
+alcuni screenshot precedenti erano in modalità sprite, dove `shapeTurn` non gira nemmeno.
+Misurando il quaternione mondiale dell'osso a parità di fotogramma: la rotazione era
+**imbardata pulita** (asse verticale 1.00 → nessuna torsione o deformazione del rig), ma
+l'ampiezza era **43° di testa a piena curva** e 21.5° allo sterzo normale. Un cavallo al
+galoppo non gira la testa di 43°: guadagni ridotti a un terzo e spostati verso la TESTA
+invece che sulla base del collo (che è ciò che rendeva innaturale la posa) → ora **14° a
+piena curva, 7° allo sterzo normale**. Aggiunta la manopola unica `BODY_BEND` per ritarare
+l'ampiezza senza toccare i singoli guadagni.
+
+**Lezione di metodo:** «si sposta di N unità» non basta a giudicare una posa — serviva
+l'angolo dell'osso, e serviva guardare la modalità giusta. Un effetto può essere
+matematicamente corretto (imbardata pura, verso giusto, nessun artefatto) e comunque
+sbagliato perché è semplicemente troppo.
+
 **Verifiche**: deriva ≤0.9° in tutte le fasi (ingresso/regime/uscita), rollio -13.5° a regime,
-piega isolata testa +105 / coda -159; regressioni invariate (affondamento 0.0, modalità libera
-11/11, 120 fps).
+testa 14°/7° con asse verticale 1.00, coda -159 verso l'esterno; regressioni invariate
+(affondamento 0.0, modalità libera 11/11, 120 fps).
 
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
