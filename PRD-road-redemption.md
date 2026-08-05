@@ -336,6 +336,58 @@ più tornanti. Verificato che restano puliti (distanza min fra rami 32965).
 - invariante del terreno ancora 0 violazioni su 213421 campioni; guida reale affondamento 0.0;
   modalità libera 11/11; **120 fps** in 6 punti, caricamento 1.35s, 1.4M triangoli.
 
+## 9.7 «Sembra un'auto che derapa»: assetto in curva del cavallo (2026-08-05)
+
+Segnalazione utente: sterzando, il cavallo sembra un'auto in derapata, col posteriore
+disallineato dal muso. Domanda posta: è colpa del modello low-poly?
+
+**No.** L'orientamento del corpo rispetto alla traiettoria non dipende dai poligoni: un
+cavallo fotorealistico avrebbe derapato uguale. E il modello Quaternius ha **50 ossa**, con
+spina segmentata (`Torso/Torso2/Torso3`), collo (`Neck1..3`), `Head` e `Tail1..7`:
+semplicemente non le stavamo usando.
+
+**Diagnosi misurata** (`assetto.js`: angolo della traiettoria vs imbardata del modello):
+
+| fase | traiettoria | imbardata | deriva | rollio |
+|---|---|---|---|---|
+| sterzo +0.1s | 18.4° | 10.6° | 7.9° | **0.0°** |
+| sterzo +0.5s | 13.4° | 13.9° | -0.5° | **-1.9°** |
+
+La deriva era piccola. Il problema vero è la colonna rollio: **il cavallo imbardava di 18°
+restando perfettamente in piedi**, perché `bank` dipendeva solo dalla curvatura della
+*strada* e non dalla sterzata del giocatore. Ruotare attorno all'asse verticale senza
+inclinarsi è esattamente la firma visiva di un'auto che scivola: un animale (o una moto)
+che gira si inclina sempre.
+
+**Correzioni:**
+1. **Rollio dalla sterzata** (`BANK_STEER_K = 0.75`), sommato a quello della strada;
+   `BANK_MAX` alzato 0.32 → 0.40 (~23°) perché ora i contributi si sommano. Da 0.0° a **-13.5°**.
+2. **Deriva azzerata**: `STEER_K` 0.9 → 1.0 (il corpo punta esattamente lungo la velocità) e
+   imbardata smorzata ~3× più svelta delle altre grandezze — con la costante lenta il muso
+   restava indietro all'ingresso e avanti all'uscita, cioè proprio la derapata. Da 7.9° a **0.7°**.
+3. **Il corpo si arcua** (`shapeTurn`): collo/testa verso l'interno, schiena arcuata, coda
+   all'esterno. La rotazione è espressa attorno al su del mondo **riportato nello spazio del
+   genitore dell'osso**, così non serve sapere come sono orientate le ossa nel rig.
+4. **Anche i rivali**: prima non imbardavano affatto, quindi cambiando corsia traslavano di
+   lato restando puntati dritti (andatura a granchio).
+
+**Due cose imparate misurando, che a occhio non si vedevano:**
+- I primi guadagni di flessione (0.05–0.10) spostavano la testa di **62 unità** su un cavallo
+  alto 1300: invisibili, perché il galoppo da solo la muove di centinaia. Serve un confronto
+  A/B allo **stesso fotogramma d'animazione** (`piega.js`) per isolare l'effetto. Alzati a
+  0.08–0.17 → 105 unità, ~43° di testa a piena curva.
+- La coda non va imbardata: misurata, **pende** (componente verticale -0.87 su `Tail1→Tail7`),
+  e ruotarla attorno alla verticale la fa girare su se stessa senza spostarla. Va mossa a
+  **pendolo attorno all'asse di marcia** → da +25 (verso l'interno, trascinata dal torace) a
+  **-159** (verso l'esterno). Nota: la coda orizzontale che si vede è la posa naturale del
+  galoppo, verificata con uno scatto in rettilineo.
+- `ROAD_TURN_K` tenuto a 0.09: con 0.22 una curva HARD da sola saturava la piega e il cavallo
+  teneva la testa girata di 43° per tutta la curva.
+
+**Verifiche**: deriva ≤0.9° in tutte le fasi (ingresso/regime/uscita), rollio -13.5° a regime,
+piega isolata testa +105 / coda -159; regressioni invariate (affondamento 0.0, modalità libera
+11/11, 120 fps).
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).

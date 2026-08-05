@@ -1007,11 +1007,24 @@ const modelReady = new Promise((res) => {
 // inclinazione in curva, imbardata in sterzata, beccheggio in accelerazione/frenata
 const GALLOP_STRIDE = HORSE_HEIGHT * 4.0;   // unità mondo percorse in un ciclo di galoppo
 const WALK_STRIDE   = HORSE_HEIGHT * 1.8;
-const BANK_K  = 0.06;                        // rollio in curva (per unità di curve × velocità)
-const BANK_MAX = 0.32;
-const STEER_K = 0.9;                         // quanto il cavallo "punta" verso dove sterza
-const PITCH_K = 0.18;                        // beccheggio su accel/frenata
+// ASSETTO IN CURVA. Un cavallo non è un'auto che derapa: punta dove va, si INCLINA
+// verso l'interno e ARCUA il corpo. Prima il rollio dipendeva solo dalla curvatura
+// della STRADA, quindi sterzando in rettilineo il cavallo imbardava di 18° restando
+// dritto come un tavolo — imbardata senza inclinazione è la firma visiva della derapata.
+const BANK_K       = 0.06;   // rollio dovuto alla curva della strada (per unità di curve × velocità)
+const BANK_STEER_K = 0.75;   // rollio dovuto alla STERZATA del giocatore (mancava del tutto)
+const BANK_MAX     = 0.40;   // ~23°: alzato da 0.32 perché ora i due contributi si sommano
+const STEER_K      = 1.0;    // 1.0 = il corpo punta ESATTAMENTE lungo la velocità → deriva nulla
+const PITCH_K      = 0.18;   // beccheggio su accel/frenata
+const BODY_TURN_K  = 1.6;    // quanto la sterzata piega collo/schiena/coda
+// 0.09 e non di più: con 0.22 una curva HARD da sola saturava la piega a 1 e il
+// cavallo teneva la testa girata di 43° per tutta la curva. Così una HARD dà 0.54,
+// una MEDIUM 0.36, e il massimo resta riservato a curva stretta + sterzata insieme.
+const ROAD_TURN_K  = 0.09;   // quanto ce la piega la curva della strada
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); };
+
+// temporanei riusati da shapeTurn (niente allocazioni per osso per frame)
+const _bq = new THREE.Quaternion(), _bq2 = new THREE.Quaternion(), _bax = new THREE.Vector3();
 
 class HorseActor {
   constructor(tintHex = 0xffffff) {
@@ -1035,6 +1048,7 @@ class HorseActor {
     // opzione B — montata quando il GLB arriva
     this.model = null; this.mixer = null;
     this.heading = 0; this.bank = 0; this.steerYaw = 0; this.pitch = 0;
+    this.turn = 0;                              // -1..1, + = sta girando a destra (piega del corpo)
     this.actGallop = this.actWalk = this.actIdle = null;
     this.w = { idle: 1, walk: 0, gallop: 0 };   // pesi andature smussati (parte da fermo)
     this.hitFlash = 0;                          // impulso emissivo rosso quando il cavallo viene colpito
@@ -1082,8 +1096,57 @@ class HorseActor {
     this.actGallop = this.mixer.clipAction(cG); this.actGallop.play();
     if (cW) { this.actWalk = this.mixer.clipAction(cW); this.actWalk.play(); }
     if (cI) { this.actIdle = this.mixer.clipAction(cI); this.actIdle.play(); }
+    // ── ossa da piegare in curva ────────────────────────────────────────────
+    // Il rig Quaternius ha spina segmentata (Torso*), collo (Neck*), testa e coda:
+    // il "sembra un'auto" NON è colpa del low-poly, è che queste ossa non le usavamo.
+    // I guadagni sono piccoli perché le ossa sono IN CATENA e le rotazioni si sommano:
+    // a piena curva la testa arriva a ~25° rispetto al corpo.
+    // Tarati misurando, non a occhio: col primo set (0.05…0.10) la testa si spostava
+    // di 62 unità su un cavallo alto 1300, cioè spariva dentro il movimento del galoppo,
+    // che da solo la muove di centinaia. A piena curva ora la testa arriva a ~43°.
+    // La coda ha guadagno NEGATIVO e più forte del torace, altrimenti verrebbe solo
+    // trascinata verso l'interno dalla piega della schiena invece di uscire all'esterno.
+    // [nome, guadagno, pendolo]. Schiena/collo/testa IMBARDANO attorno alla verticale.
+    // La coda no: misurata, pende verso il basso (componente verticale -0.87 su Tail1→Tail7),
+    // e ruotarla attorno alla verticale la farebbe girare su se stessa senza spostarla.
+    // Va mossa a PENDOLO attorno all'asse di marcia, così esce davvero all'esterno.
+    const FLESSIONE = [
+      [/^Torso2$/i, 0.08], [/^Torso3$/i, 0.10],                       // la schiena arcua
+      [/^Neck1$/i, 0.14], [/^Neck2$/i, 0.14], [/^Neck3$/i, 0.12],     // il collo porta la testa
+      [/^Head$/i, 0.17],                                              // …che guarda dove sta andando
+      [/^Tail1$/i, -0.16, true], [/^Tail2$/i, -0.18, true],           // la coda esce all'ESTERNO
+      [/^Tail3$/i, -0.18, true], [/^Tail4$/i, -0.16, true],
+    ];
+    // quali ossa le muove già l'animazione? Quelle sì le posso premoltiplicare ogni
+    // frame (il mixer le riscrive), le altre vanno ripartite dalla posa a riposo,
+    // altrimenti la rotazione si accumulerebbe all'infinito.
+    const animata = nome => modelClips.some(c => c.tracks.some(t =>
+      t.name === nome + '.quaternion' || t.name.endsWith('/' + nome + '.quaternion')));
+    this.shape = [];
+    this.model.traverse(o => {
+      if (!o.isBone) return;
+      const f = FLESSIONE.find(([re]) => re.test(o.name));
+      if (f) this.shape.push({ bone: o, gain: f[1], pendolo: !!f[2],
+                               animata: animata(o.name), base: o.quaternion.clone() });
+    });
     this.group.add(this.model);
     this.model.visible = (this.mode === 'model');
+  }
+  // Applica la piega. La rotazione è espressa attorno al SU DEL MONDO riportato
+  // nello spazio del genitore dell'osso: così non serve sapere come sono orientate
+  // le ossa nel rig (nei rig Blender l'asse locale segue l'osso, non il mondo).
+  shapeTurn() {
+    if (!this.shape) return;
+    const hb = this.heading + this.steerYaw;      // asse di marcia del corpo
+    for (const s of this.shape) {
+      if (!s.animata) s.bone.quaternion.copy(s.base);
+      if (Math.abs(this.turn) < 1e-4) continue;
+      s.bone.parent.getWorldQuaternion(_bq).invert();
+      if (s.pendolo) _bax.set(Math.sin(hb), 0, Math.cos(hb));   // coda: pendolo attorno all'avanti
+      else           _bax.set(0, 1, 0);                          // schiena/collo: imbardata
+      _bax.applyQuaternion(_bq).normalize();
+      s.bone.quaternion.premultiply(_bq2.setFromAxisAngle(_bax, -this.turn * s.gain));
+    }
   }
   setMode(mode) {
     this.mode = mode;
@@ -1145,6 +1208,7 @@ class HorseActor {
         this.actGallop.timeScale = (sp / GALLOP_STRIDE) * this.durG;
         if (this.actWalk) this.actWalk.timeScale = (sp / WALK_STRIDE) * this.durW;
         this.mixer.update(dt);
+        this.shapeTurn();     // DOPO il mixer: la piega si somma alla posa animata
       }
     }
     // affondo/rinculo del combattimento: scatto laterale che va e torna (funziona sia su
@@ -2095,7 +2159,7 @@ function frame(now) {
     while (acc >= FIXED_DT) {
       prevPosition = position;
       prevPlayerX  = playerX;
-      for (const o of opponents) o.prevPos = o.pos ?? o.prevPos;
+      for (const o of opponents) { o.prevPos = o.pos ?? o.prevPos; o.prevLat = o.lat; }
       updatePhysics(FIXED_DT);
       acc -= FIXED_DT;
     }
@@ -2104,21 +2168,31 @@ function frame(now) {
   const alpha = acc / FIXED_DT;                        // frazione tra stato precedente e corrente
 
   const kk = 1 - Math.pow(0.0005, frameDt);   // smussatura assetto, framerate-independent
+  const kkYaw = 1 - Math.pow(0.0005, frameDt*3);   // l'imbardata deve essere ~3× più pronta
   const sp = speed / MAX_SPEED;
 
   // rendering interpolato: cavalli posizionati tra i due ultimi stati fisici
   player.place(interpWrap(prevPosition, position, alpha),
                prevPlayerX + (playerX - prevPlayerX) * alpha);
-  // assetto realistico del giocatore: rollio in curva, imbardata verso lo sterzo, beccheggio
+  // assetto del giocatore: punta dove va, si inclina verso l'interno, arcua il corpo
   {
-    const bankTarget  = limit(-curveAt(position) * sp * BANK_K, -BANK_MAX, BANK_MAX);
     const latRate     = (playerX - prevPlayerX) / FIXED_DT;            // unità playerX/sec
+    // angolo VERO della velocità rispetto all'asse pista: con STEER_K=1 il corpo ci
+    // si allinea esattamente, quindi la deriva (corpo che non punta dove va) è nulla
     const steerTarget = Math.atan2(latRate * ROAD_WIDTH, Math.max(speed, 1)) * STEER_K;
+    const roadTurn    = curveAt(position) * sp;                        // + = la strada gira a destra
+    // il rollio somma i DUE motivi per cui si sta girando: la strada e la sterzata.
+    // Il secondo mancava, ed è per questo che sterzando in piano sembrava una derapata.
+    const bankTarget  = limit(-(roadTurn*BANK_K + steerTarget*BANK_STEER_K), -BANK_MAX, BANK_MAX);
     const accel       = (speed - prevSpeed) / Math.max(frameDt, 1e-3);
     const pitchTarget = limit(-accel / MAX_SPEED * PITCH_K, -0.12, 0.12);
+    const turnTarget  = limit(roadTurn*ROAD_TURN_K + steerTarget*BODY_TURN_K, -1, 1);
     player.bank     += (bankTarget  - player.bank)     * kk;
-    player.steerYaw += (steerTarget - player.steerYaw) * kk;
+    // l'imbardata insegue più svelta delle altre: con la costante lenta il muso
+    // restava indietro all'ingresso e avanti all'uscita, cioè proprio la derapata
+    player.steerYaw += (steerTarget - player.steerYaw) * kkYaw;
     player.pitch    += (pitchTarget - player.pitch)    * kk;
+    player.turn     += (turnTarget  - player.turn)     * kk;
   }
   player.update(frameDt, sp);                         // animazioni avanzano col tempo reale
   prevSpeed = speed;
@@ -2129,9 +2203,18 @@ function frame(now) {
   }
   if (!freeRoam) for (const o of opponents) {
     o.actor.place(interpWrap(o.prevPos ?? o.pos, o.pos, alpha), o.lat);
-    const ob = limit(-curveAt(o.pos) * (o.speed/MAX_SPEED) * BANK_K, -BANK_MAX, BANK_MAX);
-    o.actor.bank += (ob - o.actor.bank) * kk;
-    o.actor.update(frameDt, o.speed/MAX_SPEED);
+    // stesso assetto del giocatore: prima i rivali NON imbardavano affatto, quindi
+    // cambiando corsia traslavano di lato restando puntati dritti (granchio)
+    const oSp    = o.speed/MAX_SPEED;
+    const oLat   = (o.lat - (o.prevLat ?? o.lat)) / FIXED_DT;
+    const oSteer = Math.atan2(oLat * ROAD_WIDTH, Math.max(o.speed, 1)) * STEER_K;
+    const oRoad  = curveAt(o.pos) * oSp;
+    const ob     = limit(-(oRoad*BANK_K + oSteer*BANK_STEER_K), -BANK_MAX, BANK_MAX);
+    const oTurn  = limit(oRoad*ROAD_TURN_K + oSteer*BODY_TURN_K, -1, 1);
+    o.actor.bank     += (ob     - o.actor.bank)     * kk;
+    o.actor.steerYaw += (oSteer - o.actor.steerYaw) * kkYaw;
+    o.actor.turn     += (oTurn  - o.actor.turn)     * kk;
+    o.actor.update(frameDt, oSp);
   }
   updatePickups(frameDt);                // casse-arma: rotazione, bob, raccolta
   hitSpark.update(frameDt);              // scintille d'impatto sui colpi
