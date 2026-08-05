@@ -190,6 +190,57 @@ comune dati i range di aggancio stretti (`ATK_RANGE`/`LAT_RANGE`).
 Verificato con proiezione a schermo via Puppeteer (prima/durante/dopo un attacco) +
 screenshot. Regressione Fase 4 ancora 10/10.
 
+## 9.4 Percorso e illuminazione: il terreno diventa un vero heightfield (2026-08-05)
+Segnalazione utente: «nel percorso ci sono sezioni in cui i layer strada-erba si
+sovrappongono, a volte sembra di essere sotto il piano della terra». Misurando il
+tracciato (6705 segmenti) sono emersi **quattro difetti geometrici distinti**, non uno:
+
+| # | Difetto | Misura |
+|---|---------|--------|
+| 1 | Prato `flatOuter` con bordo esterno inchiodato a `y=0` | la pista sale a **+32871** → muro d'erba a **70°** che tappa il cielo |
+| 2 | Fondale piatto infinito a `y=-40` | **73 segmenti** hanno quota < -40 → si correva *letteralmente* sotto terra |
+| 3 | Nastro erboso largo 26480 dal centro, raggio di curva minimo **13158** | oltre il raggio il nastro si **ripiega su se stesso**: normali rovesciate, autointersezioni = i "layer sovrapposti" |
+| 4 | Il tracciato **passa sopra se stesso** (segmenti 3272/4832: 131 unità in pianta, **4201** di dislivello) | il prato del ramo alto faceva da **soffitto** sopra il ramo basso |
+
+E un quinto, di illuminazione, indipendente e più grave di quanto sembrasse:
+la cupola `Sky` è una `BoxGeometry` unitaria scalata ×450000 e **centrata sull'origine**
+(±225000), ma la pista arriva a `z=662717`: **per l'80% del tracciato (5354 punti su 6705)
+la camera usciva dalla cupola e il cielo diventava nero.** Solo il primo quinto della gara
+— dove erano stati presi tutti gli screenshot di sviluppo — è mai stato illuminato bene.
+
+**Soluzione — il terreno non è più un nastro, è una superficie che interpola la strada:**
+1. si *timbrano* nella griglia (`CELL=2000`) le quote del corridoio stradale, a `VERGE_DROP=300`
+   sotto il piano viabile: la strada sta su un **rilevato**. Dove il tracciato si sovrappone
+   vince la quota **più bassa** → il ramo alto diventa un viadotto, non un soffitto (risolve #4);
+2. le celle libere si risolvono per **rilassamento (Laplace) su piramide multigrid cascadica**
+   (~80 iterazioni sul livello grosso + 26 per livello scendendo): superficie liscia che
+   raccorda le quote senza artefatti da "cono di distanza";
+3. ondulazione collinare lontano dalla strada, dosata sulla **distanza chamfer** dal corridoio;
+4. **clamp finale**: sotto ogni punto strada il terreno è garantito ≤ quota strada − 300.
+   È l'invariante che rende *impossibile* il bug "sono sotto il piano della terra".
+
+Sezione trasversale ora formalmente corretta (semilarghezze): asfalto 2000 → cordolo 2480 →
+**banchina erbosa in piano fino a 4800** → scarpata fino a 8000. La banchina arriva a 4800
+perché `playerX` è limitato a ±2.2 = **4400**: tutto ciò che il giocatore può calpestare deve
+stare a quota strada, altrimenti il cavallo (che prende la quota dalla linea d'asse)
+galleggerebbe sulla scarpata. 8000 è ben sotto il raggio minimo 13158 → niente ripiegamenti (#3).
+La scarpata scende fino a **sotto** la quota minima del terreno attraversato (`BANK_BURY=900`):
+il lembo esterno resta sepolto, quindi non può mai aprirsi una fessura fra scarpata e terreno.
+Il timbro prosegue oltre il traguardo (come la coda pre-partenza): senza, il franco crollava
+da 300 a 55 proprio sul traguardo.
+
+Illuminazione: `sky.position.copy(camera.position)` a ogni frame (il cielo è per definizione
+all'infinito); `HemisphereLight` con colore-da-terra verde-cachi `0x6e7a45` invece del bruno
+`0x6a5436` (il rimbalzo deve essere di ciò che c'è davvero sotto: prato, non fango); terreno
+e scarpate `castShadow` (a 17° di elevazione il rilevato ombreggia davvero la banchina).
+Alberi spostati oltre il piede della scarpata e piantati su `groundAt()`, non più sulla quota
+della strada.
+
+**Verifiche** (`invariant.js`, `playtest.js`, `perf.js` headless):
+- 87178 campioni su tutta la fascia calpestabile → **0 violazioni**, franco minimo 299.7/300;
+- playtest di 20 s con sterzate reali → **affondamento massimo nel terreno 0.0**, 0 errori console;
+- 120 fps a inizio/salita/culmine/fondo pista, caricamento 1.1 s, 510k triangoli statici.
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).

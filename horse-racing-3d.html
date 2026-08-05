@@ -283,9 +283,15 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;     // ombre morbide
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 80, 600000);
 
-// CIELO ATMOSFERICO vero (Rayleigh/Mie scattering), non più un colore piatto
+// CIELO ATMOSFERICO vero (Rayleigh/Mie scattering), non più un colore piatto.
+// La cupola è una BoxGeometry unitaria scalata: con la scala 450000 copre solo
+// ±225000 dall'origine, ma la pista arriva a z=662717 → per l'80% del tracciato
+// la camera usciva DALLA CUPOLA e il cielo diventava nero. Il cielo è per
+// definizione all'infinito: va RICENTRATO SULLA CAMERA a ogni frame (vedi il
+// LOOP), non lasciato inchiodato all'origine del mondo.
 const sky = new Sky();
 sky.scale.setScalar(450000);
+sky.frustumCulled = false;
 scene.add(sky);
 const skyU = sky.material.uniforms;
 skyU.turbidity.value        = 9;
@@ -306,8 +312,10 @@ const sunDir = new THREE.Vector3();
 // nebbia tinta come l'orizzonte caldo, così la pista lontana si fonde nel cielo
 scene.fog = new THREE.Fog(0xe7d8bf, 26000, 150000);
 
-// luce ambientale dal cielo/terra + sole direzionale caldo che proietta ombre morbide
-const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6a5436, 0.85);
+// luce ambientale dal cielo/terra + sole direzionale caldo che proietta ombre morbide.
+// Il colore "da terra" deve essere il rimbalzo di ciò che c'è davvero sotto — qui
+// prato, non terra battuta: con il bruno di prima le ombre viravano al fango.
+const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6e7a45, 0.85);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffdca6, 3.0);
 sun.position.copy(sunDir).multiplyScalar(20000);
@@ -345,7 +353,6 @@ addEventListener('resize', () => {
 //=========================================================================
 const COL = {
   ROAD_L:   new THREE.Color(0x737373), ROAD_D:   new THREE.Color(0x616161),
-  GRASS_L:  new THREE.Color(0x4f9e3a), GRASS_D:  new THREE.Color(0x438c30),   // strisce morbide, verde naturale
   RUMBLE_L: new THREE.Color(0x555555), RUMBLE_D: new THREE.Color(0xBBBBBB),
   LANE:     new THREE.Color(0xCCCCCC),
   START:    new THREE.Color(0xFFFFFF), FINISH:   new THREE.Color(0x101010),
@@ -378,20 +385,11 @@ ext.push(...pts);
 // nastro generico lungo la pista; colorOf(i) → THREE.Color o null per saltare il
 // segmento. I nastri NON si sovrappongono mai (niente z-fighting a distanza);
 // le linee di corsia sono decal con polygonOffset.
-function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, flatOuter = false, roughness = 1, tex = null, uvTile = 2000 }) {
+function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, roughness = 1, tex = null, uvTile = 2000 }) {
   const positions = [], colors = [], uvs = [];
-  // flatOuter=true: bordo esterno (lontano dalla strada) scende a y=0, evita soffitti verdi sui saliscendi
-  const sideSign = Math.sign(centerOff);
   const edge = (p, off) => {
     const rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
-    let y;
-    if (flatOuter) {
-      const t = (sideSign * off + half) / (2 * half);  // 0=bordo interno, 1=bordo esterno
-      y = (p.y + yOff) * (1 - t);
-    } else {
-      y = p.y + yOff;
-    }
-    return [ p.x + rx*(centerOff+off), y, p.z + rz*(centerOff+off) ];
+    return [ p.x + rx*(centerOff+off), p.y + yOff, p.z + rz*(centerOff+off) ];
   };
   // UV planari nel frame della pista (laterale L, longitudinale D), tile in unità mondo:
   // continue tra nastri adiacenti e lungo la lunghezza → tiling senza stiramenti
@@ -427,38 +425,256 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, fl
 }
 
 const RUMBLE_W   = ROAD_WIDTH * 0.24;
-const GRASS_HALF = ROAD_WIDTH * 6;     // nastro erboso modesto; oltre c'è il fondale piatto
 
-// fondale erboso: piano enorme e STATICO (texture world-locked, niente swimming) che
-// riempie l'orizzonte fino alla nebbia senza generare triangoli-scheggia
-const GROUND_SIZE = 1500000, GROUND_TILE = 3500;
-const groundGrass = {
-  map: grassTex.map.clone(), normalMap: grassTex.normalMap.clone(), roughnessMap: grassTex.roughnessMap.clone(),
-};
-for (const k in groundGrass) {
-  const t = groundGrass[k];
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(GROUND_SIZE/GROUND_TILE, GROUND_SIZE/GROUND_TILE);
-  t.needsUpdate = true;
-}
-groundGrass.map.colorSpace = THREE.SRGBColorSpace;
-const groundPlane = new THREE.Mesh(
-  new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE),
-  new THREE.MeshStandardMaterial({ color: 0xc8d0b0, roughness: 1, metalness: 0, ...groundGrass })
-);
-groundPlane.rotation.x = -Math.PI/2;
-groundPlane.position.y = -40;
-groundPlane.renderOrder = -1;
-groundPlane.receiveShadow = true;
-scene.add(groundPlane);
+//=========================================================================
+// TERRENO — campo di quote (heightfield) SU CUI POGGIA la pista
+//
+// PERCHÉ (bug corretto qui): prima il "prato" era un nastro largo 12000 per
+// lato con il bordo esterno inchiodato a y=0 (flatOuter) più un piano piatto
+// infinito a y=-40. Tre difetti misurabili su questo tracciato:
+//   · la pista sale fino a y=+32871 → il nastro scendeva 32871 su 12000 di
+//     sviluppo laterale = muro d'erba a 70° che tappava il cielo;
+//   · 73 segmenti hanno quota < -40 → lì la strada finiva SOTTO il piano
+//     infinito: si correva letteralmente sotto terra;
+//   · raggio di curva minimo 13158 ma il nastro arrivava a 26480 dal centro
+//     → oltre il raggio il nastro si RIPIEGA su se stesso (i "layer che si
+//     sovrappongono": geometria autointersecante, normali rovesciate).
+//   · il tracciato passa SOPRA SE STESSO (segmenti 3272/4832: 131 unità di
+//     distanza in pianta, 4201 di dislivello) → il prato del ramo alto
+//     faceva da soffitto sopra il ramo basso.
+//
+// MODELLO CORRETTO: il terreno è una superficie unica che INTERPOLA le quote
+// della strada, e la strada ci poggia sopra su un rilevato.
+//   1. si timbrano nella griglia le quote del corridoio stradale, a VERGE_DROP
+//      sotto il piano viabile; dove il tracciato si sovrappone vince la quota
+//      PIÙ BASSA → il ramo alto diventa un viadotto, non un soffitto;
+//   2. le celle libere si risolvono per rilassamento (equazione di Laplace) su
+//      una piramide di risoluzioni: superficie liscia che raccorda le quote;
+//   3. ondulazione dolce lontano dalla strada, per non avere una piana finta;
+//   4. clamp finale: sotto ogni punto strada il terreno è garantito ≤ quota
+//      strada − VERGE_DROP. È l'invariante che rende IMPOSSIBILE ritrovarsi
+//      sotto il piano di campagna.
+//=========================================================================
+const VERGE_DROP  = 300;        // rilevato stradale: quanto la sede sta sopra il terreno
+const CELL        = 2000;       // passo della griglia delle quote
+const TERR_MARGIN = 50000;      // quanto il terreno deborda dal bounding box della pista
+const SKIRT       = 600000;     // l'anello di bordo si allunga fin qui → orizzonte pieno
+const GROUND_TILE = 3500;       // passo di ripetizione della texture d'erba (unità mondo)
+
+// SEZIONE TRASVERSALE (semilarghezze, dal centro strada verso l'esterno):
+//   0 → 2000   asfalto            ┐
+//   2000→2480  cordolo            ├ tutto in piano, a quota strada
+//   2480→4800  banchina erbosa    ┘  ← qui finisce chi esce di strada
+//   4800→8000  scarpata: scende fino a sparire sotto il terreno
+// La banchina arriva a 4800 perché playerX è limitato a ±2.2 = 4400 unità:
+// tutto ciò che il giocatore può calpestare deve stare a quota strada, altrimenti
+// il cavallo (che prende la quota dalla linea d'asse) galleggerebbe sulla scarpata.
+// 8000 è ben sotto il raggio di curva minimo (13158): la geometria non si ripiega.
+const VERGE_OUT   = ROAD_WIDTH * 2.4;   // bordo esterno della banchina calpestabile
+const BANK_OUT    = ROAD_WIDTH * 4;     // piede della scarpata
+const STAMP_HALF  = ROAD_WIDTH * 2.5;   // corridoio timbrato: copre tutta la parte in piano
+
+const terrain = (() => {
+  // --- bounding box della pista (coda pre-partenza inclusa) ---
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const p of ext) {
+    if (p.x < x0) x0 = p.x;  if (p.x > x1) x1 = p.x;
+    if (p.z < z0) z0 = p.z;  if (p.z > z1) z1 = p.z;
+  }
+  x0 -= TERR_MARGIN; x1 += TERR_MARGIN; z0 -= TERR_MARGIN; z1 += TERR_MARGIN;
+  const nx = Math.ceil((x1-x0)/CELL) + 1, nz = Math.ceil((z1-z0)/CELL) + 1;
+  const h = new Float32Array(nx*nz), pin = new Uint8Array(nx*nz);
+
+  // il timbro prosegue OLTRE il traguardo, come la coda `ext` prima del via:
+  // senza, le celle appena fuori dall'ultima sezione restano libere, il terreno
+  // vi risale e il franco sotto la strada crollava da 300 a 55 sul traguardo
+  const tail = ext[ext.length-1];
+  const stampPts = ext.concat(Array.from({ length: PRE }, (_, k) => ({
+    x: tail.x + Math.sin(tail.heading)*(k+1)*SEGMENT_LENGTH,
+    z: tail.z + Math.cos(tail.heading)*(k+1)*SEGMENT_LENGTH,
+    y: tail.y, heading: tail.heading })));
+
+  // ogni punto della linea d'asse timbra 7 campioni trasversali del corridoio:
+  // il passo (1667) resta sotto CELL, così nessuna cella del corridoio sfugge
+  const forEachStamp = cb => {
+    for (const p of stampPts) {
+      const rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
+      for (let s = -3; s <= 3; s++) {
+        const off = s * STAMP_HALF/3;
+        cb(p.x + rx*off, p.z + rz*off, p.y - VERGE_DROP);
+      }
+    }
+  };
+
+  // --- 1. TIMBRO del corridoio (sulle sovrapposizioni vince la quota più bassa) ---
+  forEachStamp((wx, wz, v) => {
+    const i = Math.round((wx-x0)/CELL), j = Math.round((wz-z0)/CELL);
+    if (i < 0 || i >= nx || j < 0 || j >= nz) return;
+    const c = j*nx + i;
+    h[c] = pin[c] ? Math.min(h[c], v) : v;
+    pin[c] = 1;
+  });
+
+  // --- 2. RILASSAMENTO su piramide (multigrid cascadico: poche iterazioni e
+  //        l'informazione attraversa comunque tutta la griglia) ---
+  const levels = [{ nx, nz, h, pin }];
+  while (levels[levels.length-1].nx > 6 && levels[levels.length-1].nz > 6) {
+    const f = levels[levels.length-1];
+    const cx = Math.ceil(f.nx/2), cz = Math.ceil(f.nz/2);
+    const ch = new Float32Array(cx*cz), cp = new Uint8Array(cx*cz);
+    for (let j = 0; j < f.nz; j++) for (let i = 0; i < f.nx; i++) {
+      const s = j*f.nx + i;
+      if (!f.pin[s]) continue;
+      const c = (j>>1)*cx + (i>>1);
+      ch[c] = cp[c] ? Math.min(ch[c], f.h[s]) : f.h[s];
+      cp[c] = 1;
+    }
+    levels.push({ nx: cx, nz: cz, h: ch, pin: cp });
+  }
+  const relax = (L, iters) => {           // Gauss-Seidel: media dei 4 vicini, bordi liberi
+    const w = L.nx, d = L.nz, a = L.h, q = L.pin;
+    for (let it = 0; it < iters; it++)
+      for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+        const c = j*w + i;
+        if (q[c]) continue;
+        a[c] = 0.25 * (a[c - (i>0 ? 1 : 0)] + a[c + (i<w-1 ? 1 : 0)] +
+                       a[c - (j>0 ? w : 0)] + a[c + (j<d-1 ? w : 0)]);
+      }
+  };
+  {
+    const top = levels[levels.length-1];
+    let mean = 0, cnt = 0;
+    for (let c = 0; c < top.h.length; c++) if (top.pin[c]) { mean += top.h[c]; cnt++; }
+    mean = cnt ? mean/cnt : 0;
+    for (let c = 0; c < top.h.length; c++) if (!top.pin[c]) top.h[c] = mean;
+    relax(top, 80);
+    for (let k = levels.length - 2; k >= 0; k--) {
+      const f = levels[k], g = levels[k+1];
+      for (let j = 0; j < f.nz; j++) for (let i = 0; i < f.nx; i++) {   // prolunga dal livello grosso
+        const c = j*f.nx + i;
+        if (!f.pin[c]) f.h[c] = g.h[Math.min(g.nz-1, j>>1)*g.nx + Math.min(g.nx-1, i>>1)];
+      }
+      relax(f, 26);
+    }
+  }
+
+  // --- 3. ONDULAZIONE lontano dalla strada (distanza chamfer a 2 passate) ---
+  const dist = new Float32Array(nx*nz).fill(1e9);
+  for (let c = 0; c < dist.length; c++) if (pin[c]) dist[c] = 0;
+  const D1 = CELL, D2 = CELL*Math.SQRT2;
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {          // passata avanti
+    const c = j*nx+i; let d = dist[c];
+    if (i > 0)             d = Math.min(d, dist[c-1]    + D1);
+    if (j > 0)             d = Math.min(d, dist[c-nx]   + D1);
+    if (j > 0 && i > 0)    d = Math.min(d, dist[c-nx-1] + D2);
+    if (j > 0 && i < nx-1) d = Math.min(d, dist[c-nx+1] + D2);
+    dist[c] = d;
+  }
+  for (let j = nz-1; j >= 0; j--) for (let i = nx-1; i >= 0; i--) {    // passata indietro
+    const c = j*nx+i; let d = dist[c];
+    if (i < nx-1)             d = Math.min(d, dist[c+1]    + D1);
+    if (j < nz-1)             d = Math.min(d, dist[c+nx]   + D1);
+    if (j < nz-1 && i < nx-1) d = Math.min(d, dist[c+nx+1] + D2);
+    if (j < nz-1 && i > 0)    d = Math.min(d, dist[c+nx-1] + D2);
+    dist[c] = d;
+  }
+  const fbm = (x, z) => {                 // rilievo deterministico, somma di seni
+    let v = 0, a = 1, f = 1/23000;
+    for (let o = 0; o < 3; o++) {
+      v += a * Math.sin(x*f*1.7 + Math.cos(z*f*0.9)*2.1) * Math.cos(z*f*1.3 + Math.sin(x*f*1.1)*1.7);
+      a *= 0.5; f *= 2.13;
+    }
+    return v;
+  };
+  const UND_AMP = 3400, UND_FADE = 16000;  // ampiezza collinare e raccordo verso la strada
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const c = j*nx+i;
+    const f = Math.min(1, dist[c]/UND_FADE);
+    if (f > 0) h[c] += UND_AMP * f*f * fbm(x0 + i*CELL, z0 + j*CELL);
+  }
+
+  // --- 4. CLAMP: invariante "il terreno non supera mai la sede stradale" ---
+  forEachStamp((wx, wz, lim) => {
+    const fi = (wx-x0)/CELL, fj = (wz-z0)/CELL;
+    const i0 = Math.floor(fi), j0 = Math.floor(fj);
+    for (let dj = 0; dj <= 1; dj++) for (let di = 0; di <= 1; di++) {
+      const i = i0+di, j = j0+dj;
+      if (i < 0 || i >= nx || j < 0 || j >= nz) continue;
+      const c = j*nx + i;
+      if (h[c] > lim) h[c] = lim;
+    }
+  });
+
+  // quota del terreno in un punto qualsiasi (bilineare sulla griglia)
+  function groundAt(wx, wz) {
+    const fi = (wx-x0)/CELL, fj = (wz-z0)/CELL;
+    const i = Math.min(nx-2, Math.max(0, Math.floor(fi)));
+    const j = Math.min(nz-2, Math.max(0, Math.floor(fj)));
+    const tx = Math.min(1, Math.max(0, fi-i)), tz = Math.min(1, Math.max(0, fj-j));
+    const c = j*nx + i;
+    const a = h[c]    + (h[c+1]    - h[c])    * tx;
+    const b = h[c+nx] + (h[c+nx+1] - h[c+nx]) * tx;
+    return a + (b-a)*tz;
+  }
+
+  // --- MESH: griglia regolare; l'anello di bordo è spinto fino a SKIRT così
+  //     il terreno arriva all'orizzonte e si spegne nella nebbia. (Lo stiramento
+  //     del bordo non è replicato in groundAt: là fuori, 50000 oltre il bounding
+  //     box della pista, non c'è nulla che interroghi la quota.) ---
+  let lo = Infinity, hi = -Infinity;
+  for (let c = 0; c < h.length; c++) { if (h[c] < lo) lo = h[c]; if (h[c] > hi) hi = h[c]; }
+  // tinta per quota: valle verde → cresta secca. Usata anche dalle scarpate,
+  // che condividono il materiale, così la giunzione non si vede.
+  const loGreen = [0.86, 0.98, 0.80], hiKhaki = [1.10, 1.00, 0.72];
+  const tint = (y, out, at = 0) => {
+    const t = Math.min(1, Math.max(0, (y-lo)/(hi-lo)));
+    for (let k = 0; k < 3; k++) out[at+k] = loGreen[k] + (hiKhaki[k]-loGreen[k])*t;
+  };
+  const pos = new Float32Array(nx*nz*3), uv = new Float32Array(nx*nz*2), col = new Float32Array(nx*nz*3);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const c = j*nx + i;
+    const wx = i === 0 ? x0 - SKIRT : i === nx-1 ? x1 + SKIRT : x0 + i*CELL;
+    const wz = j === 0 ? z0 - SKIRT : j === nz-1 ? z1 + SKIRT : z0 + j*CELL;
+    pos[c*3] = wx; pos[c*3+1] = h[c]; pos[c*3+2] = wz;
+    uv[c*2] = wx/GROUND_TILE; uv[c*2+1] = wz/GROUND_TILE;
+    tint(h[c], col, c*3);
+  }
+  const idx = new Uint32Array((nx-1)*(nz-1)*6);
+  let q = 0;
+  for (let j = 0; j < nz-1; j++) for (let i = 0; i < nx-1; i++) {
+    const a = j*nx+i, b = a+1, d = a+nx, e = d+1;
+    idx[q++] = a; idx[q++] = d; idx[q++] = e;      // winding CCW vista da sopra (+Y)
+    idx[q++] = a; idx[q++] = e; idx[q++] = b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('uv',       new THREE.BufferAttribute(uv, 2));
+  g.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.computeVertexNormals();
+
+  const gt = {};   // texture d'erba con UV già in unità mondo → repeat 1
+  for (const k of ['map','normalMap','roughnessMap']) {
+    const t = grassTex[k].clone();
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1,1); t.needsUpdate = true;
+    gt[k] = t;
+  }
+  gt.map.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, ...gt });
+  const mesh = new THREE.Mesh(g, mat);
+  mesh.receiveShadow = mesh.castShadow = true;
+  scene.add(mesh);
+
+  return { groundAt, tint, material: mat, minY: lo, maxY: hi, nx, nz };
+})();
+const groundAt = terrain.groundAt;
+
 const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
 // con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
 const roadPre   = new THREE.Color(0.78,0.78,0.78);
 const roadBase  = new THREE.Color(0.92,0.92,0.92);
 const roadStart = new THREE.Color(2.6,2.6,2.6);     // riga di partenza chiara
 const roadFin   = new THREE.Color(0.05,0.05,0.05);  // traguardo scuro
-const grassA    = new THREE.Color(1,1,1);
-const grassB    = new THREE.Color(0.93,0.97,0.9);   // striscia tenue per il senso di velocità
 
 buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, colorOf: i => {
   if (i < 0)              return roadPre;
@@ -466,10 +682,65 @@ buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, col
   if (i >= N - RUMBLE_LENGTH) return roadFin;
   return roadBase;
 }});
-for (const side of [-1, 1]) {
-  buildRibbon({ half: RUMBLE_W/2,  centerOff: side*(ROAD_WIDTH + RUMBLE_W/2),            colorOf: rumbleCol });
-  buildRibbon({ half: GRASS_HALF,  centerOff: side*(ROAD_WIDTH + RUMBLE_W + GRASS_HALF),
-               colorOf: i => isDark(i) ? grassB : grassA, tex: grassTex, uvTile: 3500, flatOuter: true });
+for (const side of [-1, 1])
+  buildRibbon({ half: RUMBLE_W/2, centerOff: side*(ROAD_WIDTH + RUMBLE_W/2), colorOf: rumbleCol });
+
+//=========================================================================
+// BANCHINA + SCARPATA — dal cordolo al terreno.
+// Prima un tratto PIANO a quota strada (la banchina calpestabile), poi la
+// scarpata a smoothstep che scende fino a SOTTO la quota minima del terreno
+// attraversato (BANK_BURY): il lembo esterno resta sempre sepolto, quindi non
+// può mai aprirsi una fessura fra scarpata e terreno e la parte visibile è
+// solo quella che emerge davvero.
+//=========================================================================
+{
+  const BANK_IN = ROAD_WIDTH + RUMBLE_W, BANK_BURY = 900, SPANS = 6;
+  const smooth = t => t*t*(3 - 2*t);
+  // k=0 → ciglio, k=1 → fine banchina piana, k≥2 → scarpata in discesa
+  const lat = k => k <= 1 ? BANK_IN + (VERGE_OUT-BANK_IN)*k
+                          : VERGE_OUT + (BANK_OUT-VERGE_OUT) * ((k-1)/(SPANS-1));
+  const fall = k => k <= 1 ? 0 : smooth((k-1)/(SPANS-1));   // 0 = quota strada, 1 = quota d'arrivo
+  const yOut = new Float64Array(ext.length);
+  for (const side of [-1, 1]) {
+    // quota d'arrivo: sotto il punto PIÙ BASSO del terreno attraversato dalla
+    // scarpata, così il lembo esterno resta sepolto e non si aprono fessure
+    for (let i = 0; i < ext.length; i++) {
+      const p = ext[i], rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
+      let low = Infinity;
+      for (let k = 2; k <= SPANS; k++) {
+        const off = side*lat(k);
+        low = Math.min(low, groundAt(p.x + rx*off, p.z + rz*off));
+      }
+      yOut[i] = Math.min(low, p.y - VERGE_DROP) - BANK_BURY;
+    }
+    const station = (i, k, out) => {
+      const p = ext[i], rx = -Math.cos(p.heading), rz = Math.sin(p.heading), off = side*lat(k);
+      return out.set(p.x + rx*off, p.y + (yOut[i] - p.y) * fall(k), p.z + rz*off);
+    };
+    const positions = [], uvs = [], colors = [], rgb = [0,0,0];
+    const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), D = new THREE.Vector3();
+    for (let i = 0; i < ext.length-1; i++) {
+      for (let k = 0; k < SPANS; k++) {
+        station(i, k, A); station(i, k+1, B); station(i+1, k+1, C); station(i+1, k, D);
+        // il verso "verso l'esterno" si ribalta col lato: senza questo scambio
+        // la scarpata di sinistra avrebbe le normali rivolte in basso (nera)
+        const tri = side > 0 ? [A,B,C, A,C,D] : [A,C,B, A,D,C];
+        for (const v of tri) {
+          positions.push(v.x, v.y, v.z);
+          uvs.push(v.x/GROUND_TILE, v.z/GROUND_TILE);
+          terrain.tint(v.y, rgb); colors.push(rgb[0], rgb[1], rgb[2]);
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs, 2));
+    g.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, terrain.material);   // stesso materiale del terreno: giunzione invisibile
+    m.receiveShadow = m.castShadow = true;
+    scene.add(m);
+  }
 }
 // linee di corsia tratteggiate (3 corsie come nell'originale) — decal sopra l'asfalto
 for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
@@ -485,8 +756,9 @@ const trees = (() => {
   for (let i = 8; i < N; i += 6) {
     for (const side of [-1, 1]) {
       if (Math.random() < 0.32) continue;
-      // mai dentro l'escursione laterale del giocatore (playerX max ±2.2)
-      spots.push({ i, lat: side * (2.8 + Math.random()*4.0), s: 0.65 + Math.random()*1.05,
+      // oltre il piede della scarpata (lat 4) ed entro 5.6: più in là il frame
+      // della pista si ripiega sull'interno delle curve (raggio minimo 13158 = lat 6.6)
+      spots.push({ i, lat: side * (4.25 + Math.random()*1.35), s: 0.65 + Math.random()*1.05,
                    yaw: Math.random()*Math.PI*2, hue: 0.30 + Math.random()*0.08,
                    light: 0.24 + Math.random()*0.16 });
     }
@@ -507,7 +779,9 @@ const trees = (() => {
   spots.forEach((sp, k) => {
     posToWorld(sp.i * SEGMENT_LENGTH, sp.lat, P);
     const q = new THREE.Quaternion().setFromAxisAngle(up, sp.yaw + (Math.random()-0.5)*0.3);
-    data.push({ x: P.x, y: P.y, z: P.z, s: sp.s, q, phase: Math.random() });
+    // gli alberi crescono dal TERRENO, non dalla quota della strada: fuori dal
+    // rilevato le due quote sono diverse e prima restavano sospesi o interrati
+    data.push({ x: P.x, y: groundAt(P.x, P.z), z: P.z, s: sp.s, q, phase: Math.random() });
     tint.setHSL(sp.hue, 0.55, sp.light);
     low.setColorAt(k, tint); top.setColorAt(k, tint);
   });
@@ -1626,8 +1900,13 @@ function begin() {                          // primo avvio, a caricamento finito
 }
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
+  segments, pts, posToWorld, groundAt, terrain, VERGE_DROP, VERGE_OUT, BANK_OUT,
+  SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
-  get kills(){return kills}, get score(){return score}, get money(){return money} };  // handle debug/test (headless)
+  get kills(){return kills}, get score(){return score}, get money(){return money},
+  // teleport per ispezione headless: piazza il giocatore a un punto della pista
+  teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
+                           playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
 onKill = () => { game.killsThisEvent++; };
 onPlayerDown = () => loseEvent('Sei caduto in battaglia!');
 
@@ -1711,6 +1990,9 @@ function frame(now) {
   // sole + frustum d'ombra seguono il giocatore: ombre sempre nitide attorno a lui
   sun.target.position.copy(player.group.position);
   sun.position.copy(player.group.position).addScaledVector(sunDir, 20000);
+  // il cielo è all'infinito: segue la camera, altrimenti se ne esce fuori (la
+  // pista è lunga 662k unità, la cupola copre ±225k dall'origine) e diventa nero
+  sky.position.copy(camera.position);
   composer.render();
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
   combatHud.draw(frameDt);               // barre vita nemici, popup, vignetta danno
