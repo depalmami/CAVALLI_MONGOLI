@@ -241,6 +241,44 @@ della strada.
 - playtest di 20 s con sterzate reali → **affondamento massimo nel terreno 0.0**, 0 errori console;
 - 120 fps a inizio/salita/culmine/fondo pista, caricamento 1.1 s, 510k triangoli statici.
 
+## 9.5 Tracciato lungo il doppio + modalità libera per il debug (2026-08-05)
+
+**Tracciato: da 6705 a 16035 segmenti** (1.34M → 3.21M unità; giro alla velocità massima
+da 112s a 267s). La prima metà resta il livello 1 originale di javascript-racer, invariata;
+la seconda è nuova e usa tre sezioni aggiunte: `addSwitchbacks` (tornanti alternati a quota
+costante), `addValley` (si scende in conca e si risale), `addPlateau` (salita e lungo tratto
+in quota).
+
+Due correzioni necessarie perché l'allungamento non rompesse nulla:
+- **`addDownhillToEnd` ora si dimensiona sulla quota da smaltire.** Con lunghezza fissa a 200
+  segmenti si arrivava al traguardo da +37000 e la discesa finale diventava una rampa al
+  **48%**. Poiché `easeInOut` concentra la pendenza al centro (dove vale ~π/2 volte la media),
+  il numero di segmenti si ricava da lì per tenere il picco sotto il 20%. Risultato: pendenza
+  massima di tutto il tracciato di nuovo **37.7%**, cioè il punto peggiore già presente nel
+  livello originale (segmento 2941) — la pista non è diventata più ripida di com'era.
+- **Le casse-arma seguono la lunghezza della pista** invece di essere fisse a 12. La spaziatura
+  resta quella tarata sul tracciato corto (~103k unità): altrimenti, dato che gli eventi
+  misurano *distanza percorsa* e non giri, ogni evento avrebbe offerto metà delle armi.
+
+**VINCOLO ora documentato nel codice:** mai superare `ROAD.CURVE.MEDIUM`. Con `CURVE_K=0.0038`
+una MEDIUM ha raggio 13158; una HARD scenderebbe a 8772, cioè dentro la fascia occupata da
+scarpate (8000) e alberi (fino a 11200) → tutto ciò che segue il frame della pista si
+ripiegherebbe sull'interno delle curve, riaprendo il bug dei "layer sovrapposti" di §9.4.
+
+**Modalità libera (tasto `N`, o il pulsante 🔧 nell'HUD).** Spegne tutta la parte Road
+Redemption — rivali, combattimento, casse-arma, obiettivi d'evento, danni e morte — e lascia
+solo la guida, per ispezionare pista/terreno/luci senza interruzioni. Non è una pausa: si
+entra subito in pista saltando briefing/shop/game-over. In modalità libera `R` riporta solo
+il cavallo al via senza riaccendere l'evento; spegnendola si torna a un briefing pulito con
+i rivali di nuovo visibili. Guardie in `updateAI`, `updatePickups`, `checkGame`,
+`combatHud.draw`, nel ciclo di rendering dei rivali e sui tasti d'attacco.
+
+**Verifiche** (headless): invariante del terreno su **213421** campioni → **0 violazioni**,
+franco minimo 299.9/300 · guida reale con sterzate → affondamento massimo 0.0 · modalità
+libera 11/11 asserzioni (rivali spariti, vita mai scesa, obiettivo superato senza che accada
+nulla, ritorno al gioco normale intero) · **120 fps** in 6 punti sparsi sui 16035 segmenti,
+caricamento 1.26s, 1.2M triangoli statici.
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).

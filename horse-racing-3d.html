@@ -86,6 +86,7 @@
   </div>
   <div>
     <button id="btn-camera">Camera: chase</button>
+    <button id="btn-free">🔧 Modalità libera</button>
   </div>
   <div>
     <button id="btn-tap">🎉 Tap tempo</button>
@@ -121,7 +122,7 @@
 </div>
 
 <div id="hud-help" class="panel">
-  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>T/P/F/G/H</b> show · <b>R</b> riparti
+  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>N</b> modalità libera · <b>T/P/F/G/H</b> show · <b>R</b> riparti
 </div>
 
 <div id="screen"><div class="box" id="screen-box"></div></div>
@@ -206,11 +207,40 @@ function addSCurves() {
 function addBumps() {
   for (const y of [5,-2,-5,8,5,-7,5,-2]) addRoad(10,10,10, 0, y);
 }
-function addDownhillToEnd(n=200) {
-  addRoad(n,n,n, -ROAD.CURVE.EASY, -lastY()/SEGMENT_LENGTH);
+// La discesa finale si dimensiona sulla quota da smaltire, invece di avere una
+// lunghezza fissa: con la pista lunga si arriva al traguardo da +37000 e i vecchi
+// 200 segmenti diventavano una rampa al 48%. easeInOut concentra la pendenza al
+// centro, dove vale ~π/2 volte la media: da lì la formula per il numero di segmenti.
+function addDownhillToEnd(maxGrade = 0.20) {
+  const drop = lastY() / SEGMENT_LENGTH;
+  const n = Math.max(100, Math.ceil(Math.PI/2 * Math.abs(drop) * Y_SCALE / (3*maxGrade)));
+  addRoad(n,n,n, -ROAD.CURVE.EASY, -drop);
+}
+// ── sezioni della seconda metà ──
+function addSwitchbacks(n=ROAD.LENGTH.MEDIUM) {      // tornanti alternati a quota costante
+  for (const c of [ROAD.CURVE.MEDIUM, -ROAD.CURVE.MEDIUM, ROAD.CURVE.MEDIUM, -ROAD.CURVE.MEDIUM])
+    addRoad(n, n*2, n, c, ROAD.HILL.NONE);
+}
+function addValley(n=ROAD.LENGTH.LONG) {             // si scende in conca e si risale
+  addRoad(n,n,n,  ROAD.CURVE.EASY, -ROAD.HILL.HIGH);
+  addRoad(n,n,n,  0,                ROAD.HILL.NONE);
+  addRoad(n,n,n, -ROAD.CURVE.EASY,  ROAD.HILL.HIGH);
+}
+function addPlateau(n=ROAD.LENGTH.LONG) {            // salita e lungo tratto in quota
+  addRoad(n,n,n,   0,               ROAD.HILL.MEDIUM);
+  addRoad(n,n*2,n, ROAD.CURVE.EASY, ROAD.HILL.NONE);
 }
 
-// layout del livello 1 (identico a resetRoad del gioco attuale)
+//=========================================================================
+// LAYOUT — VINCOLO DA RISPETTARE quando si aggiungono sezioni:
+// mai superare ROAD.CURVE.MEDIUM. Con CURVE_K=0.0038 una MEDIUM ha raggio
+// 13158; una HARD scenderebbe a 8772, cioè DENTRO la fascia occupata da
+// scarpate (8000) e alberi (fino a 11200): tutto ciò che segue il frame
+// della pista si ripiegherebbe sull'interno delle curve — è esattamente il
+// bug dei "layer sovrapposti" corretto in §9.4 del PRD.
+//=========================================================================
+
+// prima metà: il livello 1 originale di javascript-racer, invariato
 addStraight(ROAD.LENGTH.SHORT);
 addLowRollingHills();
 addSCurves();
@@ -228,6 +258,27 @@ addBumps();
 addHill(ROAD.LENGTH.LONG, -ROAD.HILL.MEDIUM);
 addStraight();
 addSCurves();
+
+// seconda metà (2026-08-05): il tracciato passa da 6705 a 16035 segmenti
+// (1.34M → 3.21M unità, giro da 112s a 267s alla velocità massima)
+addStraight(ROAD.LENGTH.LONG);
+addSCurves();
+addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
+addPlateau();
+addBumps();
+addCurve(ROAD.LENGTH.LONG*1.5, ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
+addLowRollingHills(ROAD.LENGTH.MEDIUM, ROAD.HILL.MEDIUM);
+addSCurves();
+addValley();
+addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, -ROAD.HILL.LOW);
+addStraight(ROAD.LENGTH.LONG);
+addSwitchbacks();
+addHill(ROAD.LENGTH.LONG, -ROAD.HILL.HIGH);
+addLowRollingHills();
+addCurve(ROAD.LENGTH.LONG*2, ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
+addBumps();
+addSCurves();
+addStraight(ROAD.LENGTH.LONG);
 addDownhillToEnd();
 
 const N = segments.length;
@@ -1096,6 +1147,10 @@ const ATK_RANGE = 3200;      // "affiancati" lungo pista (unità mondo)
 const LAT_RANGE = 0.95;      // affiancati lateralmente (unità playerX)
 let pHealth = MAX_HEALTH, nitro = 0, money = 0, score = 0, kills = 0;
 let blocking = false, critical = false, boosting = false;
+// MODALITÀ LIBERA (tasto N): spegne tutta la parte Road Redemption — rivali,
+// combattimento, casse-arma, obiettivi d'evento e morte — e lascia solo la guida.
+// Serve per ispezionare pista, terreno e luci senza essere interrotti.
+let freeRoam = false;
 let pAtkCd = 0, shake = 0, dmgFlash = 0, hitFlash = 0, strengthMul = 1;
 // ARMI a tema mongolo (Fase 3). reach = moltiplicatore raggio laterale; uses = colpi prima di esaurirsi
 const WEAPONS = {
@@ -1189,6 +1244,7 @@ function wipe(o, cause) {
 
 // AI dei rivali: rubber-band per restare nel gruppo, cambio corsia, contrattacco
 function updateAI(dt) {
+  if (freeRoam) return;                // modalità libera: nessun rivale si muove né attacca
   for (const o of opponents) {
     if (o.flash > 0) o.flash -= dt*3;
     if (o.state === 'wipe') {
@@ -1236,16 +1292,23 @@ const pickups = [];
 {
   const KEYS = ['whip', 'mace', 'saber', 'bow'];
   const boxG = new THREE.BoxGeometry(520, 520, 520);
-  for (let i = 0; i < 12; i++) {
+  // il numero segue la LUNGHEZZA della pista, non è più fisso a 12: la spaziatura
+  // resta quella tarata sul tracciato corto (~103k unità), altrimenti allungando
+  // il giro si diraderebbero e gli eventi (che misurano distanza, non giri)
+  // offrirebbero metà delle armi
+  const PICKUP_SPACING = 103000;
+  const count = Math.max(4, Math.round(TRACK_LENGTH / PICKUP_SPACING) - 1);
+  for (let i = 0; i < count; i++) {
     const key = KEYS[i % KEYS.length], w = WEAPONS[key];
     const m = new THREE.Mesh(boxG, new THREE.MeshStandardMaterial(
       { color: w.color, emissive: w.color, emissiveIntensity: 0.7, metalness: 0.3, roughness: 0.4 }));
     m.castShadow = true; scene.add(m);
-    pickups.push({ key, mesh: m, pos: ((i+1) * (TRACK_LENGTH/13)) % TRACK_LENGTH,
+    pickups.push({ key, mesh: m, pos: ((i+1) * (TRACK_LENGTH/(count+1))) % TRACK_LENGTH,
                    lat: Math.random()*1.2 - 0.6, active: true, respawnT: 0 });
   }
 }
 function updatePickups(dt) {
+  if (freeRoam) return;                // casse-arma nascoste: sono meccanica di combattimento
   for (const p of pickups) {
     if (!p.active) { p.respawnT -= dt; if (p.respawnT <= 0) { p.active = true; p.mesh.visible = true; } continue; }
     posToWorld(p.pos, p.lat, p.mesh.position);
@@ -1380,6 +1443,7 @@ function setMode(mode) {
 $('btn-sprite').onclick = () => setMode('sprite');
 $('btn-model').onclick  = () => setMode('model');
 $('btn-camera').onclick = cycleCamera;
+$('btn-free').onclick   = () => setFreeRoam(!freeRoam);
 $('btn-tap').onclick    = () => party.tap();
 $('party-gain').oninput = e => {           // slider intensità: 100% = base, 600% ≈ +500%
   const pct = +e.target.value;
@@ -1408,10 +1472,16 @@ addEventListener('keydown', e => {
   if (k === 'f') { const el = $('live-flash'); el.checked = !el.checked; live.setFlash(el.checked); }  // flash strobo
   if (k === 'g') { const el = $('live-bonus'); el.checked = !el.checked; live.setBonus(el.checked); }  // scritta lampeggiante
   if (k === 'h') { const el = $('live-3d');    el.checked = !el.checked; live.setMode3d(el.checked); } // scritta 2D/3D
-  if (k === 'j') playerAttack(-1);   // attacca a sinistra
-  if (k === 'l') playerAttack(1);    // attacca a destra
-  if (k === 'k') playerKick();       // calcio (butta fuori)
-  if (k === 'r') startEvent();               // riavvia pulito l'evento corrente
+  if (k === 'n') setFreeRoam(!freeRoam);   // modalità libera: via rivali e combattimento
+  if (k === 'j' && !freeRoam) playerAttack(-1);   // attacca a sinistra
+  if (k === 'l' && !freeRoam) playerAttack(1);    // attacca a destra
+  if (k === 'k' && !freeRoam) playerKick();       // calcio (butta fuori)
+  // R: in modalità libera riporta solo il cavallo al via, senza riaccendere l'evento
+  if (k === 'r') {
+    if (freeRoam) { position = prevPosition = 0; playerX = prevPlayerX = 0; speed = 0;
+                    currentLapTime = 0; started = false; }
+    else startEvent();                     // riavvia pulito l'evento corrente
+  }
 });
 
 //=========================================================================
@@ -1728,6 +1798,7 @@ const combatHud = (() => {
   const $ = id => document.getElementById(id);
   function draw(dt) {
     resize(); ctx.clearRect(0,0,W,H);
+    if (freeRoam) return;                 // niente barre vita/popup/vignetta senza rivali
     for (const o of opponents) {
       if (Math.abs(gapTo(o.pos)) > 26000) continue;              // solo rivali vicini
       const p = project(o.actor.group.position, HORSE_HEIGHT*1.7);
@@ -1826,6 +1897,10 @@ function objectiveText() {
 }
 function checkGame() {
   if (game.state !== 'racing') return;
+  if (freeRoam) {                      // nessun obiettivo, nessuna sconfitta: si gira e basta
+    D('combat-obj').textContent = '🔧 MODALITÀ LIBERA — rivali e combattimento disattivati (N)';
+    return;
+  }
   D('combat-obj').textContent = objectiveText();
   if (game.type === 'takedown') {
     if (game.killsThisEvent >= game.need) return winEvent();
@@ -1884,6 +1959,22 @@ function resetRun() {
   game.eventIndex = 0; money = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
+// MODALITÀ LIBERA — spegne la parte Road Redemption e lascia solo la guida.
+// Non è una pausa: si entra subito in pista (niente briefing/shop/game-over), così
+// si può ispezionare tutto il tracciato senza rivali che interrompono.
+function setFreeRoam(on) {
+  freeRoam = on;
+  D('btn-free').classList.toggle('active', on);
+  for (const o of opponents) o.actor.group.visible = !on;
+  for (const p of pickups)   p.mesh.visible = !on && p.active;
+  if (on) {
+    game.state = 'racing';
+    pHealth = MAX_HEALTH;      // niente danni: la barra resta piena
+    hideScreen();
+  } else {
+    resetRun();                // si torna al gioco normale da un briefing pulito
+  }
+}
 function showBriefing() {
   game.state = 'briefing';
   const ev = eventFor(game.eventIndex);
@@ -1900,6 +1991,7 @@ function begin() {                          // primo avvio, a caricamento finito
 }
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
+  setFreeRoam, get freeRoam(){return freeRoam},
   segments, pts, posToWorld, groundAt, terrain, VERGE_DROP, VERGE_OUT, BANK_OUT,
   SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
@@ -1970,7 +2062,7 @@ function frame(now) {
     const pp = player.group.position, ph = player.heading;
     dust.update(frameDt, pp.x - Math.sin(ph)*300, pp.y, pp.z - Math.cos(ph)*300, sp, speed > 0);
   }
-  for (const o of opponents) {
+  if (!freeRoam) for (const o of opponents) {
     o.actor.place(interpWrap(o.prevPos ?? o.pos, o.pos, alpha), o.lat);
     const ob = limit(-curveAt(o.pos) * (o.speed/MAX_SPEED) * BANK_K, -BANK_MAX, BANK_MAX);
     o.actor.bank += (ob - o.actor.bank) * kk;
@@ -1991,7 +2083,7 @@ function frame(now) {
   sun.target.position.copy(player.group.position);
   sun.position.copy(player.group.position).addScaledVector(sunDir, 20000);
   // il cielo è all'infinito: segue la camera, altrimenti se ne esce fuori (la
-  // pista è lunga 662k unità, la cupola copre ±225k dall'origine) e diventa nero
+  // pista è lunga 731k unità, la cupola copre ±225k dall'origine) e diventa nero
   sky.position.copy(camera.position);
   composer.render();
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
