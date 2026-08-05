@@ -463,9 +463,41 @@ bordi 0); le bande si accendono col testo (0 → 324); nessun testo DOM in proie
 live vero 2304×768 con render 1152×768: scena e overlay alla stessa risoluzione, **banda
 centrale piena al 100% dell'altezza**, nessuna fascia nera. Regressioni invariate, 120 fps.
 
+## 9.9 Pilota automatico e gamepad (2026-08-05)
+
+Secondo blocco del porting dal 2D. Sono i due che servono davvero *in scena*: il cavallo
+corre da solo mentre l'operatore sta alla musica, e quando riprende il controllo lo fa col
+pad invece che con la tastiera.
+
+**Un solo punto d'ingresso per i comandi.** Tastiera, gamepad e pilota confluiscono nelle
+stesse quattro funzioni `keyLeft/keyRight/keyFaster/keySlower`: tutto il resto del gioco
+continua a leggere quelle e basta, e aggiungere una sorgente non tocca né la fisica né il
+combattimento.
+
+**Pilota automatico** — portato dal 2D con le sue tre idee: le minacce si pesano sul *tempo*
+che manca a raggiungerle e non sulla distanza; ogni corsia candidata si giudica sulla
+posizione che avremo *davvero* quando ci arriveremo (lo sterzo ha velocità finita); e quando
+schivare non si può conviene alzare il piede invece di sbatterci. Le minacce, che nel 2D
+erano le auto dei segmenti, qui sono gli `opponents`.
+
+**Aggiunta obbligata rispetto al 2D: il combattimento.** Alla prima prova il pilota guidava
+benissimo (0% fuori strada, 200 km/h di punta) e **moriva dopo 7 secondi**: i rivali hanno un
+rubber-band che li tiene *apposta* affiancati e attaccano di continuo, e il 2D non aveva
+niente del genere. Ora para finché ha un rivale in raggio e nel frattempo attacca.
+Misurato dopo: **187 km/h di media, 0% fuori strada, vita mai scesa sotto 100, 13 takedown,
+evento vinto.**
+
+**Gamepad Xbox**: mappatura del 2D (stick/croce, RT gas, LT freno) più le azioni di
+combattimento che nel 2D non esistevano — X/B attacco sx/dx, Y calcio, LB parata, RB boost,
+START pilota. Gli attacchi sono a **fronte di salita**, non a pulsante tenuto, o partirebbero
+a raffica ogni frame. Fallback a scansione degli indici perché su iOS l'evento
+`gamepadconnected` può non arrivare.
+
+Comandi: `O` pilota automatico, più le caselle nella sezione 🤖 REGIA della console.
+
 ### Cosa resta del 2D da portare
-`gamepad` (Xbox) · `audio reactivity` · `pause menu` · `localStorage persistence` ·
-`level system` (livelli tematici + sprite per livello) · `pilota automatico` ·
+~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
+`localStorage persistence` · `level system` (livelli tematici + sprite per livello) ·
 `custom background` · `asset editor` · `intro/title screens` · `WebRTC webcam` (Livello 7).
 
 ## 10. Backlog / idee future (post-Fase 4)

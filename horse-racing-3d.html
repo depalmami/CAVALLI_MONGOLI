@@ -128,6 +128,13 @@
   <div style="opacity:.6; margin-top:4px;">Dai il tempo con <b>T</b>.</div>
 
   <hr>
+  <b class="head">🤖 REGIA (mani libere)</b>
+  <label><input type="checkbox" id="ap-on"> Pilota automatico <span style="opacity:.6">(O)</span></label>
+  <div id="pad-stato" class="nota">nessun pad collegato</div>
+  <div class="nota">Pad: stick/croce sterza · RT gas · LT freno · X/B attacca · Y calcio ·
+    LB parata · RB boost · START pilota.</div>
+
+  <hr>
   <b class="head">📽 PROIEZIONE (2° schermo)</b>
   <div class="row"><button id="proj-detect">Rileva schermi</button></div>
   <select id="proj-screen" disabled><option>— rileva prima gli schermi —</option></select>
@@ -160,7 +167,7 @@
 </div>
 
 <div id="hud-help" class="panel">
-  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>N</b> modalità libera · <b>T/P/F/G/H</b> show · <b>R</b> riparti
+  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T/P/F/G/H</b> show · <b>R</b> riparti
 </div>
 
 <div id="screen"><div class="box" id="screen-box"></div></div>
@@ -1342,10 +1349,15 @@ addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
 });
 addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-const keyLeft   = () => keys['arrowleft']  || keys['a'];
-const keyRight  = () => keys['arrowright'] || keys['d'];
-const keyFaster = () => keys['arrowup']    || keys['w'];
-const keySlower = () => keys['arrowdown']  || keys['s'];
+// SORGENTI DI COMANDO — tastiera, gamepad e pilota automatico confluiscono qui.
+// Tutto il resto del gioco continua a leggere queste quattro funzioni e basta:
+// aggiungere una sorgente non tocca né la fisica né il combattimento.
+const pad = { sx:false, dx:false, gas:false, freno:false, parata:false, boost:false, connesso:false };
+const ap  = { on:false, sx:false, dx:false, gas:false, freno:false, parata:false };
+const keyLeft   = () => keys['arrowleft']  || keys['a'] || pad.sx    || (ap.on && ap.sx);
+const keyRight  = () => keys['arrowright'] || keys['d'] || pad.dx    || (ap.on && ap.dx);
+const keyFaster = () => keys['arrowup']    || keys['w'] || pad.gas   || (ap.on && ap.gas);
+const keySlower = () => keys['arrowdown']  || keys['s'] || pad.freno || (ap.on && ap.freno);
 
 //=========================================================================
 // COMBATTIMENTO stile Road Redemption — salute, attacchi, takedown, AI rivali
@@ -1531,12 +1543,214 @@ function updatePickups(dt) {
   }
 }
 
+//=========================================================================
+// GAMEPAD (Xbox) — mappatura ripresa dal 2D, più le azioni di combattimento
+// che nel 2D non esistevano. Gli attacchi sono a FRONTE DI SALITA (premuta),
+// non a pulsante tenuto, o partirebbero a raffica ogni frame.
+//=========================================================================
+const gamepad = (() => {
+  const B = { A:0, B:1, X:2, Y:3, LB:4, RB:5, LT:6, RT:7, BACK:8, START:9,
+              SU:12, GIU:13, SX:14, DX:15 };
+  const MORTA = 0.15;
+  let idx = null, prima = [];
+  const premuto = (g, b) => !!(g.buttons[b] && (g.buttons[b].pressed || g.buttons[b].value > 0.1));
+  const zonaMorta = v => Math.abs(v) < MORTA ? 0 : Math.sign(v) * (Math.abs(v)-MORTA)/(1-MORTA);
+
+  addEventListener('gamepadconnected',    e => { idx = e.gamepad.index; segnala(e.gamepad.id); });
+  addEventListener('gamepaddisconnected', () => { idx = null; segnala(null); });
+  function segnala(nome) {
+    pad.connesso = !!nome;
+    const e = document.getElementById('pad-stato');
+    if (e) e.textContent = nome ? '🎮 ' + String(nome).slice(0, 28) : 'nessun pad collegato';
+  }
+  function prendi() {
+    const l = navigator.getGamepads ? navigator.getGamepads() : [];
+    if (idx !== null && l[idx]) return l[idx];
+    for (let i = 0; i < l.length; i++) if (l[i]) { idx = i; segnala(l[i].id); return l[i]; }   // iOS non emette l'evento
+    return null;
+  }
+  function leggi() {
+    const g = prendi();
+    if (!g) { pad.sx = pad.dx = pad.gas = pad.freno = pad.parata = pad.boost = false; return; }
+    const lx = zonaMorta(g.axes[0] || 0);
+    pad.sx    = lx < -0.1 || premuto(g, B.SX);
+    pad.dx    = lx >  0.1 || premuto(g, B.DX);
+    pad.gas   = premuto(g, B.RT) || premuto(g, B.A);
+    pad.freno = premuto(g, B.LT) || premuto(g, B.GIU);
+    pad.parata = premuto(g, B.LB);
+    pad.boost  = premuto(g, B.RB);
+    const scatto = b => { const ora = premuto(g, b), era = prima[b]; prima[b] = ora; return ora && !era; };
+    if (scatto(B.X))     playerAttack(-1);
+    if (scatto(B.B))     playerAttack(1);
+    if (scatto(B.Y))     playerKick();
+    if (scatto(B.START)) setPilota(!ap.on);
+  }
+  return { leggi };
+})();
+
+//=========================================================================
+// PILOTA AUTOMATICO — portato dal 2D. Serve proprio nel live: il cavallo corre
+// da solo mentre l'operatore sta alla musica. Tre idee lo tengono veloce:
+//  1. le minacce si pesano sul TEMPO che manca a raggiungerle, non sulla
+//     distanza: un rivale lontano ma lentissimo conta più di uno vicino e
+//     quasi altrettanto veloce;
+//  2. ogni corsia candidata si giudica sulla posizione che avremo DAVVERO
+//     quando ci arriveremo, perché lo sterzo ha una velocità finita;
+//  3. quando schivare non si può conviene alzare il piede invece di sbatterci.
+// Qui in più attacca da solo i rivali affiancati: senza, lo show sarebbe una
+// processione.
+//=========================================================================
+const AP = {
+  EDGE:0.90, RECOVER:0.97, RISK_W:3.0, LINE_W:0.30, MOVE_W:0.10,
+  EDGE_W:1.5, EDGE_SOFT:0.78, DRIFT_W:4.0, DRIFT_T:1.0,
+  TTC_LIFT:0.80, TTC_BRAKE:0.30, COMMIT:0.30, STUCK_T:0.60,
+  LARG:0.62,        // larghezza laterale di due cavalli affiancati, in unità playerX
+};
+let apTargetX = 0, apCommit = 0, apStuck = 0, apAtkCd = 0;
+
+function setPilota(on) {
+  ap.on = on;
+  ap.sx = ap.dx = ap.gas = ap.freno = false;
+  apTargetX = 0; apCommit = 0; apStuck = 0;
+  const c = document.getElementById('ap-on');   if (c) c.checked = on;
+  const b = document.getElementById('btn-pilota'); if (b) b.classList.toggle('active', on);
+}
+
+function updateAutopilot(dt) {
+  const spdPct    = speed / MAX_SPEED;
+  const latRate   = 2 * spdPct;                                        // offset/s dello sterzo
+  const driftRate = -2 * spdPct * spdPct * curveAt(position) * CENTRIFUGAL;
+  // tiene sempre il gas: valuta le minacce con la velocità che avrà fra poco,
+  // altrimenti dopo un urto "non vede" più il rivale che l'ha fermato
+  const projSpeed = Math.min(MAX_SPEED, speed + ACCEL * 1.2);
+  const idx = Math.floor(position / SEGMENT_LENGTH);
+
+  // --- 1. linea ideale: guarda avanti e sta all'interno della curva ---
+  const look = Math.round(14 + 36*spdPct);
+  let curveAhead = 0, wsum = 0;
+  for (let i = 2; i <= look; i += 2) {
+    const w = 1 - i/(look+2);
+    curveAhead += segments[(idx+i) % N].curve * w;
+    wsum += w;
+  }
+  curveAhead = wsum ? curveAhead/wsum : 0;
+  const lineX = limit(curveAhead * (0.34 + 0.30*spdPct), -AP.EDGE, AP.EDGE);
+  // la deriva vale curve*CENTRIFUGAL*spdPct volte lo sterzo: sopra 1 non è più
+  // recuperabile, quindi nelle curve vere bisogna ENTRARE già stretti
+  const driftAhead = -2 * spdPct * spdPct * curveAhead * CENTRIFUGAL;
+  const pushX = Math.max(0, Math.abs(driftAhead) - latRate) * Math.sign(driftAhead || 1) * AP.DRIFT_T;
+
+  const guida = (target, gas, freno) => {
+    const passo = latRate * dt;
+    const err = target - (playerX + driftRate*dt);
+    ap.sx = err < -passo*0.35;  ap.dx = err > passo*0.35;
+    ap.gas = gas; ap.freno = freno;
+  };
+
+  // --- 2. fuori pista: rientrare è la sola priorità ---
+  if (Math.abs(playerX) > AP.RECOVER) {
+    apTargetX = Math.sign(playerX) * 0.55; apCommit = 0;
+    guida(apTargetX, true, false);
+    return;
+  }
+
+  // --- 3. minacce, ordinate per tempo all'impatto ---
+  const minacce = [];
+  for (const o of opponents) {
+    if (o.state === 'wipe') continue;
+    const gap = gapTo(o.pos);                       // + = davanti a noi
+    if (gap <= 0) continue;
+    const ttc = gap / Math.max(projSpeed - o.speed, 40);
+    if (ttc > 2.4 && gap > 14*SEGMENT_LENGTH) continue;
+    minacce.push({ off:o.lat, speed:o.speed, gap, ttc,
+                   halfW: AP.LARG*0.5*1.45,         // banda di sicurezza
+                   hitW:  AP.LARG*0.4*1.15 });      // banda in cui l'urto avviene davvero
+  }
+  minacce.sort((a,b) => a.ttc - b.ttc);
+
+  // dove saremo quando raggiungeremo `m`, se puntiamo alla corsia `c`
+  const dove = (c, m) => {
+    const vuole = c - playerX, arrivo = latRate * m.ttc;
+    return playerX + Math.min(Math.abs(vuole), arrivo)*Math.sign(vuole || 1) + driftRate*m.ttc;
+  };
+  const rischio = c => {
+    let r = 0;
+    for (const m of minacce) {
+      const d = Math.abs(dove(c, m) - m.off);
+      if (d < m.halfW) { const sev = 1 - d/m.halfW; r += (sev*sev)/(0.20 + m.ttc); }
+    }
+    return r;
+  };
+  const costo = c => rischio(c)*AP.RISK_W
+    + Math.abs(c - lineX)*AP.LINE_W
+    + Math.abs(c - playerX)*AP.MOVE_W
+    + Math.max(0, Math.abs(c) - AP.EDGE_SOFT)*AP.EDGE_W
+    + Math.max(0, Math.abs(c + pushX) - 0.95)*AP.DRIFT_W;
+
+  // --- 4. scelta della corsia ---
+  const emax = Math.round(AP.EDGE*100);
+  let bestX = 0, bestC = Infinity;
+  for (let v = -emax; v <= emax; v += 3) {
+    const c = v/100, k = costo(c);
+    if (k < bestC) { bestC = k; bestX = c; }
+  }
+
+  // --- 5. impegno: una manovra iniziata non si abbandona per poco ---
+  apCommit = Math.max(0, apCommit - dt);
+  const costoPrec = costo(apTargetX);
+  if (apCommit > 0 && bestC > costoPrec*0.75) { bestX = apTargetX; bestC = costoPrec; }
+  else if (Math.abs(bestX - apTargetX) > 0.06) apCommit = AP.COMMIT;
+
+  // --- 6. gas e freno ---
+  let gas = true, freno = false, pericolo = null;
+  for (const m of minacce)
+    if (speed > m.speed && Math.abs(dove(bestX, m) - m.off) < m.hitW) { pericolo = m; break; }
+  if (pericolo) {
+    if (pericolo.ttc < AP.TTC_BRAKE) { gas = false; freno = true; }
+    else if (pericolo.ttc < AP.TTC_LIFT) gas = false;
+  }
+
+  // --- 7. anti-incastro: se restiamo lenti dietro qualcuno, sbloccati ---
+  const incastrato = minacce.length && minacce[0].gap < 20*SEGMENT_LENGTH &&
+                     Math.abs(minacce[0].off - playerX) < minacce[0].halfW;
+  if (spdPct < 0.62 && incastrato) apStuck += dt; else apStuck = Math.max(0, apStuck - dt*2);
+  if (apStuck > AP.STUCK_T) {
+    let rSx = 0, rDx = 0;
+    for (let v = -emax; v <= -15; v += 5) rSx += rischio(v/100);
+    for (let v = 15; v <= emax; v += 5) rDx += rischio(v/100);
+    bestX = (rSx <= rDx ? -1 : 1) * (AP.EDGE - 0.12);   // il lato più libero
+    gas = true; freno = false; apCommit = 0.8;
+  }
+
+  apTargetX = bestX;
+  guida(bestX, gas, freno);
+
+  // --- 8. combatte da solo ---
+  // Senza difesa lo show a mani libere dura 7 secondi: misurato. I rivali hanno
+  // un rubber-band che li tiene APPOSTA affiancati e attaccano in continuazione,
+  // quindi il pilota para finché ne ha uno in raggio, e nel frattempo mena.
+  ap.parata = false;
+  let bersaglio = null;
+  for (const o of opponents) {
+    if (o.state === 'wipe') continue;
+    const g = Math.abs(gapTo(o.pos)), l = Math.abs(o.lat - playerX);
+    if (g < ATK_RANGE*1.15 && l < LAT_RANGE*1.1) ap.parata = true;
+    if (g < ATK_RANGE && l < LAT_RANGE && !bersaglio) bersaglio = o;
+  }
+  apAtkCd -= dt;
+  if (bersaglio && apAtkCd <= 0) {
+    playerAttack(Math.sign(bersaglio.lat - playerX) || 1);
+    apAtkCd = 0.45 + Math.random()*0.35;
+  }
+}
+
 function updatePhysics(dt) {
+  if (ap.on) updateAutopilot(dt);
   const speedPct = speed / MAX_SPEED;
   const dx = dt * 2 * speedPct;
 
-  blocking = !!keys['i'];                       // parata (tieni premuto)
-  boosting = !!keys['shift'] && nitro > 0;      // boost (tieni premuto, consuma nitro)
+  blocking = !!keys['i'] || pad.parata || (ap.on && ap.parata);  // parata (tieni premuto)
+  boosting = (!!keys['shift'] || pad.boost) && nitro > 0;        // boost (consuma nitro)
 
   if (keyLeft())  playerX -= dx;
   if (keyRight()) playerX += dx;
@@ -1653,6 +1867,7 @@ $('btn-model').onclick  = () => setMode('model');
 $('btn-camera').onclick = cycleCamera;
 $('btn-free').onclick   = () => setFreeRoam(!freeRoam);
 // — PROIEZIONE —
+$('ap-on').onchange      = e => setPilota(e.target.checked);
 $('proj-detect').onclick = () => proiezione.rileva();
 $('proj-open').onclick   = () => proiezione.apri();
 $('proj-full').onclick   = () => proiezione.pieno();
@@ -1698,6 +1913,7 @@ addEventListener('keydown', e => {
   if (k === 'g') { const el = $('live-bonus'); el.checked = !el.checked; live.setBonus(el.checked); }  // scritta lampeggiante
   if (k === 'h') { const el = $('live-3d');    el.checked = !el.checked; live.setMode3d(el.checked); } // scritta 2D/3D
   if (k === 'n') setFreeRoam(!freeRoam);   // modalità libera: via rivali e combattimento
+  if (k === 'o') setPilota(!ap.on);        // pilota automatico: il cavallo corre da solo
   if (k === 'j' && !freeRoam) playerAttack(-1);   // attacca a sinistra
   if (k === 'l' && !freeRoam) playerAttack(1);    // attacca a destra
   if (k === 'k' && !freeRoam) playerKick();       // calcio (butta fuori)
@@ -2415,7 +2631,7 @@ function begin() {                          // primo avvio, a caricamento finito
 }
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
-  setFreeRoam, get freeRoam(){return freeRoam},
+  setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione,
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
@@ -2514,6 +2730,7 @@ function frame(now) {
   updatePickups(frameDt);                // casse-arma: rotazione, bob, raccolta
   hitSpark.update(frameDt);              // scintille d'impatto sui colpi
   party.update(frameDt);                 // party mode: alberi e luce a tempo
+  gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
 
   updateCamera(frameDt);
   // FOV dinamico: si allarga con la velocità → forte senso di velocità
