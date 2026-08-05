@@ -1144,7 +1144,7 @@ class HorseActor {
   // le ossa nel rig (nei rig Blender l'asse locale segue l'osso, non il mondo).
   shapeTurn() {
     if (!this.shape) return;
-    const hb = this.heading + this.steerYaw;      // asse di marcia del corpo
+    const hb = this.heading - this.steerYaw;      // asse di marcia (stesso segno di update)
     for (const s of this.shape) {
       if (!s.animata) s.bone.quaternion.copy(s.base);
       if (Math.abs(this.turn) < 1e-4) continue;
@@ -1152,6 +1152,11 @@ class HorseActor {
       if (s.pendolo) _bax.set(Math.sin(hb), 0, Math.cos(hb));   // coda: pendolo attorno all'avanti
       else           _bax.set(0, 1, 0);                          // schiena/collo: imbardata
       _bax.applyQuaternion(_bq).normalize();
+      // NB: il segno qui è OPPOSTO a quello dell'imbardata del corpo, e non è un errore:
+      // l'imbardata ruota il modello (rotazione minore = verso destra), la piega ruota
+      // le ossa attorno al su del MONDO. Verificato con un A/B allo stesso fotogramma
+      // d'animazione: è l'unico modo di isolare la piega dal galoppo, che da solo
+      // muove la testa di centinaia di unità.
       s.bone.quaternion.premultiply(_bq2.setFromAxisAngle(_bax, -this.turn * s.gain));
     }
   }
@@ -1195,7 +1200,12 @@ class HorseActor {
                                              camera.position.z - this.group.position.z);
     } else if (this.model) {
       // assetto: imbardata pista + sterzo, rollio in curva, beccheggio
-      this.model.rotation.y = this.heading + MODEL_YAW + this.steerYaw;
+      // SEGNO: un offset laterale POSITIVO (verso destra schermo) corrisponde a un
+      // angolo di rotazione MINORE — una traiettoria a +s verso destra vale h-s. Col
+      // + il muso puntava dalla parte OPPOSTA al moto: era questo il "sembra un'auto
+      // che derapa", e c'era da prima che toccassimo l'assetto. Verificato proiettando
+      // muso e spostamento reale sullo SCHERMO, non confrontando numeri fra loro.
+      this.model.rotation.y = this.heading + MODEL_YAW - this.steerYaw;
       this.model.rotation.z = this.bank;
       this.model.rotation.x = this.pitch;
       if (this.mixer) {
@@ -2190,7 +2200,7 @@ function frame(now) {
     const roadTurn    = curveAt(position) * sp;                        // + = la strada gira a destra
     // il rollio somma i DUE motivi per cui si sta girando: la strada e la sterzata.
     // Il secondo mancava, ed è per questo che sterzando in piano sembrava una derapata.
-    const bankTarget  = limit(-(roadTurn*BANK_K + steerTarget*BANK_STEER_K), -BANK_MAX, BANK_MAX);
+    const bankTarget  = limit(roadTurn*BANK_K + steerTarget*BANK_STEER_K, -BANK_MAX, BANK_MAX);
     const accel       = (speed - prevSpeed) / Math.max(frameDt, 1e-3);
     const pitchTarget = limit(-accel / MAX_SPEED * PITCH_K, -0.12, 0.12);
     const turnTarget  = limit(roadTurn*ROAD_TURN_K + steerTarget*BODY_TURN_K, -1, 1);
@@ -2216,7 +2226,7 @@ function frame(now) {
     const oLat   = (o.lat - (o.prevLat ?? o.lat)) / FIXED_DT;
     const oSteer = Math.atan2(oLat * ROAD_WIDTH, Math.max(o.speed, 1)) * STEER_K;
     const oRoad  = curveAt(o.pos) * oSp;
-    const ob     = limit(-(oRoad*BANK_K + oSteer*BANK_STEER_K), -BANK_MAX, BANK_MAX);
+    const ob     = limit(oRoad*BANK_K + oSteer*BANK_STEER_K, -BANK_MAX, BANK_MAX);
     const oTurn  = limit(oRoad*ROAD_TURN_K + oSteer*BODY_TURN_K, -1, 1);
     o.actor.bank     += (ob     - o.actor.bank)     * kk;
     o.actor.steerYaw += (oSteer - o.actor.steerYaw) * kkYaw;

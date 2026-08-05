@@ -395,6 +395,30 @@ invece che sulla base del collo (che è ciò che rendeva innaturale la posa) →
 piena curva, 7° allo sterzo normale**. Aggiunta la manopola unica `BODY_BEND` per ritarare
 l'ampiezza senza toccare i singoli guadagni.
 
+**IL BUG VERO, trovato al terzo giro (segnalato «il movimento è al contrario»).** Il corpo
+imbardava dalla parte OPPOSTA al moto: misurato in spazio schermo, sterzando a destra il
+cavallo si muoveva a +38px ma puntava il muso a **-86px**. Un angolo di deriva doppio e
+invertito — *era questo* il «sembra un'auto che derapa» originale, e c'era da prima che
+toccassimo l'assetto. Anche il rollio era invertito (si inclinava in FUORI dalla curva).
+
+Causa: in `posToWorld` un offset laterale **positivo** va verso destra schermo, ma la
+rotazione attorno a Y che punta a destra è **minore**, non maggiore (una traiettoria a `+s`
+verso destra corrisponde all'angolo `h − s`). `model.rotation.y` usava `heading + steerYaw`.
+Corretti quattro segni: imbardata del modello, rollio (giocatore e rivali), asse di marcia
+del pendolo della coda.
+
+**Perché non era emerso prima.** I miei controlli confrontavano `steerYaw` con un angolo di
+traiettoria calcolato *nella stessa convenzione*: un errore di segno comune si cancellava e
+la "deriva" risultava 0.7°. Non avevo mai verificato come la scena viene **renderizzata**.
+La verifica giusta è proiettare in **spazio schermo** con la camera vera del gioco.
+
+**E un secondo tranello, opposto**: correggendo, avevo invertito anche la piega del corpo,
+che era già giusta. Il test in spazio schermo sembrava confermarlo, ma era confuso dal moto
+rigido — la coda sta DIETRO il centro, quindi quando il corpo imbarda a destra la coda va a
+sinistra da sola. Per la piega serve l'A/B a fotogramma d'animazione fisso (`piega.js`), che
+è l'unico a isolarla. Segni finali: imbardata `heading − steerYaw`, piega `−turn * gain`
+(opposti fra loro, e non è un errore: ruotano cose diverse attorno ad assi diversi).
+
 **Lezione di metodo:** «si sposta di N unità» non basta a giudicare una posa — serviva
 l'angolo dell'osso, e serviva guardare la modalità giusta. Un effetto può essere
 matematicamente corretto (imbardata pura, verso giusto, nessun artefatto) e comunque
