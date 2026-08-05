@@ -279,6 +279,63 @@ libera 11/11 asserzioni (rivali spariti, vita mai scesa, obiettivo superato senz
 nulla, ritorno al gioco normale intero) · **120 fps** in 6 punti sparsi sui 16035 segmenti,
 caricamento 1.26s, 1.2M triangoli statici.
 
+## 9.6 Tre difetti, una causa sola: CURVE_K era troppo grande (2026-08-05)
+
+Segnalazione utente dopo §9.5, con screenshot: «ci sono ancora punti in cui il tracciato
+entra nelle colline d'erba e punti in cui addirittura si sovrappone a se stesso. Inoltre
+sono presenti alberi in carreggiata».
+
+Sembravano tre problemi indipendenti. Misurando, ne è emerso **uno solo**: il tracciato
+si sovrapponeva a se stesso in **20 punti**, con rami che passavano a **22–109 unità** di
+distanza in pianta e fino a **11135** di dislivello. Il 51.5% del tracciato aveva un altro
+ramo entro 26000 unità. Da lì discendevano tutti e tre i sintomi:
+
+| Sintomo segnalato | Causa reale |
+|---|---|
+| muri d'erba a bordo strada | il *rilevato* del ramo che passava sopra, a quota diversa |
+| «la pista entra nella collina» | lo stesso rilevato, visto da dentro l'abitacolo |
+| alberi in carreggiata | piazzati a lato del **proprio** ramo, cadevano sulla strada dell'**altro** |
+
+**Perché si avvitava.** `CURVE_K` converte il valore `curve` dei segmenti in una rotazione
+vera. A 0.0038 una curva MEDIUM lunga 600 segmenti ruota di **366°**: più di un giro
+completo. Nel motore pseudo-3D originale `curve` era solo un effetto ottico e questo non
+si vedeva; integrato in geometria reale, il tracciato diventa un gomitolo.
+
+**Correzione: `CURVE_K` 0.0038 → 0.0020.** Scelto misurando, non a occhio: è il valore più
+alto che azzera i conflitti, ed è una soglia netta, non un passaggio al pelo.
+
+| CURVE_K | raggio min | zone di conflitto | distanza min fra rami |
+|---|---|---|---|
+| 0.0038 (prima) | 13157 | 20 | 20 |
+| 0.0024 | 20833 | 13 | 38 |
+| 0.0022 | 22727 | 4 | 75 |
+| **0.0020** | **25000** | **0** | **35867** |
+| 0.0018 | 27777 | 0 | 36632 (griglia terreno +50%) |
+
+`CURVE_K` è puramente geometrico: la fisica (centrifuga, rollio) usa `curve` grezzo, quindi
+**la guida non cambia**. L'escursione di direzione resta 359°, quindi le curve restano varie.
+
+Due interventi di rinforzo, perché il layout da solo non è una garanzia:
+- **Tetto laterale del terreno.** Entro 20000 dalla strada il terreno non può salire più
+  ripido del 30% rispetto alla quota stradale. Il campo chamfer ora propaga anche la *quota
+  della strada più vicina* (solo la più vicina: nessuna interferenza fra rami). Senza,
+  l'ondulazione da sola piazzava ancora una collina al 51% a ridosso del ciglio.
+- **Alberi filtrati sulla distanza reale dalla strada** (`roadDist`, il campo chamfer),
+  non sull'offset laterale del proprio segmento: un albero a lato del ramo A non può più
+  finire sulla carreggiata del ramo B. ~30 alberi su ~3600 vengono scartati.
+
+Con il raggio minimo salito a 25000, le curve **HARD** sono tornate utilizzabili (raggio
+16667, sopra gli 11200 degli alberi): applicate ai tornanti, che con le MEDIUM non erano
+più tornanti. Verificato che restano puliti (distanza min fra rami 32965).
+
+**Verifiche** (`tredifetti.js`, headless, misure esatte sul gioco che gira):
+- alberi: **0** in carreggiata, **0** sulla banchina, il più vicino a 8502 (piede scarpata 8000);
+- muri: **0** punti su 10946 con pendenza laterale >50%; massima ora **30%**, cioè esattamente
+  il tetto imposto;
+- sovrapposizione: **0** tratti entro 26000 da un altro; distanza minima **32965**;
+- invariante del terreno ancora 0 violazioni su 213421 campioni; guida reale affondamento 0.0;
+  modalità libera 11/11; **120 fps** in 6 punti, caricamento 1.35s, 1.4M triangoli.
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).

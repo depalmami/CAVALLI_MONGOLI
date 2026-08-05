@@ -154,7 +154,22 @@ const OFFROAD_LIMIT  =  MAX_SPEED/4;
 const CENTRIFUGAL    = 0.3;
 
 // Conversione pseudo-3D → 3D reale:
-const CURVE_K = 0.0038;               // radianti di sterzata per unità di "curve" per segmento
+// CURVE_K è il cambio di questo valore più importante di tutto il porting: nel motore
+// pseudo-3D originale "curve" era solo un effetto ottico, qui diventa una rotazione VERA
+// che si integra lungo la pista. A 0.0038 una curva MEDIUM lunga 600 segmenti ruotava di
+// 366°, cioè più di un giro completo: il tracciato si avvitava e si SOVRAPPONEVA a se
+// stesso in 20 punti (rami a 22-109 unità di distanza in pianta e fino a 11135 di
+// dislivello). Da lì nascevano tre difetti che sembravano indipendenti:
+//   · muri d'erba a bordo strada  → era il rilevato del ramo che passava sopra;
+//   · "la pista entra nella collina" → stessa cosa, vista da dentro;
+//   · alberi in carreggiata → piazzati a lato di un ramo, cadevano sulla strada dell'altro.
+// A 0.0020 le spire non si chiudono più: le zone di conflitto passano da 20 a ZERO e la
+// distanza minima fra due tratti non adiacenti salta da 75 a 35867 unità — soglia netta,
+// non un passaggio al pelo. L'escursione di direzione resta 359°, quindi le curve restano
+// varie; scendere ancora non aggiunge margine e raddoppia solo il costo del terreno.
+// NB: CURVE_K è puramente geometrico. La fisica (forza centrifuga, rollio) usa `curve`
+// grezzo, quindi la guida non cambia di una virgola.
+const CURVE_K = 0.0020;               // radianti di sterzata per unità di "curve" per segmento
 const Y_SCALE = 0.6;                  // smorza le colline (nel finto 3D erano esagerate dalla proiezione)
 
 const HORSE_HEIGHT = 1300;            // altezza cavallo in unità mondo (≈ 1 corsia)
@@ -217,8 +232,11 @@ function addDownhillToEnd(maxGrade = 0.20) {
   addRoad(n,n,n, -ROAD.CURVE.EASY, -drop);
 }
 // ── sezioni della seconda metà ──
-function addSwitchbacks(n=ROAD.LENGTH.MEDIUM) {      // tornanti alternati a quota costante
-  for (const c of [ROAD.CURVE.MEDIUM, -ROAD.CURVE.MEDIUM, ROAD.CURVE.MEDIUM, -ROAD.CURVE.MEDIUM])
+// Tornanti alternati a quota costante. Usa HARD: con CURVE_K=0.0020 il raggio
+// resta 16667, sopra gli 11200 degli alberi, e la distanza minima fra rami del
+// tracciato resta 32965 (verificata) — quindi qui si può stringere davvero.
+function addSwitchbacks(n=ROAD.LENGTH.MEDIUM) {
+  for (const c of [ROAD.CURVE.HARD, -ROAD.CURVE.HARD, ROAD.CURVE.HARD, -ROAD.CURVE.HARD])
     addRoad(n, n*2, n, c, ROAD.HILL.NONE);
 }
 function addValley(n=ROAD.LENGTH.LONG) {             // si scende in conca e si risale
@@ -232,12 +250,19 @@ function addPlateau(n=ROAD.LENGTH.LONG) {            // salita e lungo tratto in
 }
 
 //=========================================================================
-// LAYOUT — VINCOLO DA RISPETTARE quando si aggiungono sezioni:
-// mai superare ROAD.CURVE.MEDIUM. Con CURVE_K=0.0038 una MEDIUM ha raggio
-// 13158; una HARD scenderebbe a 8772, cioè DENTRO la fascia occupata da
-// scarpate (8000) e alberi (fino a 11200): tutto ciò che segue il frame
-// della pista si ripiegherebbe sull'interno delle curve — è esattamente il
-// bug dei "layer sovrapposti" corretto in §9.4 del PRD.
+// LAYOUT — DUE VINCOLI da verificare quando si aggiungono o si cambiano sezioni:
+//
+// 1. RAGGIO > 11200. Tutto ciò che segue il frame della pista (scarpate a 8000,
+//    alberi fino a 11200) si ripiega sull'interno delle curve se il raggio
+//    scende sotto il proprio offset laterale — il bug dei "layer sovrapposti"
+//    di §9.4. Con CURVE_K=0.0020: MEDIUM = 25000, HARD = 16667, quindi ora
+//    anche le HARD sono utilizzabili (con 0.0038 non lo erano: 8772).
+//
+// 2. IL TRACCIATO NON DEVE AVVICINARSI A SE STESSO. È il vincolo che è costato
+//    di più (§9.6): due rami vicini a quote diverse producono muri d'erba a
+//    bordo strada e alberi in carreggiata. Oggi la distanza minima fra tratti
+//    non adiacenti è 35867 unità; va ri-misurata dopo ogni modifica al layout,
+//    perché nessun controllo a runtime la può garantire.
 //=========================================================================
 
 // prima metà: il livello 1 originale di javascript-racer, invariato
@@ -609,25 +634,28 @@ const terrain = (() => {
     }
   }
 
-  // --- 3. ONDULAZIONE lontano dalla strada (distanza chamfer a 2 passate) ---
+  // --- 3. DISTANZA dalla strada (chamfer a 2 passate) + quota della strada più
+  //        vicina: la seconda serve al "tetto laterale" del punto 5 ---
   const dist = new Float32Array(nx*nz).fill(1e9);
-  for (let c = 0; c < dist.length; c++) if (pin[c]) dist[c] = 0;
+  const srcY = new Float32Array(nx*nz);
+  for (let c = 0; c < dist.length; c++) if (pin[c]) { dist[c] = 0; srcY[c] = h[c]; }
   const D1 = CELL, D2 = CELL*Math.SQRT2;
+  // propaga distanza E sorgente insieme, così ogni cella sa a che quota sta la
+  // strada più vicina (solo la PIÙ VICINA: nessuna interferenza fra rami lontani)
+  const prop = (c, cn, w) => { const d = dist[cn] + w; if (d < dist[c]) { dist[c] = d; srcY[c] = srcY[cn]; } };
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {          // passata avanti
-    const c = j*nx+i; let d = dist[c];
-    if (i > 0)             d = Math.min(d, dist[c-1]    + D1);
-    if (j > 0)             d = Math.min(d, dist[c-nx]   + D1);
-    if (j > 0 && i > 0)    d = Math.min(d, dist[c-nx-1] + D2);
-    if (j > 0 && i < nx-1) d = Math.min(d, dist[c-nx+1] + D2);
-    dist[c] = d;
+    const c = j*nx+i;
+    if (i > 0)             prop(c, c-1,    D1);
+    if (j > 0)             prop(c, c-nx,   D1);
+    if (j > 0 && i > 0)    prop(c, c-nx-1, D2);
+    if (j > 0 && i < nx-1) prop(c, c-nx+1, D2);
   }
   for (let j = nz-1; j >= 0; j--) for (let i = nx-1; i >= 0; i--) {    // passata indietro
-    const c = j*nx+i; let d = dist[c];
-    if (i < nx-1)             d = Math.min(d, dist[c+1]    + D1);
-    if (j < nz-1)             d = Math.min(d, dist[c+nx]   + D1);
-    if (j < nz-1 && i < nx-1) d = Math.min(d, dist[c+nx+1] + D2);
-    if (j < nz-1 && i > 0)    d = Math.min(d, dist[c+nx-1] + D2);
-    dist[c] = d;
+    const c = j*nx+i;
+    if (i < nx-1)             prop(c, c+1,    D1);
+    if (j < nz-1)             prop(c, c+nx,   D1);
+    if (j < nz-1 && i < nx-1) prop(c, c+nx+1, D2);
+    if (j < nz-1 && i > 0)    prop(c, c+nx-1, D2);
   }
   const fbm = (x, z) => {                 // rilievo deterministico, somma di seni
     let v = 0, a = 1, f = 1/23000;
@@ -637,6 +665,7 @@ const terrain = (() => {
     }
     return v;
   };
+  // --- 4. ONDULAZIONE, che entra solo allontanandosi dalla strada ---
   const UND_AMP = 3400, UND_FADE = 16000;  // ampiezza collinare e raccordo verso la strada
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const c = j*nx+i;
@@ -644,7 +673,19 @@ const terrain = (() => {
     if (f > 0) h[c] += UND_AMP * f*f * fbm(x0 + i*CELL, z0 + j*CELL);
   }
 
-  // --- 4. CLAMP: invariante "il terreno non supera mai la sede stradale" ---
+  // --- 5. TETTO LATERALE: vicino alla strada il terreno non può salire più
+  //        ripido di SIDE_GRADE rispetto alla quota stradale. Senza, l'ondulazione
+  //        può piazzare una collina a ridosso del ciglio e dall'abitacolo sembra
+  //        che la pista "entri dentro" al terreno. Il tetto usa la quota della
+  //        strada PIÙ VICINA, quindi non ci sono interferenze fra rami diversi. ---
+  const R_CEIL = 20000, SIDE_GRADE = 0.30;
+  for (let c = 0; c < h.length; c++) {
+    if (pin[c] || dist[c] >= R_CEIL) continue;
+    const tetto = srcY[c] + SIDE_GRADE * dist[c];
+    if (h[c] > tetto) h[c] = tetto;
+  }
+
+  // --- 6. CLAMP: invariante "il terreno non supera mai la sede stradale" ---
   forEachStamp((wx, wz, lim) => {
     const fi = (wx-x0)/CELL, fj = (wz-z0)/CELL;
     const i0 = Math.floor(fi), j0 = Math.floor(fj);
@@ -655,6 +696,20 @@ const terrain = (() => {
       if (h[c] > lim) h[c] = lim;
     }
   });
+
+  // distanza (approssimata, chamfer sulla griglia) dal corridoio stradale —
+  // da QUALUNQUE ramo della pista, non solo dal più vicino lungo il percorso.
+  // Serve per non piantare alberi addosso alla strada.
+  function roadDist(wx, wz) {
+    const fi = (wx-x0)/CELL, fj = (wz-z0)/CELL;
+    const i = Math.min(nx-2, Math.max(0, Math.floor(fi)));
+    const j = Math.min(nz-2, Math.max(0, Math.floor(fj)));
+    const tx = Math.min(1, Math.max(0, fi-i)), tz = Math.min(1, Math.max(0, fj-j));
+    const c = j*nx + i;
+    const a = dist[c]    + (dist[c+1]    - dist[c])    * tx;
+    const b = dist[c+nx] + (dist[c+nx+1] - dist[c+nx]) * tx;
+    return a + (b-a)*tz;
+  }
 
   // quota del terreno in un punto qualsiasi (bilineare sulla griglia)
   function groundAt(wx, wz) {
@@ -716,9 +771,9 @@ const terrain = (() => {
   mesh.receiveShadow = mesh.castShadow = true;
   scene.add(mesh);
 
-  return { groundAt, tint, material: mat, minY: lo, maxY: hi, nx, nz };
+  return { groundAt, roadDist, tint, material: mat, minY: lo, maxY: hi, nx, nz };
 })();
-const groundAt = terrain.groundAt;
+const groundAt = terrain.groundAt, roadDist = terrain.roadDist;
 
 const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
 // con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
@@ -802,18 +857,28 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
 // ALBERI — vero 3D di contorno (instanced, ~500 alberi). Esposto pulse() per
 // il "party mode" a tempo: rimbalzano ingrandendosi in modo elastico/comico.
 //=========================================================================
+const TREE_CLEARANCE = 3000;   // distanza minima dal corridoio stradale (vedi sotto)
 const trees = (() => {
   const spots = [];
+  const P0 = new THREE.Vector3();
+  let scartati = 0;
   for (let i = 8; i < N; i += 6) {
     for (const side of [-1, 1]) {
       if (Math.random() < 0.32) continue;
       // oltre il piede della scarpata (lat 4) ed entro 5.6: più in là il frame
-      // della pista si ripiega sull'interno delle curve (raggio minimo 13158 = lat 6.6)
-      spots.push({ i, lat: side * (4.25 + Math.random()*1.35), s: 0.65 + Math.random()*1.05,
+      // della pista si ripiega sull'interno delle curve (raggio minimo 25000 = lat 12.5)
+      const lat = side * (4.25 + Math.random()*1.35);
+      // …ma "a lato del PROPRIO segmento" non basta: se un altro ramo della pista
+      // passa lì vicino, l'albero finisce in mezzo a QUELLA carreggiata. Il controllo
+      // va fatto sulla distanza dal corridoio stradale nel suo complesso.
+      posToWorld(i * SEGMENT_LENGTH, lat, P0);
+      if (roadDist(P0.x, P0.z) < TREE_CLEARANCE) { scartati++; continue; }
+      spots.push({ i, lat, s: 0.65 + Math.random()*1.05,
                    yaw: Math.random()*Math.PI*2, hue: 0.30 + Math.random()*0.08,
                    light: 0.24 + Math.random()*0.16 });
     }
   }
+  if (scartati) console.info(`alberi scartati perché troppo vicini alla strada: ${scartati}`);
   // abete a due chiome: tronco + cono basso largo + cono alto stretto
   const trunkG = new THREE.CylinderGeometry(55, 95, 620, 6);
   const lowG   = new THREE.ConeGeometry(640, 1250, 9);
@@ -850,7 +915,7 @@ const trees = (() => {
     trunk.instanceMatrix.needsUpdate = low.instanceMatrix.needsUpdate = top.instanceMatrix.needsUpdate = true;
   }
   pulse(1, 1);                                       // posa iniziale a riposo
-  return { pulse };
+  return { pulse, data };                            // data: posizioni, ispezionabili dai test
 })();
 
 //=========================================================================
@@ -1992,8 +2057,8 @@ function begin() {                          // primo avvio, a caricamento finito
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam},
-  segments, pts, posToWorld, groundAt, terrain, VERGE_DROP, VERGE_OUT, BANK_OUT,
-  SEGMENT_LENGTH, ROAD_WIDTH, N,
+  segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE,
+  VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
   get kills(){return kills}, get score(){return score}, get money(){return money},
   // teleport per ispezione headless: piazza il giocatore a un punto della pista
