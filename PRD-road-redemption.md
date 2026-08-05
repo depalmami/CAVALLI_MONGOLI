@@ -428,6 +428,46 @@ sbagliato perché è semplicemente troppo.
 testa 14°/7° con asse verticale 1.00, coda -159 verso l'esterno; regressioni invariate
 (affondamento 0.0, modalità libera 11/11, 120 fps).
 
+## 9.8 Console + proiezione sul secondo schermo (2026-08-05)
+
+Primo pezzo del porting dello **spettacolo live** dal 2D al 3D: console sullo schermo
+dell'operatore, e sul secondo schermo **solo il gioco**.
+
+**Come è fatto.** Il gioco a schermo è tre tele sovrapposte — scena WebGL (`#scene`), HUD
+combattimento (`#combat-overlay`, z5), overlay dello show (`#live-overlay`, z6) — mentre i
+pannelli di controllo sono DOM. Quindi "proiettare solo il gioco" = ricomporre le tre tele
+in ordine di z-index in una seconda finestra: **i pannelli restano fuori per costruzione**,
+senza doverli nascondere e senza rischio di dimenticarne uno. Verificato che nella finestra
+di proiezione `document.body.innerText` è vuoto.
+
+**Due modalità**: *adatta* (il gioco riempie lo schermo mantenendo l'aspetto) e **matrice
+2304×768**, il layout dei live: bande `384 | 192 | 1152(gioco) | 192 | 384`, con testo
+verticale scorrevole sulle quattro bande laterali (palette condivisa con la scritta dello
+show, glifi pre-renderizzati in cache — nel 2D lo `shadowBlur` per-frame era *il* collo di
+bottiglia).
+
+**`vista`: risoluzione logica condivisa.** Punto non ovvio: la banda centrale è 1152×768
+(3:2). Se il gioco fosse renderizzato nell'aspetto della finestra dell'operatore, in
+proiezione arriverebbe incorniciato di nero. Con la risoluzione di render fissa il render è
+NATIVO per il pannello, e nella finestra dell'operatore le tele vengono solo centrate e
+scalate — **tutte e tre insieme**, altrimenti le scritte si scollerebbero dal 3D. Per questo
+`live` e `combatHud` non usano più `innerWidth/innerHeight` ma `vista.W/H`.
+
+Schermi rilevati con `getScreenDetails()` (serve contesto sicuro: `127.0.0.1` va bene),
+`requestFullscreen({screen})` per mandare la proiezione a pieno schermo su quello scelto.
+Interruttore per includere o no l'HUD di gioco (di norma escluso).
+
+**Verifiche** (`proiezione.js`, `matrice.js`): la seconda finestra si apre e riceve immagine
+(82% di pixel accesi); in modalità matrice il gioco sta nella banda centrale (centro 1363 vs
+bordi 0); le bande si accendono col testo (0 → 324); nessun testo DOM in proiezione. Scenario
+live vero 2304×768 con render 1152×768: scena e overlay alla stessa risoluzione, **banda
+centrale piena al 100% dell'altezza**, nessuna fascia nera. Regressioni invariate, 120 fps.
+
+### Cosa resta del 2D da portare
+`gamepad` (Xbox) · `audio reactivity` · `pause menu` · `localStorage persistence` ·
+`level system` (livelli tematici + sprite per livello) · `pilota automatico` ·
+`custom background` · `asset editor` · `intro/title screens` · `WebRTC webcam` (Livello 7).
+
 ## 10. Backlog / idee future (post-Fase 4)
 - Coordinare la scelta di lato tra rivali (evitare che due puntino allo stesso `playerX±0.6`
   e si sovrappongano tra loro — vedi §9.1).

@@ -15,7 +15,14 @@
   #hud-left b { font-size:26px; }
   #hud-right { top:12px; right:12px; text-align:right; }
   #hud-help  { bottom:12px; left:50%; transform:translateX(-50%); font-size:13px; white-space:nowrap; }
-  #hud-live  { bottom:12px; left:12px; font-size:13px; line-height:1.7; max-width:230px; }
+  #hud-live  { bottom:12px; left:12px; font-size:13px; line-height:1.7; max-width:250px;
+               max-height:calc(100vh - 24px); overflow-y:auto; }
+  #hud-live hr { border:0; border-top:1px solid rgba(255,255,255,.18); margin:9px 0 7px; }
+  #hud-live .row { display:flex; gap:6px; align-items:center; margin-top:3px; }
+  #hud-live .row button { flex:1; margin:0; padding:6px 8px; font-size:12px; }
+  #hud-live .nota { font-size:11px; opacity:.6; line-height:1.35; margin-top:3px; }
+  #hud-live .nota.warn { color:#ffd08a; opacity:.9; }
+  #proj-stato { font-size:11px; opacity:.75; margin-top:3px; }
   #hud-live label { display:flex; align-items:center; gap:6px; cursor:pointer; }
   #hud-live input[type=text] { width:100%; box-sizing:border-box; margin-top:3px; padding:4px 6px;
            border-radius:6px; border:0; font-size:13px; }
@@ -119,6 +126,37 @@
   <div style="margin-top:2px;">Distorsione scritta: <span id="live-int-val">120%</span>
     <input type="range" id="live-int" min="0" max="200" step="10" value="120"></div>
   <div style="opacity:.6; margin-top:4px;">Dai il tempo con <b>T</b>.</div>
+
+  <hr>
+  <b class="head">📽 PROIEZIONE (2° schermo)</b>
+  <div class="row"><button id="proj-detect">Rileva schermi</button></div>
+  <select id="proj-screen" disabled><option>— rileva prima gli schermi —</option></select>
+  <select id="proj-mode">
+    <option value="mirror">Riempi lo schermo (adatta)</option>
+    <option value="matrix">Matrice 2304×768 (5 pannelli)</option>
+  </select>
+  <select id="proj-res">
+    <option value="auto">Render: come la finestra</option>
+    <option value="1152x768">Render: 1152×768 (banda centrale 3:2)</option>
+    <option value="1920x1080">Render: 1920×1080 (Full HD)</option>
+  </select>
+  <div class="row">
+    <button id="proj-open">▶︎ Apri proiezione</button>
+    <button id="proj-full" disabled>⛶ Pieno</button>
+  </div>
+  <label style="margin-top:3px;"><input type="checkbox" id="proj-hud"> Includi l'HUD di gioco</label>
+  <div id="proj-stato">spenta</div>
+  <div class="nota">Sulla proiezione va <b>solo il gioco</b>: niente pannelli, niente console.</div>
+
+  <hr>
+  <b class="head">🎞 TESTO LATERALE (bande)</b>
+  <label><input type="checkbox" id="side-on"> Scorrimento verticale</label>
+  <input type="text" id="side-text" value="CAVALLI MONGOLI" maxlength="40" placeholder="Testo bande…">
+  <div style="margin-top:2px;">Velocità: <span id="side-speed-val">60</span>
+    <input type="range" id="side-speed" min="0" max="200" step="5" value="60"></div>
+  <div style="margin-top:2px;">Corpo: <span id="side-size-val">64</span>
+    <input type="range" id="side-size" min="24" max="140" step="4" value="64"></div>
+  <div class="nota">Visibile solo in modalità <b>Matrice</b>.</div>
 </div>
 
 <div id="hud-help" class="panel">
@@ -416,13 +454,37 @@ const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
-addEventListener('resize', () => {
-  camera.aspect = innerWidth/innerHeight;
+//=========================================================================
+// VISTA — risoluzione LOGICA del gioco, condivisa da scena 3D e overlay 2D.
+// Serve per il live: la banda centrale della matrice è 1152×768 (3:2), e se il
+// gioco fosse renderizzato nell'aspetto della finestra dell'operatore la
+// proiezione arriverebbe con bande nere. Con una risoluzione fissa il render è
+// NATIVO per il pannello, e sulla finestra dell'operatore le tele vengono solo
+// centrate e scalate (tutte e tre insieme, o le scritte si scollerebbero dal 3D).
+//=========================================================================
+const vista = { W: innerWidth, H: innerHeight, nativa: null };   // nativa=null → segue la finestra
+const teleVista = [];   // riempito dai moduli overlay (live, combatHud)
+
+function ridimensiona() {
+  const W = vista.nativa ? vista.nativa.w : innerWidth;
+  const H = vista.nativa ? vista.nativa.h : innerHeight;
+  vista.W = W; vista.H = H;
+  camera.aspect = W/H;
   camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-  composer.setSize(innerWidth, innerHeight);
-  bloom.setSize(innerWidth, innerHeight);
-});
+  renderer.setSize(W, H, false);        // false: la misura CSS la decidiamo qui sotto
+  composer.setSize(W, H);
+  bloom.setSize(W, H);
+  const k = Math.min(innerWidth/W, innerHeight/H);
+  const cw = Math.round(W*k), ch = Math.round(H*k);
+  const cx = Math.round((innerWidth-cw)/2), cy = Math.round((innerHeight-ch)/2);
+  for (const c of [renderer.domElement, ...teleVista]) {
+    if (!c) continue;
+    c.style.left = cx+'px'; c.style.top = cy+'px';
+    c.style.width = cw+'px'; c.style.height = ch+'px';
+    c.style.right = 'auto'; c.style.bottom = 'auto';
+  }
+}
+addEventListener('resize', ridimensiona);
 
 //=========================================================================
 // GEOMETRIA PISTA — nastri (ribbon) con vertex colors
@@ -1590,6 +1652,23 @@ $('btn-sprite').onclick = () => setMode('sprite');
 $('btn-model').onclick  = () => setMode('model');
 $('btn-camera').onclick = cycleCamera;
 $('btn-free').onclick   = () => setFreeRoam(!freeRoam);
+// — PROIEZIONE —
+$('proj-detect').onclick = () => proiezione.rileva();
+$('proj-open').onclick   = () => proiezione.apri();
+$('proj-full').onclick   = () => proiezione.pieno();
+$('proj-screen').onchange = e => proiezione.setSchermo(+e.target.value);
+$('proj-mode').onchange  = e => proiezione.setModo(e.target.value);
+$('proj-hud').onchange   = e => proiezione.setHud(e.target.checked);
+$('proj-res').onchange   = e => {
+  const v = e.target.value;
+  vista.nativa = v === 'auto' ? null : { w:+v.split('x')[0], h:+v.split('x')[1] };
+  ridimensiona();
+};
+// — TESTO LATERALE DELLE BANDE —
+$('side-on').onchange    = e => proiezione.setLato('on', e.target.checked);
+$('side-text').oninput   = e => proiezione.setLato('testo', e.target.value);
+$('side-speed').oninput  = e => { proiezione.setLato('vel', +e.target.value); $('side-speed-val').textContent = e.target.value; };
+$('side-size').oninput   = e => { proiezione.setLato('corpo', +e.target.value); $('side-size-val').textContent = e.target.value; };
 $('btn-tap').onclick    = () => party.tap();
 $('party-gain').oninput = e => {           // slider intensità: 100% = base, 600% ≈ +500%
   const pct = +e.target.value;
@@ -1838,11 +1917,13 @@ const live = (() => {
   const randPal = () => PALETTES[NAMES[(Math.random()*NAMES.length)|0]];
 
   const cv = document.createElement('canvas');
+  cv.id = 'live-overlay';   // la proiezione lo ricompone sopra la scena 3D
   cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:6;';
   document.body.appendChild(cv);
+  teleVista.push(cv);
   const ctx = cv.getContext('2d');
   let W = 0, H = 0, dirty = false;
-  function resize() { const w = innerWidth, h = innerHeight; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
+  function resize() { const w = vista.W, h = vista.H; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
   resize(); addEventListener('resize', resize);
 
   let flashOn = false, flashUntil = 0;
@@ -1911,6 +1992,7 @@ const live = (() => {
   }
   return {
     update,
+    palette() { return pal; },       // il testo laterale delle bande usa la stessa palette
     setFlash(b) { flashOn = b; },
     setBonus(b) { bonusOn = b; if (b) { bonusStart = performance.now(); resolvePal(); } else text3d.show(false); },
     setText(t) { bonusText = (t || '').toUpperCase() || 'CAVALLI MONGOLI'; text3d.setText(bonusText); },
@@ -1926,11 +2008,13 @@ const live = (() => {
 //=========================================================================
 const combatHud = (() => {
   const cv = document.createElement('canvas');
+  cv.id = 'combat-overlay';
   cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:5;';
   document.body.appendChild(cv);
+  teleVista.push(cv);
   const ctx = cv.getContext('2d');
   let W = 0, H = 0;
-  function resize() { const w = innerWidth, h = innerHeight; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
+  function resize() { const w = vista.W, h = vista.H; if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; } }
   resize(); addEventListener('resize', resize);
   const v = new THREE.Vector3();
   function project(worldPos, yOff) {
@@ -1989,6 +2073,200 @@ const combatHud = (() => {
       (isFinite(curWeapon.uses) ? ' ×' + curWeapon.uses : '');
   }
   return { draw };
+})();
+
+//=========================================================================
+// PROIEZIONE — seconda finestra col SOLO GIOCO, per il secondo schermo.
+//
+// Il gioco a schermo è fatto di TRE tele sovrapposte: la scena WebGL, l'HUD di
+// combattimento e l'overlay dello show. I pannelli di controllo invece sono DOM.
+// Quindi per proiettare "solo il gioco" basta ricomporre le tre tele in ordine di
+// z-index: i pannelli restano fuori per costruzione, senza doverli nascondere.
+//
+// Due modalità:
+//  · adatta   — il gioco riempie lo schermo mantenendo l'aspetto;
+//  · matrice  — il layout dei live: 5 pannelli su un'unica matrice 2304×768,
+//               bande in unità base 384 | 192 | 1152(gioco) | 192 | 384, con
+//               testo verticale scorrevole sulle bande laterali.
+//=========================================================================
+const proiezione = (() => {
+  const BASE_W = 2304;
+  const BANDE = [ {x:0,w:384}, {x:384,w:192}, {x:1728,w:192}, {x:1920,w:384} ];
+  const CENTRO = { x:576, w:1152 };
+
+  let win = null, ctx = null, out = null, dettagli = null, indice = null;
+  let modo = 'mirror';
+  const lato = { on:false, testo:'CAVALLI MONGOLI', vel:60, corpo:64, off:0, righe:null, ultimo:0 };
+
+  let conHud = false;   // barre vita/popup dei rivali: di norma FUORI dalla proiezione
+  const tele = () => [ renderer.domElement,
+                       conHud ? document.getElementById('combat-overlay') : null,
+                       document.getElementById('live-overlay') ];
+  const stato = t => { const e = document.getElementById('proj-stato'); if (e) e.textContent = t; };
+
+  // --- glifi pre-renderizzati: nel 2D lo shadowBlur per-frame era IL collo di
+  //     bottiglia del testo laterale, quindi ogni lettera si disegna una volta sola
+  const cacheGlifi = new Map();
+  function glifo(ch, corpo, pal, chiave) {
+    const k = ch + '|' + Math.round(corpo) + '|' + chiave;
+    let g = cacheGlifi.get(k);
+    if (g) return g;
+    const fs = Math.round(corpo);
+    const font = '900 ' + fs + 'px Impact, "Arial Black", sans-serif';
+    const m = document.createElement('canvas').getContext('2d');
+    m.font = font;
+    const tw = Math.ceil(m.measureText(ch).width) || fs;
+    const blur = Math.max(6, fs*0.28), pad = Math.ceil(blur + fs*0.12 + 4);
+    const c = document.createElement('canvas');
+    c.width = tw + pad*2; c.height = Math.ceil(fs*1.3) + pad*2;
+    const x = c.getContext('2d');
+    x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle';
+    const cx = c.width/2, cy = c.height/2;
+    x.shadowColor = pal.halo; x.shadowBlur = blur; x.fillStyle = pal.halo; x.fillText(ch, cx, cy);
+    x.shadowBlur = 0;
+    const gr = x.createLinearGradient(0, cy-fs/2, 0, cy+fs/2);
+    gr.addColorStop(0, pal.grad[0]); gr.addColorStop(0.5, pal.grad[1]); gr.addColorStop(1, pal.grad[2]);
+    x.fillStyle = gr; x.fillText(ch, cx, cy);
+    x.lineWidth = Math.max(2, fs*0.06); x.strokeStyle = pal.stroke; x.strokeText(ch, cx, cy);
+    g = { c, w: c.width, h: c.height };
+    if (cacheGlifi.size > 400) cacheGlifi.clear();
+    cacheGlifi.set(k, g);
+    return g;
+  }
+
+  function disegnaGioco(dx, dy, dw, dh) {
+    const src = renderer.domElement;
+    const k = Math.min(dw/src.width, dh/src.height);      // "contain": mai stirato
+    const w = src.width*k, h = src.height*k;
+    const x = dx + (dw-w)/2, y = dy + (dh-h)/2;
+    ctx.save(); ctx.beginPath(); ctx.rect(dx, dy, dw, dh); ctx.clip();
+    for (const c of tele()) if (c && c.width && c.height) ctx.drawImage(c, x, y, w, h);
+    ctx.restore();
+  }
+
+  function disegnaBande(scala, H, dt) {
+    if (!lato.on || !lato.testo) return;
+    const pal = live.palette(), chiave = lato.testo + '|' + pal.halo;
+    if (!lato.righe || lato.chiave !== chiave) {
+      lato.righe = [...lato.testo.toUpperCase()].map(c => c === ' ' ? '' : c);
+      lato.chiave = chiave;
+    }
+    const corpo = lato.corpo * scala, passo = corpo * 1.35;
+    const totale = passo * lato.righe.length;
+    lato.off = (lato.off + lato.vel * scala * dt) % (totale || 1);
+    for (const b of BANDE) {
+      const bx = b.x*scala, bw = b.w*scala;
+      ctx.save(); ctx.beginPath(); ctx.rect(bx, 0, bw, H); ctx.clip();
+      // due colonne di testo sfalsate: il ciclo non mostra mai un vuoto
+      for (let ripeti = -1; ripeti <= Math.ceil(H/totale); ripeti++) {
+        for (let i = 0; i < lato.righe.length; i++) {
+          const ch = lato.righe[i];
+          if (!ch) continue;
+          const y = ripeti*totale + i*passo - lato.off;
+          if (y < -passo || y > H + passo) continue;
+          const g = glifo(ch, corpo, pal, chiave);
+          ctx.drawImage(g.c, bx + (bw-g.w)/2, y);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  let ultimoT = performance.now();
+  function disegna() {
+    if (!ctx || !win || win.closed) return;
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - ultimoT)/1000); ultimoT = now;
+    const W = out.width, H = out.height;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+    if (modo === 'matrix') {
+      const s = W / BASE_W;
+      disegnaGioco(CENTRO.x*s, 0, CENTRO.w*s, H);
+      disegnaBande(s, H, dt);
+    } else {
+      disegnaGioco(0, 0, W, H);
+    }
+  }
+
+  async function rileva() {
+    const sel = document.getElementById('proj-screen');
+    if (!window.getScreenDetails) {
+      stato('API multi-schermo non disponibile su questo browser.');
+      sel.innerHTML = '<option>— non disponibile —</option>';
+      return;
+    }
+    try {
+      dettagli = await window.getScreenDetails();
+      sel.innerHTML = '';
+      dettagli.screens.forEach((s, i) => {
+        const o = document.createElement('option');
+        o.value = i;
+        o.textContent = `Schermo ${i} — ${s.width}×${s.height}` +
+          (s.isPrimary ? ' [primario]' : '') + (s === dettagli.currentScreen ? ' [questo]' : '');
+        sel.appendChild(o);
+      });
+      // di default il primo schermo che NON è quello della console
+      let def = dettagli.screens.findIndex(s => s !== dettagli.currentScreen);
+      if (def < 0) def = 0;
+      sel.value = def; indice = def; sel.disabled = false;
+      stato(`${dettagli.screens.length} schermi rilevati.`);
+    } catch (e) {
+      stato('Permesso schermi negato o non concesso: ' + (e && e.message || e));
+    }
+  }
+
+  function apri() {
+    if (win && !win.closed) { chiudi(); return; }
+    const s = dettagli && indice != null ? dettagli.screens[indice] : null;
+    const w = s ? s.width : 1280, h = s ? s.height : 800;
+    const x = s ? s.left : 0, y = s ? s.top : 0;
+    win = window.open('', 'CM3D_Proiezione',
+      `popup=yes,width=${w},height=${h},left=${x},top=${y}`);
+    if (!win) { stato('⚠︎ finestra bloccata dal browser: consenti i popup.'); return; }
+    win.document.write(
+      '<!doctype html><meta charset="utf-8"><title>Cavalli Mongoli — proiezione</title>' +
+      '<style>html,body{margin:0;background:#000;overflow:hidden;cursor:none}' +
+      'canvas{display:block;width:100vw;height:100vh}</style><canvas id="out"></canvas>');
+    win.document.close();
+    out = win.document.getElementById('out');
+    ctx = out.getContext('2d');
+    const misura = () => {
+      out.width  = win.innerWidth  || w;
+      out.height = win.innerHeight || h;
+    };
+    misura();
+    win.addEventListener('resize', misura);
+    win.addEventListener('unload', () => { win = null; ctx = null; aggiornaUI(); });
+    if (s) { try { win.moveTo(s.left, s.top); win.resizeTo(s.width, s.height); } catch {} }
+    aggiornaUI();
+    stato('proiezione attiva — ' + out.width + '×' + out.height);
+  }
+
+  function pieno() {
+    if (!win || win.closed) return;
+    const s = dettagli && indice != null ? dettagli.screens[indice] : null;
+    const el = win.document.documentElement;
+    try { el.requestFullscreen(s ? { screen: s } : undefined); } catch { try { el.requestFullscreen(); } catch {} }
+  }
+
+  function chiudi() { if (win && !win.closed) win.close(); win = null; ctx = null; aggiornaUI(); stato('spenta'); }
+
+  function aggiornaUI() {
+    const attiva = !!(win && !win.closed);
+    const b = document.getElementById('proj-open');
+    if (b) { b.textContent = attiva ? '■ Chiudi proiezione' : '▶︎ Apri proiezione'; b.classList.toggle('active', attiva); }
+    const f = document.getElementById('proj-full');
+    if (f) f.disabled = !attiva;
+  }
+
+  return {
+    disegna, rileva, apri, pieno, chiudi,
+    attiva: () => !!(win && !win.closed),
+    setModo(m) { modo = m; },
+    setSchermo(i) { indice = i; },
+    setHud(b) { conHud = b; },
+    setLato(k, v) { lato[k] = v; if (k === 'testo') lato.righe = null; },
+  };
 })();
 
 //=========================================================================
@@ -2253,6 +2531,7 @@ function frame(now) {
   composer.render();
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
   combatHud.draw(frameDt);               // barre vita nemici, popup, vignetta danno
+  proiezione.disegna();                  // ricompone le tre tele sul secondo schermo
 
   $('speed').textContent   = Math.round(speed/60);
   $('laptime').textContent = currentLapTime.toFixed(1);
@@ -2293,6 +2572,7 @@ Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
   if (!mOK) $('btn-model').disabled = true;
   setMode(sOK ? 'sprite' : 'model');
   $('loading').remove();
+  ridimensiona();          // fissa la vista ora che le tele overlay esistono tutte
   player.place(0, 0);
   begin();
   requestAnimationFrame(frame);
