@@ -506,6 +506,29 @@ non solo che il menù *mostri* 1152×768, ma che la tela della scena sia larga d
 La finestra di proiezione **non** si riapre da sola: aprire un popup senza un gesto
 dell'utente viene bloccato dal browser, e sarebbe pure una sorpresa sgradita.
 
+## 9.11 La pagina principale diventa il banco di regia (2026-08-05)
+
+Correzione di rotta dopo il feedback: «la console deve essere più accessibile e nello schermo
+principale voglio l'anteprima del gioco, non lo schermo intero — riprendi pari pari quanto
+avviene nella versione 2D».
+
+Stavo costruendo una cosa diversa dal 2D: gioco a tutto schermo con pannelli galleggianti
+sopra. Nel 2D è l'opposto — `<div id="control-panel">` è **la pagina**, con il gioco dentro
+una card «Game Preview» (`#racer-container`), e quando il dual monitor è attivo una regola
+CSS (`.dual-active`) rimpicciolisce l'anteprima perché l'output vero sta sull'altro schermo.
+
+Rifatto uguale: pagina-console scorrevole con card (Regia, Proiezione, Show, Bande, Resa),
+il gioco in un riquadro `#gioco` in cima, e l'HUD di gioco (velocità, barre, aiuto) ora
+**dentro** il riquadro invece che sulla finestra. Le tele overlay vengono appese a `#gioco`,
+non più al body. L'anteprima ha un tetto d'altezza (46% della finestra, 30% con la proiezione
+accesa) e la larghezza segue l'aspetto del render: così sotto si vedono subito i controlli e
+il riquadro non ha mai bande nere. Anche gli avvisi di caricamento sono diventati card della
+console: da pannelli fissi finivano sopra i controlli.
+
+**Verifiche**: riquadro 786×442 su finestra 960 (era 746 di altezza, cioè il 78%), tela
+esattamente coincidente col riquadro, pagina scorrevole, 6 card. Regressioni tutte invariate:
+proiezione e matrice 2304×768, persistenza, pilota (evento vinto), modalità libera, 120 fps.
+
 ### Cosa resta del 2D da portare
 ~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
 ~~`localStorage persistence`~~ (§9.10) · `level system` (livelli tematici + sprite per livello) ·

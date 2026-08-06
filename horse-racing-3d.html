@@ -6,58 +6,87 @@
 <title>Cavalli Mongoli 3D — Prototipo (Opzione A/B)</title>
 <link rel="icon" href="data:,">
 <style>
-  html, body { margin:0; padding:0; overflow:hidden; background:#000; font-family:-apple-system, 'Segoe UI', sans-serif; }
-  #scene { position:fixed; inset:0; display:block; }
+  :root {
+    --sfondo:#11141b; --card:#1a1f2b; --bordo:#2b3444; --testo:#e8edf6;
+    --tenue:#9aa7bd; --acc:#38a169; --acc2:#2b6cb0;
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; padding:0; background:var(--sfondo); color:var(--testo);
+               font-family:-apple-system,'Segoe UI',sans-serif; font-size:14px; }
 
-  .panel { position:fixed; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.8); z-index:20;
-           background:rgba(0,0,0,.45); border-radius:10px; padding:10px 14px; backdrop-filter:blur(4px); }
-  #hud-left  { top:12px; left:12px; font-size:15px; line-height:1.5; }
-  #hud-left b { font-size:26px; }
-  #hud-right { top:12px; right:12px; text-align:right; }
-  #hud-help  { bottom:12px; left:50%; transform:translateX(-50%); font-size:13px; white-space:nowrap; }
-  #hud-live  { bottom:12px; left:12px; font-size:13px; line-height:1.7; max-width:250px;
-               max-height:calc(100vh - 24px); overflow-y:auto; }
-  #hud-live hr { border:0; border-top:1px solid rgba(255,255,255,.18); margin:9px 0 7px; }
-  #hud-live .row { display:flex; gap:6px; align-items:center; margin-top:3px; }
-  #hud-live .row button { flex:1; margin:0; padding:6px 8px; font-size:12px; }
-  #hud-live .nota { font-size:11px; opacity:.6; line-height:1.35; margin-top:3px; }
-  #hud-live .nota.warn { color:#ffd08a; opacity:.9; }
-  #proj-stato { font-size:11px; opacity:.75; margin-top:3px; }
-  #hud-live label { display:flex; align-items:center; gap:6px; cursor:pointer; }
-  #hud-live input[type=text] { width:100%; box-sizing:border-box; margin-top:3px; padding:4px 6px;
-           border-radius:6px; border:0; font-size:13px; }
-  #hud-live select { width:100%; margin-top:3px; padding:3px; border-radius:6px; border:0; font-size:13px; }
-  #hud-live input[type=range] { width:100%; }
-  #hud-live b.head { display:block; font-size:12px; letter-spacing:.08em; opacity:.75; margin-bottom:4px; }
-  #hud-combat { top:12px; left:50%; transform:translateX(-50%); min-width:280px; text-align:center; }
-  .cbar { display:flex; align-items:center; gap:7px; margin:3px 0; }
-  .cbar-lbl { width:18px; text-align:center; }
-  .cbar-track { flex:1; height:13px; background:rgba(255,255,255,.16); border-radius:7px; overflow:hidden; box-shadow:inset 0 0 4px rgba(0,0,0,.4); }
-  .cbar-fill { height:100%; width:100%; border-radius:7px; transition:width .1s linear; }
-  #combat-stats { font-size:15px; margin-top:4px; }
+  /* ── CONSOLE: la pagina principale NON è il gioco, è il banco di regia.
+       Il gioco vero va sul secondo schermo; qui ne resta un'anteprima. ── */
+  #console { max-width:1400px; margin:0 auto; padding:18px 20px 40px; }
+  #testata { display:flex; justify-content:space-between; align-items:flex-end;
+             gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  #testata h1 { font-size:24px; margin:0; letter-spacing:.01em; }
+  #testata p  { margin:2px 0 0; color:var(--tenue); font-size:13px; }
+  .card { background:var(--card); border:1px solid var(--bordo); border-radius:12px;
+          padding:14px 16px; margin-bottom:16px; }
+  .card > h2 { font-size:12px; letter-spacing:.10em; text-transform:uppercase;
+               color:var(--tenue); margin:0 0 10px; font-weight:700; }
+  .griglia { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); align-items:start; }
 
-  button { background:#2b6cb0; color:#fff; border:0; border-radius:8px; padding:8px 12px;
-           font-size:14px; cursor:pointer; margin:2px 0 2px 6px; }
-  button.active { background:#38a169; }
+  /* ── ANTEPRIMA: contenitore del gioco. L'aspetto lo impone ridimensiona()
+       in base alla risoluzione di render, così non ci sono bande nere. ── */
+  #gioco { position:relative; width:100%; background:#000; border-radius:8px;
+           overflow:hidden; margin:0 auto; }
+  #gioco canvas { position:absolute; display:block; }
+  #gioco { transition:max-width .2s ease; }              /* l'anteprima si stringe quando parte la proiezione */
+  #eco-proiezione { color:var(--acc); font-weight:600; }
+
+  /* pannelli DELL'HUD DI GIOCO: stanno dentro l'anteprima, non sulla pagina */
+  .panel { position:absolute; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.85); z-index:6;
+           background:rgba(0,0,0,.42); border-radius:8px; padding:6px 9px; font-size:12px;
+           backdrop-filter:blur(3px); pointer-events:none; }
+  #hud-left   { top:8px; left:8px; line-height:1.45; }
+  #hud-left b { font-size:19px; }
+  #hud-combat { top:8px; left:50%; transform:translateX(-50%); min-width:230px; text-align:center; }
+  #hud-help   { bottom:8px; left:50%; transform:translateX(-50%); font-size:10.5px; white-space:nowrap; }
+  .cbar { display:flex; align-items:center; gap:6px; margin:2px 0; }
+  .cbar-lbl { width:16px; text-align:center; }
+  .cbar-track { flex:1; height:10px; background:rgba(255,255,255,.16); border-radius:6px; overflow:hidden; }
+  .cbar-fill { height:100%; width:100%; border-radius:6px; transition:width .1s linear; }
+  #combat-stats { font-size:13px; margin-top:3px; }
+
+  /* ── controlli della console: grandi e leggibili, non microscopici ── */
+  .riga { display:flex; align-items:center; gap:8px; margin:7px 0; }
+  .riga > label { flex:1; }
+  label.spunta { display:flex; align-items:center; gap:8px; cursor:pointer; margin:7px 0; user-select:none; }
+  label.spunta input { width:17px; height:17px; accent-color:var(--acc); cursor:pointer; }
+  .tasto { font-size:11px; color:var(--tenue); border:1px solid var(--bordo);
+           border-radius:4px; padding:0 5px; margin-left:auto; }
+  input[type=text], select {
+    width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--bordo);
+    background:#0f131a; color:var(--testo); font-size:14px; margin:5px 0; }
+  input[type=range] { width:100%; accent-color:var(--acc); cursor:pointer; margin:4px 0; }
+  .val { color:var(--acc); font-weight:700; }
+  .nota { font-size:12px; color:var(--tenue); line-height:1.45; margin-top:6px; }
+  .nota.forte { color:#ffd08a; }
+  button { background:var(--acc2); color:#fff; border:0; border-radius:8px; padding:9px 12px;
+           font-size:13px; cursor:pointer; }
   button:hover { filter:brightness(1.15); }
-  input[type=range] { vertical-align:middle; width:150px; accent-color:#38a169; cursor:pointer; }
+  button.active { background:var(--acc); }
+  button:disabled { opacity:.4; cursor:default; }
+  .bottoni { display:flex; gap:8px; flex-wrap:wrap; margin:7px 0; }
+  .bottoni button { flex:1 1 auto; }
 
-  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-             flex-direction:column; gap:12px; background:#1a202c; color:#fff; font-size:20px; z-index:10; }
-  #loading small { opacity:.6; }
-  .err { color:#feb2b2; max-width:600px; text-align:center; font-size:15px; }
+  #loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+             flex-direction:column; gap:10px; background:#1a202c; color:#fff; font-size:15px;
+             z-index:10; text-align:center; padding:16px; }
+  #loading small { opacity:.6; font-size:12px; }
+  .err { color:#feb2b2; max-width:600px; text-align:center; font-size:13px; }
 
-  #screen { position:fixed; inset:0; z-index:25; display:none; align-items:center; justify-content:center;
-            background:rgba(8,10,18,.84); backdrop-filter:blur(6px); color:#fff; text-align:center;
-            font-family:-apple-system,'Segoe UI',sans-serif; }
-  #screen .box { max-width:560px; padding:22px 28px; }
-  #screen h1 { font-size:36px; margin:0 0 4px; letter-spacing:.02em; }
-  #screen h2 { font-size:19px; opacity:.85; margin:0 0 14px; font-weight:500; }
-  #screen p  { opacity:.85; margin:8px 0; }
-  #screen .shopgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0; }
-  #screen button { font-size:15px; padding:11px 14px; width:100%; }
-  #screen button:disabled { opacity:.4; cursor:default; }
-  #screen .big { font-size:18px; padding:13px 24px; margin-top:14px; background:#38a169; }
+  /* schermate di briefing/shop: sopra l'ANTEPRIMA, non sopra la console */
+  #screen { position:absolute; inset:0; z-index:12; display:none; align-items:center; justify-content:center;
+            background:rgba(8,10,18,.88); backdrop-filter:blur(5px); color:#fff; text-align:center; }
+  #screen .box { max-width:92%; padding:14px 18px; }
+  #screen h1 { font-size:26px; margin:0 0 3px; }
+  #screen h2 { font-size:15px; opacity:.85; margin:0 0 10px; font-weight:500; }
+  #screen p  { opacity:.85; margin:6px 0; font-size:13px; }
+  #screen .shopgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+  #screen button { font-size:13px; padding:9px 11px; width:100%; }
+  #screen .big { font-size:15px; padding:11px 20px; margin-top:10px; background:var(--acc); }
   #screen .amber { background:#c98a3a; }
 </style>
 <script type="importmap">
@@ -70,107 +99,130 @@
 </script>
 </head>
 <body>
-<canvas id="scene"></canvas>
+<div id="console">
 
-<div id="loading">🐎 Caricamento prototipo 3D… <small>(serve connessione internet per Three.js e il modello)</small></div>
-
-<div id="hud-left" class="panel">
-  <b><span id="speed">0</span></b> km/h<br>
-  Giro: <span id="laptime">0.0</span>s &nbsp; Ultimo: <span id="lastlap">—</span>
-</div>
-
-<div id="hud-combat" class="panel">
-  <div class="cbar"><span class="cbar-lbl">❤️</span><div class="cbar-track"><div id="bar-health" class="cbar-fill" style="background:#e23b3b"></div></div></div>
-  <div class="cbar"><span class="cbar-lbl">⚡</span><div class="cbar-track"><div id="bar-nitro" class="cbar-fill" style="background:#3bb0e2"></div></div></div>
-  <div id="combat-stats">🗡 <b id="stat-kills">0</b> &nbsp; 🏆 <b id="stat-score">0</b> &nbsp; 💰 <b id="stat-money">0</b> &nbsp; <span id="stat-weapon" style="opacity:.85">👊 Pugni</span></div>
-  <div id="combat-obj" style="font-size:12px; opacity:.8; margin-top:2px;"></div>
-</div>
-
-<div id="hud-right" class="panel">
-  <div>
-    <button id="btn-sprite" class="active">Opzione A — Sprite</button>
-    <button id="btn-model">Opzione B — Modello 3D</button>
+  <div id="testata">
+    <div>
+      <h1>🐎 Cavalli Mongoli — 3D</h1>
+      <p>Banco di regia per il live. Il gioco vero va sul secondo schermo.</p>
+    </div>
+    <div id="pad-stato" class="nota">nessun pad collegato</div>
   </div>
-  <div>
-    <button id="btn-camera">Camera: chase</button>
-    <button id="btn-free">🔧 Modalità libera</button>
+
+  <!-- ══ ANTEPRIMA ══ -->
+  <div class="card" id="card-anteprima">
+    <h2>Anteprima gioco <span id="eco-proiezione"></span></h2>
+    <div id="gioco">
+      <canvas id="scene"></canvas>
+
+      <div id="hud-left" class="panel">
+        <b><span id="speed">0</span></b> km/h<br>
+        Giro: <span id="laptime">0.0</span>s &nbsp; Ultimo: <span id="lastlap">—</span>
+      </div>
+
+      <div id="hud-combat" class="panel">
+        <div class="cbar"><span class="cbar-lbl">❤️</span><div class="cbar-track"><div id="bar-health" class="cbar-fill" style="background:#e23b3b"></div></div></div>
+        <div class="cbar"><span class="cbar-lbl">⚡</span><div class="cbar-track"><div id="bar-nitro" class="cbar-fill" style="background:#3bb0e2"></div></div></div>
+        <div id="combat-stats">🗡 <b id="stat-kills">0</b> &nbsp; 🏆 <b id="stat-score">0</b> &nbsp; 💰 <b id="stat-money">0</b> &nbsp; <span id="stat-weapon" style="opacity:.85">👊 Pugni</span></div>
+        <div id="combat-obj" style="font-size:11px; opacity:.8; margin-top:2px;"></div>
+      </div>
+
+      <div id="hud-help" class="panel">
+        ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost ·
+        <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>R</b> riparti
+      </div>
+
+      <div id="screen"><div class="box" id="screen-box"></div></div>
+      <div id="loading">🐎 Caricamento…<small>(serve internet per Three.js e il modello)</small></div>
+    </div>
   </div>
-  <div>
-    <button id="btn-tap">🎉 Tap tempo</button>
-    <span id="party-info" style="font-size:13px; margin-left:4px;">spento</span>
-  </div>
-  <div style="font-size:13px; margin-top:4px; text-align:right;">
-    Intensità festa: <b><span id="gain-val">600%</span></b><br>
-    <input type="range" id="party-gain" min="0" max="1500" step="25" value="600">
+
+  <div class="griglia">
+
+    <!-- ══ REGIA ══ -->
+    <div class="card">
+      <h2>🤖 Regia — mani libere</h2>
+      <label class="spunta"><input type="checkbox" id="ap-on"> Pilota automatico <span class="tasto">O</span></label>
+      <label class="spunta"><input type="checkbox" id="free-on"> Modalità libera (niente rivali) <span class="tasto">N</span></label>
+      <div class="nota">Col pilota il cavallo corre, para e attacca da solo: serve per stare
+        alla musica invece che al gioco.</div>
+      <div class="nota">🎮 Pad: stick/croce sterza · RT gas · LT freno · X/B attacca ·
+        Y calcio · LB parata · RB boost · START pilota.</div>
+    </div>
+
+    <!-- ══ PROIEZIONE ══ -->
+    <div class="card">
+      <h2>📽 Proiezione — 2° schermo</h2>
+      <div class="bottoni"><button id="proj-detect">Rileva schermi</button></div>
+      <select id="proj-screen" disabled><option>— rileva prima gli schermi —</option></select>
+      <select id="proj-mode">
+        <option value="mirror">Riempi lo schermo (adatta)</option>
+        <option value="matrix">Matrice 2304×768 (5 pannelli)</option>
+      </select>
+      <select id="proj-res">
+        <option value="auto">Render: come l'anteprima</option>
+        <option value="1152x768">Render: 1152×768 (banda centrale 3:2)</option>
+        <option value="1920x1080">Render: 1920×1080 (Full HD)</option>
+      </select>
+      <div class="bottoni">
+        <button id="proj-open">▶︎ Apri proiezione</button>
+        <button id="proj-full" disabled>⛶ Pieno</button>
+      </div>
+      <label class="spunta"><input type="checkbox" id="proj-hud"> Includi l'HUD di gioco</label>
+      <div id="proj-stato" class="nota">spenta</div>
+      <div class="nota">In proiezione va <b>solo il gioco</b>: mai i pannelli, mai questa console.</div>
+    </div>
+
+    <!-- ══ SHOW ══ -->
+    <div class="card">
+      <h2>✨ Show live — a tempo</h2>
+      <div class="bottoni">
+        <button id="btn-tap">🎉 Tap tempo (T)</button>
+        <span id="party-info" class="nota" style="align-self:center">spento</span>
+      </div>
+      <label class="spunta"><input type="checkbox" id="live-flash"> ⚡ Flash strobo <span class="tasto">F</span></label>
+      <label class="spunta"><input type="checkbox" id="live-bonus"> 💬 Scritta lampeggiante <span class="tasto">G</span></label>
+      <input type="text" id="live-text" value="CAVALLI MONGOLI" maxlength="24" placeholder="Testo dello show…">
+      <select id="live-palette">
+        <option value="gold">🟡 Gold</option><option value="neon">💚 Neon</option>
+        <option value="cyber">🔵 Cyber</option><option value="vapor">💗 Vapor</option>
+        <option value="fire">🔥 Fire</option><option value="toxic">🟢 Toxic</option>
+        <option value="ice">🧊 Ice</option><option value="voodoo">🟣 Voodoo</option>
+        <option value="random">🎲 Random</option>
+      </select>
+      <label class="spunta"><input type="checkbox" id="live-cycle"> 🌈 Colore a ogni beat</label>
+      <label class="spunta"><input type="checkbox" id="live-3d"> 🧊 Scritta in 3D <span class="tasto">H</span></label>
+      <div>Distorsione scritta: <span class="val" id="live-int-val">120%</span>
+        <input type="range" id="live-int" min="0" max="200" step="10" value="120"></div>
+      <div>Intensità festa: <span class="val" id="gain-val">600%</span>
+        <input type="range" id="party-gain" min="0" max="1500" step="25" value="600"></div>
+    </div>
+
+    <!-- ══ BANDE ══ -->
+    <div class="card">
+      <h2>🎞 Testo laterale — bande</h2>
+      <label class="spunta"><input type="checkbox" id="side-on"> Scorrimento verticale</label>
+      <input type="text" id="side-text" value="CAVALLI MONGOLI" maxlength="40" placeholder="Testo delle bande…">
+      <div>Velocità: <span class="val" id="side-speed-val">60</span>
+        <input type="range" id="side-speed" min="0" max="200" step="5" value="60"></div>
+      <div>Corpo: <span class="val" id="side-size-val">64</span>
+        <input type="range" id="side-size" min="24" max="140" step="4" value="64"></div>
+      <div class="nota">Si vede solo con la proiezione in modalità <b>Matrice</b>.</div>
+    </div>
+
+    <!-- ══ RESA ══ -->
+    <div class="card">
+      <h2>🎬 Resa</h2>
+      <div class="bottoni">
+        <button id="btn-sprite" class="active">Opzione A — Sprite</button>
+        <button id="btn-model">Opzione B — Modello 3D</button>
+      </div>
+      <div class="bottoni"><button id="btn-camera">Camera: chase</button></div>
+      <div class="nota">La camera si cambia anche con <b>C</b>: chase, onboard, tv, orbit.</div>
+    </div>
+
   </div>
 </div>
-
-<div id="hud-live" class="panel">
-  <b class="head">✨ SHOW LIVE (a tempo)</b>
-  <label><input type="checkbox" id="live-flash"> ⚡ Flash strobo <span style="opacity:.6">(F)</span></label>
-  <label><input type="checkbox" id="live-bonus"> 💬 Scritta lampeggiante <span style="opacity:.6">(G)</span></label>
-  <input type="text" id="live-text" value="CAVALLI MONGOLI" maxlength="24" placeholder="Testo…">
-  <select id="live-palette">
-    <option value="gold">🟡 Gold</option>
-    <option value="neon">💚 Neon</option>
-    <option value="cyber">🔵 Cyber</option>
-    <option value="vapor">💗 Vapor</option>
-    <option value="fire">🔥 Fire</option>
-    <option value="toxic">🟢 Toxic</option>
-    <option value="ice">🧊 Ice</option>
-    <option value="voodoo">🟣 Voodoo</option>
-    <option value="random">🎲 Random</option>
-  </select>
-  <label style="margin-top:3px;"><input type="checkbox" id="live-cycle"> 🌈 Colore a ogni beat</label>
-  <label><input type="checkbox" id="live-3d"> 🧊 Scritta in 3D <span style="opacity:.6">(H)</span></label>
-  <div style="margin-top:2px;">Distorsione scritta: <span id="live-int-val">120%</span>
-    <input type="range" id="live-int" min="0" max="200" step="10" value="120"></div>
-  <div style="opacity:.6; margin-top:4px;">Dai il tempo con <b>T</b>.</div>
-
-  <hr>
-  <b class="head">🤖 REGIA (mani libere)</b>
-  <label><input type="checkbox" id="ap-on"> Pilota automatico <span style="opacity:.6">(O)</span></label>
-  <div id="pad-stato" class="nota">nessun pad collegato</div>
-  <div class="nota">Pad: stick/croce sterza · RT gas · LT freno · X/B attacca · Y calcio ·
-    LB parata · RB boost · START pilota.</div>
-
-  <hr>
-  <b class="head">📽 PROIEZIONE (2° schermo)</b>
-  <div class="row"><button id="proj-detect">Rileva schermi</button></div>
-  <select id="proj-screen" disabled><option>— rileva prima gli schermi —</option></select>
-  <select id="proj-mode">
-    <option value="mirror">Riempi lo schermo (adatta)</option>
-    <option value="matrix">Matrice 2304×768 (5 pannelli)</option>
-  </select>
-  <select id="proj-res">
-    <option value="auto">Render: come la finestra</option>
-    <option value="1152x768">Render: 1152×768 (banda centrale 3:2)</option>
-    <option value="1920x1080">Render: 1920×1080 (Full HD)</option>
-  </select>
-  <div class="row">
-    <button id="proj-open">▶︎ Apri proiezione</button>
-    <button id="proj-full" disabled>⛶ Pieno</button>
-  </div>
-  <label style="margin-top:3px;"><input type="checkbox" id="proj-hud"> Includi l'HUD di gioco</label>
-  <div id="proj-stato">spenta</div>
-  <div class="nota">Sulla proiezione va <b>solo il gioco</b>: niente pannelli, niente console.</div>
-
-  <hr>
-  <b class="head">🎞 TESTO LATERALE (bande)</b>
-  <label><input type="checkbox" id="side-on"> Scorrimento verticale</label>
-  <input type="text" id="side-text" value="CAVALLI MONGOLI" maxlength="40" placeholder="Testo bande…">
-  <div style="margin-top:2px;">Velocità: <span id="side-speed-val">60</span>
-    <input type="range" id="side-speed" min="0" max="200" step="5" value="60"></div>
-  <div style="margin-top:2px;">Corpo: <span id="side-size-val">64</span>
-    <input type="range" id="side-size" min="24" max="140" step="4" value="64"></div>
-  <div class="nota">Visibile solo in modalità <b>Matrice</b>.</div>
-</div>
-
-<div id="hud-help" class="panel">
-  ↑↓ gas/freno · ←→ sterza · <b>J</b> attacca sx · <b>L</b> attacca dx · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost &nbsp;|&nbsp; <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T/P/F/G/H</b> show · <b>R</b> riparti
-</div>
-
-<div id="screen"><div class="box" id="screen-box"></div></div>
 
 <script type="module">
 import * as THREE from 'three';
@@ -473,25 +525,34 @@ const vista = { W: innerWidth, H: innerHeight, nativa: null };   // nativa=null 
 const teleVista = [];   // riempito dai moduli overlay (live, combatHud)
 
 function ridimensiona() {
-  const W = vista.nativa ? vista.nativa.w : innerWidth;
-  const H = vista.nativa ? vista.nativa.h : innerHeight;
+  const box = document.getElementById('gioco');
+  const bw = Math.max(200, box.clientWidth);
+  // Risoluzione di render: quella scelta per la proiezione, oppure quella
+  // dell'anteprima. In entrambi i casi il RIQUADRO prende l'aspetto del render,
+  // così l'anteprima non ha mai bande nere e mostra esattamente ciò che esce.
+  const W = vista.nativa ? vista.nativa.w : Math.round(bw);
+  const H = vista.nativa ? vista.nativa.h : Math.round(bw * 9/16);
   vista.W = W; vista.H = H;
+  box.style.aspectRatio = W + ' / ' + H;
+  // L'anteprima non deve mangiarsi la finestra: sotto ci vanno i controlli, ed
+  // è quello il senso della console. Tetto in altezza, larghezza di conseguenza
+  // per non deformare nulla.
+  const tetto = Math.round(innerHeight * (proiezione.attiva() ? 0.30 : 0.46));
+  box.style.maxWidth = Math.round(tetto * W/H) + 'px';
   camera.aspect = W/H;
   camera.updateProjectionMatrix();
   renderer.setSize(W, H, false);        // false: la misura CSS la decidiamo qui sotto
   composer.setSize(W, H);
   bloom.setSize(W, H);
-  const k = Math.min(innerWidth/W, innerHeight/H);
-  const cw = Math.round(W*k), ch = Math.round(H*k);
-  const cx = Math.round((innerWidth-cw)/2), cy = Math.round((innerHeight-ch)/2);
+  const bh = Math.max(120, Math.round(bw * H/W));
   for (const c of [renderer.domElement, ...teleVista]) {
     if (!c) continue;
-    c.style.left = cx+'px'; c.style.top = cy+'px';
-    c.style.width = cw+'px'; c.style.height = ch+'px';
-    c.style.right = 'auto'; c.style.bottom = 'auto';
+    c.style.left = '0'; c.style.top = '0';
+    c.style.width = bw+'px'; c.style.height = bh+'px';
   }
 }
 addEventListener('resize', ridimensiona);
+new ResizeObserver(() => ridimensiona()).observe(document.getElementById('gioco'));
 
 //=========================================================================
 // GEOMETRIA PISTA — nastri (ribbon) con vertex colors
@@ -1865,7 +1926,7 @@ function setMode(mode) {
 $('btn-sprite').onclick = () => setMode('sprite');
 $('btn-model').onclick  = () => setMode('model');
 $('btn-camera').onclick = cycleCamera;
-$('btn-free').onclick   = () => setFreeRoam(!freeRoam);
+$('free-on').onchange   = e => setFreeRoam(e.target.checked);
 // — PROIEZIONE —
 $('ap-on').onchange      = e => setPilota(e.target.checked);
 $('proj-detect').onclick = () => proiezione.rileva();
@@ -2181,8 +2242,8 @@ const live = (() => {
 
   const cv = document.createElement('canvas');
   cv.id = 'live-overlay';   // la proiezione lo ricompone sopra la scena 3D
-  cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:6;';
-  document.body.appendChild(cv);
+  cv.style.cssText = 'position:absolute; pointer-events:none; z-index:6;';
+  document.getElementById('gioco').appendChild(cv);
   teleVista.push(cv);
   const ctx = cv.getContext('2d');
   let W = 0, H = 0, dirty = false;
@@ -2272,8 +2333,8 @@ const live = (() => {
 const combatHud = (() => {
   const cv = document.createElement('canvas');
   cv.id = 'combat-overlay';
-  cv.style.cssText = 'position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:5;';
-  document.body.appendChild(cv);
+  cv.style.cssText = 'position:absolute; pointer-events:none; z-index:5;';
+  document.getElementById('gioco').appendChild(cv);
   teleVista.push(cv);
   const ctx = cv.getContext('2d');
   let W = 0, H = 0;
@@ -2520,6 +2581,12 @@ const proiezione = (() => {
     if (b) { b.textContent = attiva ? '■ Chiudi proiezione' : '▶︎ Apri proiezione'; b.classList.toggle('active', attiva); }
     const f = document.getElementById('proj-full');
     if (f) f.disabled = !attiva;
+    // come nel 2D: con la proiezione accesa l'output vero è sull'altro schermo,
+    // qui basta un'anteprima compatta
+    document.getElementById('card-anteprima').classList.toggle('compatta', attiva);
+    const eco = document.getElementById('eco-proiezione');
+    if (eco) eco.textContent = attiva ? '— in onda sul 2° schermo' : '';
+    ridimensiona();
   }
 
   return {
@@ -2651,7 +2718,7 @@ function resetRun() {
 // si può ispezionare tutto il tracciato senza rivali che interrompono.
 function setFreeRoam(on) {
   freeRoam = on;
-  D('btn-free').classList.toggle('active', on);
+  const cb = D('free-on'); if (cb) cb.checked = on;
   for (const o of opponents) o.actor.group.visible = !on;
   for (const p of pickups)   p.mesh.visible = !on && p.active;
   if (on) {
@@ -2808,13 +2875,16 @@ const serverHint = 'apri <b>http://127.0.0.1:8901/horse-racing-3d.html</b> ' +
   'nella cartella del progetto, oppure <code>node server.js</code> e poi ' +
   '<b>https://localhost:3000/horse-racing-3d.html</b>)';
 
+// Avviso in cima alla console: da quando la pagina è un banco di regia e non il
+// gioco a tutto schermo, un pannello fisso finirebbe sopra i controlli.
 function showWarning(html) {
   const w = document.createElement('div');
-  w.className = 'panel';
-  w.style.cssText = 'top:60px; left:50%; transform:translateX(-50%); max-width:640px; font-size:14px; background:rgba(140,80,0,.75); cursor:pointer;';
-  w.innerHTML = html + '<br><small>(clicca per chiudere)</small>';
+  w.className = 'card';
+  w.style.cssText = 'border-color:#8a5a1a; background:#2a1f10; cursor:pointer;';
+  w.innerHTML = html + '<div class="nota">(clicca per chiudere)</div>';
   w.onclick = () => w.remove();
-  document.body.appendChild(w);
+  const c = document.getElementById('console');
+  c.insertBefore(w, c.children[1] || null);
 }
 
 Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
