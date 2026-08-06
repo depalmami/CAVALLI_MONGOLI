@@ -529,6 +529,40 @@ console: da pannelli fissi finivano sopra i controlli.
 esattamente coincidente col riquadro, pagina scorrevole, 6 card. Regressioni tutte invariate:
 proiezione e matrice 2304×768, persistenza, pilota (evento vinto), modalità libera, 120 fps.
 
+## 9.12 Tracciato generato, 3× più lungo (2026-08-05)
+
+Da 16035 a **52101 segmenti** (3.21M → 10.42M unità; giro alla velocità del pilota
+automatico da ~4.8 a **~15.5 minuti**). Serve per il live: con l'autopilota acceso durante un
+set, un giro lungo vuol dire non rivedere lo stesso paesaggio.
+
+**Il layout non è più scritto a mano, è generato**, perché a mano il tracciato si ripiegava
+su se stesso appena cresceva — ed è il difetto che è costato di più (§9.6). Ora la garanzia è
+**strutturale invece che verificata a posteriori**:
+
+- ogni curva parte dai **gradi** voluti e da lì si ricava la lunghezza. Prima una curva MEDIUM
+  di 600 segmenti ruotava di 84° e una sola bastava a mandare la pista all'indietro;
+- la lunghezza deve bastare **sia all'angolo sia alla pendenza**: una salita HIGH schiacciata
+  in una curva stretta dava rampe al 57%;
+- il verso di ogni curva insegue un **bersaglio di direzione limitato** a ±29°, che a sua
+  volta insegue il centro della fascia laterale. Forzare il verso "a occhio" quando la pista
+  derivava faceva avvitare tutto (direzione fino a **1276°**): col bersaglio limitato,
+  |direzione| resta sotto i **43°**, e cos(43°)=0.73 > 0 significa che la **Z avanza sempre**
+  — quindi due tratti lontani lungo il percorso non possono ritrovarsi vicini in pianta.
+
+Risultato misurato: distanza minima fra tratti non adiacenti **38561** (soglia 26000),
+pendenza massima **25%** (era 37.7%), 0 alberi in carreggiata, 0 muri d'erba.
+
+**Costo tenuto sotto controllo.** La geometria dei nastri (strada, cordoli, corsie, scarpate)
+ora si campiona ogni **3 segmenti** invece che a ognuno: 600 unità di corda su un raggio
+minimo di 16667 danno 2.7 unità d'errore su una strada larga 4000, invisibili. Il passo vale
+3 perché è `RUMBLE_LENGTH`, quindi ogni quad cade esattamente su una striscia del cordolo e
+il tratteggio delle corsie resta identico. Su 52000 segmenti taglia ~1.4M triangoli. `PRE`
+portato a 24 per restare multiplo del passo.
+
+**Verifiche**: invariante del terreno su **677326** campioni → 0 violazioni, franco 299.7/300;
+3.5M triangoli, **120 fps** in 6 punti sparsi, caricamento 1.5s; pilota automatico ancora
+vince l'evento; proiezione, matrice e persistenza invariate.
+
 ### Cosa resta del 2D da portare
 ~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
 ~~`localStorage persistence`~~ (§9.10) · `level system` (livelli tematici + sprite per livello) ·

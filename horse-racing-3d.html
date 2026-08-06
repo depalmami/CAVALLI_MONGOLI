@@ -298,110 +298,80 @@ const ROAD = {
   HILL:   { NONE:0, LOW:20, MEDIUM:40, HIGH:60 },
   CURVE:  { NONE:0, EASY:2, MEDIUM:4, HARD:6 }
 };
-const addStraight = (n=ROAD.LENGTH.MEDIUM)                                    => addRoad(n,n,n, 0, 0);
-const addHill     = (n=ROAD.LENGTH.MEDIUM, h=ROAD.HILL.MEDIUM)                => addRoad(n,n,n, 0, h);
-const addCurve    = (n=ROAD.LENGTH.MEDIUM, c=ROAD.CURVE.MEDIUM, h=ROAD.HILL.NONE) => addRoad(n,n,n, c, h);
-function addLowRollingHills(n=ROAD.LENGTH.SHORT, h=ROAD.HILL.LOW) {
-  addRoad(n,n,n,  0,  h/2);
-  addRoad(n,n,n,  0, -h);
-  addRoad(n,n,n,  ROAD.CURVE.EASY,  h);
-  addRoad(n,n,n,  0,  0);
-  addRoad(n,n,n, -ROAD.CURVE.EASY,  h/2);
-  addRoad(n,n,n,  0,  0);
-}
-function addSCurves() {
-  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.EASY,    ROAD.HILL.NONE);
-  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  ROAD.CURVE.MEDIUM,  ROAD.HILL.MEDIUM);
-  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM,  ROAD.CURVE.EASY,   -ROAD.HILL.LOW);
-  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.EASY,    ROAD.HILL.MEDIUM);
-  addRoad(ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, ROAD.LENGTH.MEDIUM, -ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
-}
-function addBumps() {
-  for (const y of [5,-2,-5,8,5,-7,5,-2]) addRoad(10,10,10, 0, y);
-}
-// La discesa finale si dimensiona sulla quota da smaltire, invece di avere una
-// lunghezza fissa: con la pista lunga si arriva al traguardo da +37000 e i vecchi
-// 200 segmenti diventavano una rampa al 48%. easeInOut concentra la pendenza al
-// centro, dove vale ~π/2 volte la media: da lì la formula per il numero di segmenti.
-function addDownhillToEnd(maxGrade = 0.20) {
-  const drop = lastY() / SEGMENT_LENGTH;
-  const n = Math.max(100, Math.ceil(Math.PI/2 * Math.abs(drop) * Y_SCALE / (3*maxGrade)));
-  addRoad(n,n,n, -ROAD.CURVE.EASY, -drop);
-}
-// ── sezioni della seconda metà ──
-// Tornanti alternati a quota costante. Usa HARD: con CURVE_K=0.0020 il raggio
-// resta 16667, sopra gli 11200 degli alberi, e la distanza minima fra rami del
-// tracciato resta 32965 (verificata) — quindi qui si può stringere davvero.
-function addSwitchbacks(n=ROAD.LENGTH.MEDIUM) {
-  for (const c of [ROAD.CURVE.HARD, -ROAD.CURVE.HARD, ROAD.CURVE.HARD, -ROAD.CURVE.HARD])
-    addRoad(n, n*2, n, c, ROAD.HILL.NONE);
-}
-function addValley(n=ROAD.LENGTH.LONG) {             // si scende in conca e si risale
-  addRoad(n,n,n,  ROAD.CURVE.EASY, -ROAD.HILL.HIGH);
-  addRoad(n,n,n,  0,                ROAD.HILL.NONE);
-  addRoad(n,n,n, -ROAD.CURVE.EASY,  ROAD.HILL.HIGH);
-}
-function addPlateau(n=ROAD.LENGTH.LONG) {            // salita e lungo tratto in quota
-  addRoad(n,n,n,   0,               ROAD.HILL.MEDIUM);
-  addRoad(n,n*2,n, ROAD.CURVE.EASY, ROAD.HILL.NONE);
-}
 
 //=========================================================================
-// LAYOUT — DUE VINCOLI da verificare quando si aggiungono o si cambiano sezioni:
+// TRACCIATO GENERATO — 20 "capitoli" invece di un layout scritto a mano.
 //
-// 1. RAGGIO > 11200. Tutto ciò che segue il frame della pista (scarpate a 8000,
-//    alberi fino a 11200) si ripiega sull'interno delle curve se il raggio
-//    scende sotto il proprio offset laterale — il bug dei "layer sovrapposti"
-//    di §9.4. Con CURVE_K=0.0020: MEDIUM = 25000, HARD = 16667, quindi ora
-//    anche le HARD sono utilizzabili (con 0.0038 non lo erano: 8772).
+// Perché generato: a mano il tracciato si ripiegava su se stesso appena
+// cresceva, ed è il difetto che è costato di più (§9.6: rami vicini = muri
+// d'erba a bordo strada e alberi in carreggiata). Qui la garanzia è
+// STRUTTURALE, non verificata a posteriori:
 //
-// 2. IL TRACCIATO NON DEVE AVVICINARSI A SE STESSO. È il vincolo che è costato
-//    di più (§9.6): due rami vicini a quote diverse producono muri d'erba a
-//    bordo strada e alberi in carreggiata. Oggi la distanza minima fra tratti
-//    non adiacenti è 35867 unità; va ri-misurata dopo ogni modifica al layout,
-//    perché nessun controllo a runtime la può garantire.
+//  · ogni curva parte dai GRADI voluti e da lì si ricava la lunghezza. Prima
+//    una curva MEDIUM di 600 segmenti ruotava di 84°, e una sola bastava a
+//    mandare la pista all'indietro;
+//  · la lunghezza deve bastare SIA all'angolo SIA alla pendenza: una salita
+//    HIGH schiacciata in una curva stretta dava rampe al 57%;
+//  · il verso di ogni curva insegue un BERSAGLIO di direzione limitato a ±29°,
+//    che a sua volta insegue il centro della fascia. Così |direzione| resta
+//    sotto i 43° e cos(43°)=0.73 > 0: la Z avanza SEMPRE, quindi due tratti
+//    lontani lungo il percorso non possono mai ritrovarsi vicini in pianta.
+//    Misurato: distanza minima fra tratti non adiacenti 38581 unità.
+//
+// Il seme è fisso: il tracciato è sempre lo stesso, non cambia a ogni ricarica.
 //=========================================================================
+const CAPITOLI = 20;                  // ~52000 segmenti, giro di ~15 minuti
+const SEME = 12345;
 
-// prima metà: il livello 1 originale di javascript-racer, invariato
-addStraight(ROAD.LENGTH.SHORT);
-addLowRollingHills();
-addSCurves();
-addCurve(ROAD.LENGTH.MEDIUM, ROAD.CURVE.MEDIUM, ROAD.HILL.LOW);
-addBumps();
-addLowRollingHills();
-addCurve(ROAD.LENGTH.LONG*2, ROAD.CURVE.MEDIUM, ROAD.HILL.MEDIUM);
-addStraight();
-addHill(ROAD.LENGTH.MEDIUM, ROAD.HILL.HIGH);
-addSCurves();
-addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, ROAD.HILL.NONE);
-addHill(ROAD.LENGTH.LONG, ROAD.HILL.HIGH);
-addCurve(ROAD.LENGTH.LONG, ROAD.CURVE.MEDIUM, -ROAD.HILL.LOW);
-addBumps();
-addHill(ROAD.LENGTH.LONG, -ROAD.HILL.MEDIUM);
-addStraight();
-addSCurves();
+{
+  let r = SEME;
+  const rnd = () => (r = (r*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const SWING = 1.833 * CURVE_K;      // Δdirezione di addRoad(n,n,n,c) ≈ 1.833·n·c·K
+  const XCAP = 90000;                 // fascia laterale in cui tenere il tracciato
+  const GRADE = 0.24;                 // pendenza di picco ammessa
+  let dir = 0, px = 0;
 
-// seconda metà (2026-08-05): il tracciato passa da 6705 a 16035 segmenti
-// (1.34M → 3.21M unità, giro da 112s a 267s alla velocità massima)
-addStraight(ROAD.LENGTH.LONG);
-addSCurves();
-addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
-addPlateau();
-addBumps();
-addCurve(ROAD.LENGTH.LONG*1.5, ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
-addLowRollingHills(ROAD.LENGTH.MEDIUM, ROAD.HILL.MEDIUM);
-addSCurves();
-addValley();
-addCurve(ROAD.LENGTH.LONG, -ROAD.CURVE.MEDIUM, -ROAD.HILL.LOW);
-addStraight(ROAD.LENGTH.LONG);
-addSwitchbacks();
-addHill(ROAD.LENGTH.LONG, -ROAD.HILL.HIGH);
-addLowRollingHills();
-addCurve(ROAD.LENGTH.LONG*2, ROAD.CURVE.MEDIUM, -ROAD.HILL.MEDIUM);
-addBumps();
-addSCurves();
-addStraight(ROAD.LENGTH.LONG);
-addDownhillToEnd();
+  const avanza = n => { px += Math.sin(dir) * n * SEGMENT_LENGTH; };
+  const dritto = (n, h) => { addRoad(n,n,n, 0, h); avanza(3*n); };
+  const gobbe  = () => { for (const y of [5,-2,-5,8,5,-7,5,-2]) addRoad(10,10,10, 0, y); avanza(240); };
+  const gira = (gradi, curva, h) => {
+    const d = gradi * Math.PI/180;
+    const n = Math.max(12, Math.round(d/(SWING*curva)),
+                       Math.ceil(Math.PI/2 * Math.abs(h) * Y_SCALE / (3*GRADE)));
+    const c = Math.min(ROAD.CURVE.HARD, d/(SWING*n));      // curva ricavata dalla lunghezza vera
+    const bersaglio = -Math.sign(px || 1) * Math.min(0.50, Math.abs(px)/XCAP * 0.50);
+    const verso = Math.abs((dir-d)-bersaglio) <= Math.abs((dir+d)-bersaglio) ? 1 : -1;
+    addRoad(n,n,n, verso*c, h);
+    dir -= verso * c * SWING * n;
+    avanza(3*n);
+  };
+
+  const L = ROAD.LENGTH, H = ROAD.HILL, C = ROAD.CURVE;
+  for (let k = 0; k < CAPITOLI; k++) {
+    const a = () => 20 + rnd()*15;    // curve fra 20° e 35°
+    dritto(L.MEDIUM, 0);
+    gira(a(), C.MEDIUM,  H.LOW);
+    gira(a(), C.EASY,   -H.MEDIUM);
+    gobbe();
+    gira(a(), C.HARD,    H.NONE);     // tornante stretto
+    dritto(L.LONG, H.MEDIUM);
+    gira(a(), C.MEDIUM, -H.LOW);
+    gira(a(), C.EASY,    H.HIGH);     // salita
+    gira(a(), C.MEDIUM, -H.HIGH);     // e discesa
+    dritto(L.LONG, 0);
+    gira(a(), C.MEDIUM,  H.LOW);
+    gobbe();
+    gira(a(), C.HARD,   -H.MEDIUM);
+    dritto(L.MEDIUM, 0);
+  }
+  // rientro a quota zero: la lunghezza si dimensiona sulla quota da smaltire,
+  // altrimenti l'ultimo tratto diventa una rampa
+  {
+    const drop = lastY() / SEGMENT_LENGTH;
+    const n = Math.max(100, Math.ceil(Math.PI/2 * Math.abs(drop) * Y_SCALE / (3*GRADE)));
+    addRoad(n,n,n, -ROAD.CURVE.EASY, -drop);
+  }
+}
 
 const N = segments.length;
 const TRACK_LENGTH = N * SEGMENT_LENGTH;
@@ -583,10 +553,17 @@ const asphaltTex = loadPBR('assets/textures/Asphalt014/Asphalt014_1K-JPG');
 const grassTex   = loadPBR('assets/textures/Grass004/Grass004_1K-JPG');
 
 // coda di pista piatta prima del via, così dietro la partenza non c'è il vuoto
-const PRE = 25;
+const PRE = 24;   // multiplo di PASSO: i quad restano allineati ai segmenti
 const ext = [];
 for (let i = PRE; i > 0; i--) ext.push({ x: 0, y: pts[0].y, z: -i * SEGMENT_LENGTH, heading: 0 });
 ext.push(...pts);
+
+// PASSO: la geometria dei nastri viene campionata ogni 3 segmenti invece che a
+// ognuno. A 600 unità di corda su un raggio minimo di 16667 l'errore è 2.7 unità
+// su una strada larga 4000: invisibile. Vale 3 perché è RUMBLE_LENGTH, quindi
+// ogni quad cade esattamente su una striscia del cordolo e il tratteggio delle
+// corsie resta identico. Su 52000 segmenti taglia ~1.4M triangoli.
+const PASSO = RUMBLE_LENGTH;
 
 // nastro generico lungo la pista; colorOf(i) → THREE.Color o null per saltare il
 // segmento. I nastri NON si sovrappongono mai (niente z-fighting a distanza);
@@ -600,14 +577,14 @@ function buildRibbon({ half, yOff = 0, centerOff = 0, colorOf, decal = false, ro
   // UV planari nel frame della pista (laterale L, longitudinale D), tile in unità mondo:
   // continue tra nastri adiacenti e lungo la lunghezza → tiling senza stiramenti
   const uL = (centerOff - half)/uvTile, uR = (centerOff + half)/uvTile;
-  for (let i = 0; i < ext.length - 1; i++) {
+  for (let i = 0; i + PASSO < ext.length; i += PASSO) {
     const c = colorOf(i - PRE);
     if (!c) continue;
-    const a = ext[i], b = ext[i+1];
+    const a = ext[i], b = ext[i+PASSO];
     const al = edge(a,-half), ar = edge(a,half), bl = edge(b,-half), br = edge(b,half);
     positions.push(...al, ...ar, ...br,  ...al, ...br, ...bl);
     for (let k = 0; k < 6; k++) colors.push(c.r, c.g, c.b);
-    const vA = (i*SEGMENT_LENGTH)/uvTile, vB = ((i+1)*SEGMENT_LENGTH)/uvTile;
+    const vA = (i*SEGMENT_LENGTH)/uvTile, vB = ((i+PASSO)*SEGMENT_LENGTH)/uvTile;
     uvs.push(uL,vA, uR,vA, uR,vB,  uL,vA, uR,vB, uL,vB);
   }
   const g = new THREE.BufferGeometry();
@@ -955,9 +932,9 @@ for (const side of [-1, 1])
     };
     const positions = [], uvs = [], colors = [], rgb = [0,0,0];
     const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), D = new THREE.Vector3();
-    for (let i = 0; i < ext.length-1; i++) {
+    for (let i = 0; i + PASSO < ext.length; i += PASSO) {
       for (let k = 0; k < SPANS; k++) {
-        station(i, k, A); station(i, k+1, B); station(i+1, k+1, C); station(i+1, k, D);
+        station(i, k, A); station(i, k+1, B); station(i+PASSO, k+1, C); station(i+PASSO, k, D);
         // il verso "verso l'esterno" si ribalta col lato: senza questo scambio
         // la scarpata di sinistra avrebbe le normali rivolte in basso (nera)
         const tri = side > 0 ? [A,B,C, A,C,D] : [A,C,B, A,D,C];
