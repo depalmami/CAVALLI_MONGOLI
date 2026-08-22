@@ -710,6 +710,7 @@
                 <option value='low'>Low (480x360)</option>
                 <option value='square'>Square (500x500)</option>
                 <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
+                <option value='ledwall'>LEDWALL 768x512 (3:2 nativo)</option>
               </select>
             </div>
             <div>
@@ -947,6 +948,29 @@
               <span class="material-icons text-base">desktop_windows</span>
               Dual Monitor classico (Full HD)
             </button>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="ledwall-btn">
+              <span class="material-icons text-base">tv</span>
+              LEDWALL 768×512 esatto
+            </button>
+            <div class="text-[10px] text-gray-500 dark:text-gray-400">
+              Imposta in un colpo render, uscita e finestra a 768×512: pixel del gioco
+              e pixel del pannello coincidono uno a uno, senza scalature né bande.
+            </div>
+            <div class="space-y-1">
+              <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Uscita (pixel reali del ledwall)</label>
+              <select id="output-size" class="w-full px-2 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded">
+                <option value="auto">Auto — come la finestra</option>
+                <option value="768x512">LEDWALL 768×512</option>
+                <option value="1536x1024">LEDWALL 1536×1024 (2×)</option>
+                <option value="2304x768">Matrice 2304×768</option>
+                <option value="1920x1080">Full HD 1920×1080</option>
+              </select>
+              <div class="text-[10px] text-gray-500 dark:text-gray-400">
+                Con "Auto" la tela segue la finestra: se il sistema riporta una misura diversa da
+                quella vera del pannello l'immagine esce fuori e appare tagliata. Fissando i pixel
+                reali resta sempre intera.
+              </div>
+            </div>
             <label class="flex items-center gap-2 py-1 px-1 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
               <input type="checkbox" id="matrix-layout-toggle" class="w-4 h-4">
               Layout matrice 2304×768 (gioco al centro + lati)
@@ -1049,6 +1073,7 @@
           <option value='low'>Low (480x360)</option>
           <option value='square'>Square (500x500)</option>
           <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
+          <option value='ledwall'>LEDWALL 768x512 (3:2 nativo)</option>
         </select>
       </td>
     </tr>
@@ -3286,6 +3311,90 @@
       });
     }
 
+    // Misura d'uscita del secondo schermo. Serve perche' su un ledwall la
+    // dimensione riportata dalla finestra puo' non coincidere coi pixel veri del
+    // pannello: in quel caso la tela viene dimensionata male e l'immagine appare
+    // tagliata. Fissandola a mano, la tela ha SEMPRE i pixel del pannello e il CSS
+    // (object-fit: contain) al massimo la rimpicciolisce, senza mai tagliarla.
+    function getOutputSize() {
+      var sel = Dom.get('output-size');
+      var v = sel ? sel.value : 'auto';
+      if (!v || v === 'auto') return null;
+      var p = v.split('x');
+      return { w: parseInt(p[0], 10), h: parseInt(p[1], 10) };
+    }
+
+    function applyOutputSize() {
+      if (!dualMonitorWindow || dualMonitorWindow.closed || !dualMonitorCanvas) return;
+      if (typeof dualMonitorWindow.__fit === 'function') { dualMonitorWindow.__fit(); return; }
+      var f = getOutputSize();
+      if (f) { dualMonitorCanvas.width = f.w; dualMonitorCanvas.height = f.h; }
+      var info = Dom.get('dual-monitor-status');
+      if (info) info.textContent = 'Uscita ' + dualMonitorCanvas.width + '×' + dualMonitorCanvas.height +
+                                  (f ? ' (fissata)' : ' (auto)');
+    }
+
+    // Tutto il comportamento della finestra del ledwall e' collegato dal banco di
+    // regia invece che da uno script dentro la finestra stessa: gli script scritti
+    // con document.write non vengono eseguiti in modo affidabile (verificato: il
+    // tag c'era, 3827 caratteri, e nessuna funzione risultava definita).
+    function setupPopupControls(fallbackW, fallbackH) {
+      var w = dualMonitorWindow, d = w.document;
+      var overlay = d.getElementById('fullscreen-overlay');
+      var stay    = d.getElementById('stay-windowed');
+      var readout = d.getElementById('size-readout');
+      var cv      = dualMonitorCanvas;
+      var tMis = null;
+
+      function misura() {
+        if (!readout) return;
+        var f = getOutputSize();
+        readout.textContent = 'finestra ' + w.innerWidth + '×' + w.innerHeight +
+                              '\ntela     ' + cv.width + '×' + cv.height +
+                              (f ? '  (fissata)' : '  (segue la finestra)');
+        readout.className = 'on';
+        clearTimeout(tMis);
+        tMis = setTimeout(function() { readout.className = ''; }, 2500);
+      }
+
+      function fit() {
+        var f = getOutputSize();
+        cv.width  = f ? f.w : (w.innerWidth  || fallbackW || 1280);
+        cv.height = f ? f.h : (w.innerHeight || fallbackH || 720);
+        misura();
+        var info = Dom.get('dual-monitor-status');
+        if (info) info.textContent = 'Uscita ' + cv.width + '×' + cv.height + (f ? ' (fissata)' : ' (auto)');
+      }
+
+      function schermoIntero() {
+        try {
+          var pr = d.documentElement.requestFullscreen();
+          if (pr && pr.then) {
+            pr.then(function() { overlay.style.display = 'none'; d.body.style.cursor = 'none'; fit(); })
+              .catch(function() { overlay.style.display = 'none'; });
+          } else { overlay.style.display = 'none'; }
+        } catch (e) { overlay.style.display = 'none'; }
+      }
+
+      if (overlay) overlay.addEventListener('click', schermoIntero);
+      if (stay) stay.addEventListener('click', function(ev) {
+        // resta in finestra: serve per portarla a mano sulla misura del pannello
+        ev.preventDefault(); ev.stopPropagation();
+        overlay.style.display = 'none';
+        d.body.style.cursor = 'default';
+        misura();
+      });
+      d.addEventListener('keydown', function(ev) {
+        if (ev.key === 'f' || ev.key === 'F') {
+          if (d.fullscreenElement) d.exitFullscreen(); else schermoIntero();
+        }
+      });
+      w.addEventListener('resize', fit);
+      d.addEventListener('fullscreenchange', fit);
+      w.__fit = fit;
+      fit();
+    }
+
     function openDualMonitorMode() {
       if (isDualMonitorMode) {
         closeDualMonitorMode();
@@ -3423,7 +3532,7 @@
         ',width=' + screenWidth +
         ',height=' + screenHeight +
         ',fullscreen=yes' +
-        ',menubar=no,toolbar=no,location=no,status=no,titlebar=no,scrollbars=no,resizable=no';
+        ',menubar=no,toolbar=no,location=no,status=no,titlebar=no,scrollbars=no,resizable=yes';
 
       console.log('  Window features:', windowFeatures);
 
@@ -3491,6 +3600,14 @@
               image-rendering: crisp-edges;
               background: #000;
             }
+            #size-readout {
+              position: fixed; top: 8px; left: 8px; z-index: 20;
+              font: 700 13px/1.4 ui-monospace, Menlo, Consolas, monospace;
+              color: #fff; background: rgba(0,0,0,.72); padding: 5px 9px;
+              border-radius: 6px; pointer-events: none; opacity: 0;
+              transition: opacity .25s; white-space: pre;
+            }
+            #size-readout.on { opacity: 1; }
             #fullscreen-overlay {
               position: fixed;
               top: 0;
@@ -3532,74 +3649,13 @@
             <div class="click-icon">🖱️</div>
             <h1>Click to Start Fullscreen</h1>
             <p>Il gioco apparirà a schermo intero</p>
+            <p style="margin-top:26px"><a href="#" id="stay-windowed"
+               style="color:#8fd3ff;font-size:18px">…oppure resta in finestra e ridimensionala a mano</a></p>
           </div>
-          <script>
-            var overlay = document.getElementById('fullscreen-overlay');
-            var canvas = document.getElementById('game-canvas');
-
-            function enterFullscreen() {
-              var elem = document.documentElement;
-              var promise = null;
-
-              if (elem.requestFullscreen) {
-                promise = elem.requestFullscreen();
-              } else if (elem.webkitRequestFullscreen) {
-                elem.webkitRequestFullscreen();
-              } else if (elem.mozRequestFullScreen) {
-                elem.mozRequestFullScreen();
-              } else if (elem.msRequestFullscreen) {
-                elem.msRequestFullscreen();
-              }
-
-              if (promise) {
-                promise.then(function() {
-                  overlay.style.display = 'none';
-                  document.body.style.cursor = 'none';
-                  // Update canvas size
-                  canvas.width = window.innerWidth;
-                  canvas.height = window.innerHeight;
-                }).catch(function(err) {
-                  console.log('Fullscreen failed:', err);
-                  // Hide overlay anyway, window is already maximized
-                  overlay.style.display = 'none';
-                });
-              } else {
-                overlay.style.display = 'none';
-              }
-            }
-
-            // Click anywhere to go fullscreen
-            overlay.addEventListener('click', enterFullscreen);
-
-            // Also support keyboard
-            document.addEventListener('keydown', function(e) {
-              if (overlay.style.display !== 'none') {
-                enterFullscreen();
-              } else if (e.key === 'Escape') {
-                // Allow ESC to exit fullscreen
-              } else if (e.key === 'f' || e.key === 'F') {
-                if (document.fullscreenElement) {
-                  document.exitFullscreen();
-                } else {
-                  enterFullscreen();
-                }
-              }
-            });
-
-            // Handle fullscreen changes
-            document.addEventListener('fullscreenchange', function() {
-              if (document.fullscreenElement) {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-              }
-            });
-
-            // Handle resize
-            window.addEventListener('resize', function() {
-              canvas.width = window.innerWidth;
-              canvas.height = window.innerHeight;
-            });
-          <\/script>
+          <div id="size-readout"></div>
+          <!-- Niente script qui: gli script scritti con document.write non
+               vengono eseguiti in modo affidabile. Comandi e dimensionamento
+               sono collegati dal banco di regia in setupPopupControls(). -->
         </body>
         </html>
       `);
@@ -3614,9 +3670,8 @@
       console.log('Canvas element retrieved');
       console.log('  Window inner size:', dualMonitorWindow.innerWidth + 'x' + dualMonitorWindow.innerHeight);
 
-      // Set initial canvas size
-      dualMonitorCanvas.width = dualMonitorWindow.innerWidth || targetWidth;
-      dualMonitorCanvas.height = dualMonitorWindow.innerHeight || targetHeight;
+      // Comandi e dimensionamento della finestra: collegati DA QUI
+      setupPopupControls(targetWidth, targetHeight);
 
       console.log('Canvas resolution set to:', dualMonitorCanvas.width + 'x' + dualMonitorCanvas.height);
 
@@ -4134,6 +4189,183 @@
     }
 
     //=========================================================================
+    // PILOTA AUTOMATICO
+    //=========================================================================
+    // Guida il cavallo da solo. Tre idee lo tengono veloce:
+    //  1. le minacce si pesano sul TEMPO che manca a raggiungerle, non sulla
+    //     distanza: un cavallo lontano ma lentissimo conta più di uno vicino
+    //     e quasi altrettanto veloce;
+    //  2. ogni corsia candidata si giudica sulla posizione che avremo DAVVERO
+    //     quando arriveremo lì (lo sterzo ha una velocità finita), così non si
+    //     sceglie un varco che non si fa in tempo a raggiungere;
+    //  3. l'urto costa carissimo — la velocità crolla a car.speed²/speed — ma
+    //     NON avviene affatto se si arriva più lenti dell'ostacolo: quando lo
+    //     schivo non è possibile conviene alzare il piede invece di sbatterci.
+
+    var apTargetX = 0;      // corsia verso cui stiamo puntando
+    var apCommit  = 0;      // secondi di "impegno" residuo sulla manovra in corso
+    var apStuck   = 0;      // da quanto siamo lenti e imbottigliati dietro qualcuno
+
+    var AP = {
+      EDGE:      0.90,      // corsia più esterna utilizzabile
+      RECOVER:   0.97,      // oltre questo si pensa solo a rientrare in pista
+      SAFETY:    1.45,      // margine sulla larghezza degli ostacoli
+      RISK_W:    3.0,       // peso del rischio nel costo di una corsia
+      LINE_W:    0.30,      // peso dello scostamento dalla linea ideale
+      MOVE_W:    0.10,      // peso dello spostamento laterale richiesto
+      EDGE_W:    1.5,       // penalità per stare vicino al bordo
+      EDGE_SOFT: 0.78,      // oltre questo offset scatta la penalità bordo
+      DRIFT_W:   4.0,       // penalità per finire fuori a causa della deriva
+      DRIFT_T:   1.0,       // secondi di deriva centrifuga da prevedere
+      TTC_LIFT:  0.80,      // sotto questo tempo all'impatto: piede alzato
+      TTC_BRAKE: 0.30,      // sotto questo tempo all'impatto: freno
+      COMMIT:    0.30,      // durata minima di una manovra, per non tentennare
+      STUCK_T:   0.60       // secondi di imbottigliamento prima dello sblocco
+    };
+
+    function resetAutopilotState() {
+      apTargetX = 0; apCommit = 0; apStuck = 0;
+    }
+
+    function updateAutopilot(dt, playerSegment, playerW) {
+      var spdPct    = speed / maxSpeed;
+      var latRate   = 2 * spdPct;                                                   // offset/s dello sterzo
+      var driftRate = -2 * spdPct * spdPct * playerSegment.curve * centrifugal;     // offset/s della forza centrifuga
+      // Il pilota tiene sempre il gas: valuta le minacce con la velocità che avrà
+      // fra poco, altrimenti dopo un urto "non vede" più il cavallo che l'ha fermato.
+      var projSpeed = Math.min(maxSpeed, speed + accel * 1.2);
+      var i, j, k, s;
+
+      // --- 1. linea ideale: guarda avanti e stai all'interno della curva ----
+      var look = Math.round(14 + 36 * spdPct), curveAhead = 0, wsum = 0;
+      for (i = 2; i <= look; i += 2) {
+        var w = 1 - i / (look + 2);
+        curveAhead += segments[(playerSegment.index + i) % segments.length].curve * w;
+        wsum += w;
+      }
+      curveAhead = wsum ? curveAhead / wsum : 0;
+      var lineX = Util.limit(curveAhead * (0.34 + 0.30 * spdPct), -AP.EDGE, AP.EDGE);
+
+      // La deriva centrifuga vale curve*centrifugal*spdPct volte lo sterzo: sopra 1
+      // non è più recuperabile, quindi nelle curve vere bisogna ENTRARE già stretti.
+      var driftAhead = -2 * spdPct * spdPct * curveAhead * centrifugal;
+      var pushX = Math.max(0, Math.abs(driftAhead) - latRate) * (driftAhead < 0 ? -1 : 1) * AP.DRIFT_T;
+
+      // --- 2. fuori pista: rientrare è la sola priorità ---------------------
+      if (Math.abs(playerX) > AP.RECOVER) {
+        apTargetX = (playerX < 0 ? -1 : 1) * 0.55;
+        apCommit = 0;
+        apSteer(apTargetX, true, false);
+        return;
+      }
+
+      // --- 3. minacce, ordinate per tempo all'impatto ------------------------
+      var horizon = Math.round(34 + 86 * spdPct), threats = [], myZ = position + playerZ;
+      for (i = 1; i <= horizon; i++) {
+        var seg = segments[(playerSegment.index + i) % segments.length];
+        for (j = 0; j < seg.cars.length; j++) {
+          var c = seg.cars[j];
+          var gap = c.z - myZ;
+          if (gap < 0) gap += trackLength;
+          if (gap <= 0) continue;
+          var ttc = gap / Math.max(projSpeed - c.speed, 40);
+          if (ttc > 2.4 && i > 14) continue;          // troppo lontano nel tempo
+          var wid = c.sprite.w * SPRITES.SCALE + playerW;
+          threats.push({
+            off: c.offset, speed: c.speed, seg: i, ttc: ttc,
+            halfW: wid * 0.5 * AP.SAFETY,             // banda di sicurezza
+            hitW:  wid * 0.4 * 1.15                   // banda in cui l'urto avviene davvero
+          });
+        }
+      }
+      threats.sort(function(a, b) { return a.ttc - b.ttc; });
+
+      // Dove ci troveremo quando raggiungeremo `th`, se puntiamo alla corsia `cand`.
+      function xWhenReaching(cand, th) {
+        var want = cand - playerX, reach = latRate * th.ttc;
+        var move = Math.min(Math.abs(want), reach) * (want < 0 ? -1 : 1);
+        return playerX + move + driftRate * th.ttc;
+      }
+
+      function riskOf(cand) {
+        var risk = 0;
+        for (var n = 0; n < threats.length; n++) {
+          var th = threats[n];
+          var d = Math.abs(xWhenReaching(cand, th) - th.off);
+          if (d < th.halfW) {
+            var sev = 1 - d / th.halfW;               // 0 = di striscio, 1 = in pieno
+            risk += (sev * sev) / (0.20 + th.ttc);    // l'imminente pesa molto di più
+          }
+        }
+        return risk;
+      }
+
+      function costOf(cand) {
+        return riskOf(cand) * AP.RISK_W
+             + Math.abs(cand - lineX) * AP.LINE_W
+             + Math.abs(cand - playerX) * AP.MOVE_W
+             + Math.max(0, Math.abs(cand) - AP.EDGE_SOFT) * AP.EDGE_W
+             + Math.max(0, Math.abs(cand + pushX) - 0.95) * AP.DRIFT_W;
+      }
+
+      // --- 4. scelta della corsia -------------------------------------------
+      var emax = Math.round(AP.EDGE * 100), bestX = 0, bestCost = Infinity;
+      for (s = -emax; s <= emax; s += 3) {
+        var cand = s / 100, cost = costOf(cand);
+        if (cost < bestCost) { bestCost = cost; bestX = cand; }
+      }
+
+      // --- 5. impegno: una manovra iniziata non si abbandona per poco -------
+      apCommit = Math.max(0, apCommit - dt);
+      var prevCost = costOf(apTargetX);
+      if (apCommit > 0 && bestCost > prevCost * 0.75) {
+        bestX = apTargetX; bestCost = prevCost;
+      } else if (Math.abs(bestX - apTargetX) > 0.06) {
+        apCommit = AP.COMMIT;
+      }
+
+      // --- 6. gas e freno ----------------------------------------------------
+      var faster = true, slower = false, danger = null;
+      for (k = 0; k < threats.length; k++) {
+        var t2 = threats[k];
+        if (speed > t2.speed && Math.abs(xWhenReaching(bestX, t2) - t2.off) < t2.hitW) { danger = t2; break; }
+      }
+      if (danger) {
+        // Arrivarci più lenti di lui annulla del tutto l'urto; arrivarci un po'
+        // più lenti lo rende comunque molto meno costoso (la penalità è quadratica).
+        if (danger.ttc < AP.TTC_BRAKE) { faster = false; slower = true; }
+        else if (danger.ttc < AP.TTC_LIFT) { faster = false; }
+      }
+
+      // --- 7. anti-incastro: se restiamo lenti dietro qualcuno, sbloccati ----
+      var pinned = threats.length > 0 && threats[0].seg < 20 &&
+                   Math.abs(threats[0].off - playerX) < threats[0].halfW;
+      if (spdPct < 0.62 && pinned) apStuck += dt; else apStuck = Math.max(0, apStuck - dt * 2);
+      if (apStuck > AP.STUCK_T) {
+        var lRisk = 0, rRisk = 0;
+        for (s = -emax; s <= -15; s += 5) lRisk += riskOf(s / 100);
+        for (s = 15; s <= emax; s += 5) rRisk += riskOf(s / 100);
+        bestX = (lRisk <= rRisk ? -1 : 1) * (AP.EDGE - 0.12);   // scegli il lato più libero
+        faster = true; slower = false;                          // e passa col gas aperto
+        apCommit = 0.8;
+      }
+
+      apTargetX = bestX;
+      apSteer(bestX, faster, slower);
+
+      // Sterzo: punta la corsia tenendo conto di dove la deriva ci porterà nel
+      // prossimo frame, con zona morta più piccola di un passo per non oscillare.
+      function apSteer(target, gas, brake) {
+        var stepX = latRate * dt;
+        var err = target - (playerX + driftRate * dt);
+        keyLeft   = err < -stepX * 0.35;
+        keyRight  = err >  stepX * 0.35;
+        keyFaster = gas;
+        keySlower = brake;
+      }
+    }
+
+    //=========================================================================
     // UPDATE THE GAME WORLD
     //=========================================================================
 
@@ -4158,85 +4390,8 @@
       updateGamepadInput();
 
       // Pilota automatico: sovrascrive gli input e guida il cavallo da solo
-      if (autopilot) {
-        // Accelera sempre (a meno di ostacoli imminenti, vedi sotto)
-        keyFaster = true;
-        keySlower = false;
-
-        // Target di base: anticipa la curva restando sull'interno (centro in rettilineo)
-        var aheadSegment = findSegment(position + playerZ + segmentLength * 5);
-        var targetX = Util.limit(aheadSegment.curve * 0.6, -0.7, 0.7);
-
-        // --- Avoidance ostacoli ---
-        // 1) Raccogli i cavalli davanti che raggiungeremo (più lenti di noi),
-        //    con la loro distanza in segmenti e il semi-margine di sicurezza.
-        var apHorizon = 50;                 // segmenti scanditi davanti
-        var apThreats = [];
-        var apNearest = apHorizon;          // distanza dell'ostacolo utile più vicino
-        for (var ai = 1; ai < apHorizon; ai++) {
-          var apSeg = segments[(playerSegment.index + ai) % segments.length];
-          for (var aj = 0; aj < apSeg.cars.length; aj++) {
-            var apCar = apSeg.cars[aj];
-            if (apCar.speed < speed) {
-              apThreats.push({
-                off:   apCar.offset,
-                // margine: metà somma larghezze + 30% di tolleranza
-                halfW: (apCar.sprite.w * SPRITES.SCALE + playerW) / 2 * 1.3,
-                dist:  ai
-              });
-            }
-          }
-        }
-
-        // 2) C'è una minaccia sulla nostra traiettoria ideale, entro l'orizzonte di manovra?
-        var apManeuver = 32;                // entro quanti segmenti vogliamo aver schivato
-        var imminent = null;
-        for (var ti = 0; ti < apThreats.length; ti++) {
-          var th = apThreats[ti];
-          if (th.dist <= apManeuver && Math.abs(targetX - th.off) < th.halfW) {
-            if (!imminent || th.dist < imminent.dist) imminent = th;
-          }
-        }
-
-        // 3) Se sì, campiona le corsie disponibili e scegli quella LIBERA da tutte
-        //    le minacce vicine con la deviazione minima dalla linea ideale.
-        if (imminent) {
-          var bestX = null, bestCost = 1e9;
-          for (var s = -90; s <= 90; s += 5) {     // corsie candidate da -0.90 a +0.90
-            var cand = s / 100, clear = true;
-            for (var ci = 0; ci < apThreats.length; ci++) {
-              var c = apThreats[ci];
-              if (c.dist > apManeuver) continue;
-              if (Math.abs(cand - c.off) < c.halfW) { clear = false; break; }
-            }
-            if (clear) {
-              var cost = Math.abs(cand - targetX);
-              if (cost < bestCost) { bestCost = cost; bestX = cand; }
-            }
-          }
-
-          if (bestX !== null) {
-            targetX = bestX;
-            // Manovra ampia + ostacolo molto vicino: alleggerisci per non sbattere
-            if (imminent.dist < 8 && Math.abs(bestX - playerX) > 0.5) keyFaster = false;
-          } else {
-            // Nessuna corsia libera: frena e allargati dal lato meno occupato
-            keyFaster = false;
-            keySlower = true;
-            targetX = (imminent.off <= 0) ? 0.85 : -0.85;
-          }
-        }
-
-        // 4) Sterzo verso targetX
-        var steerDeadzone = 0.04;
-        if (playerX > targetX + steerDeadzone) {
-          keyLeft = true;  keyRight = false;
-        } else if (playerX < targetX - steerDeadzone) {
-          keyLeft = false; keyRight = true;
-        } else {
-          keyLeft = false; keyRight = false;
-        }
-      }
+      if (autopilot)
+        updateAutopilot(dt, playerSegment, playerW);
 
       // Update audio-reactive camera shake
       updateCameraShake();
@@ -4743,9 +4898,15 @@
           dualMonitorCtx.drawImage(canvas,      0, 0, width, height, c.x, c.y, c.w, c.h);
           dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, c.x, c.y, c.w, c.h);
         } else {
-          // --- MIRROR classico: gioco a tutto schermo ---
-          dualMonitorCtx.drawImage(canvas,      0, 0, width, height, 0, 0, dw, dh);
-          dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, 0, 0, dw, dh);
+          // --- MIRROR classico ---
+          // "contain" invece di stirare: con un ledwall 3:2 e un render 16:9 lo
+          // stiramento deformava tutto. Cosi' l'immagine e' sempre intera e nelle
+          // proporzioni giuste, al massimo con due bande nere.
+          var k  = Math.min(dw / width, dh / height);
+          var iw = Math.round(width * k), ih = Math.round(height * k);
+          var ix = Math.round((dw - iw) / 2), iy = Math.round((dh - ih) / 2);
+          dualMonitorCtx.drawImage(canvas,      0, 0, width, height, ix, iy, iw, ih);
+          dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, ix, iy, iw, ih);
           renderHudOnDualMonitor();
         }
       }
@@ -5858,6 +6019,8 @@
     // TWEAK UI HANDLERS
     //=========================================================================
 
+    Dom.on('output-size', 'change', function(ev) { applyOutputSize(); Dom.blur(ev); });
+
     Dom.on('resolution', 'change', function(ev) {
       var w, h, ratio;
       switch(ev.target.options[ev.target.selectedIndex].value) {
@@ -5868,6 +6031,7 @@
         case 'low':    w = 480;  h = 360;  ratio=w/width; break;
         case 'square': w = 500;  h = 500;  ratio=w/width; break;
         case 'game32': w = 1152; h = 768;  ratio=w/width; break;  // render nativo 3:2 per banda centrale live
+        case 'ledwall':w = 768;  h = 512;  ratio=w/width; break;  // render nativo 1:1 sul ledwall 768x512
       }
       reset({ width: w, height: h })
       Dom.blur(ev);
@@ -6091,6 +6255,35 @@
       matrixLayoutMode = ev.target.checked;
     });
 
+    // LEDWALL 768x512 ESATTO.
+    // Un comando solo perche' i tre pezzi devono coincidere: se il gioco
+    // renderizza 16:9 e il pannello e' 3:2 restano bande nere, e se la tela segue
+    // la finestra invece dei pixel veri del pannello l'immagine viene tagliata.
+    // Qui render, uscita e finestra valgono tutti 768x512, quindi e' una copia
+    // pixel a pixel.
+    function goLedwall() {
+      matrixLayoutMode = false;
+      var mt = Dom.get('matrix-layout-toggle'); if (mt) mt.checked = false;
+      reset({ width: 768, height: 512 });
+      var rs = document.querySelectorAll('#resolution');
+      for (var i = 0; i < rs.length; i++) rs[i].value = 'ledwall';
+      var os = Dom.get('output-size'); if (os) os.value = '768x512';
+      if (!isDualMonitorMode) openDualMonitorMode(); else applyOutputSize();
+      // la finestra alla misura esatta del pannello: se resta piu' grande,
+      // il pannello ne mostra solo un pezzo
+      setTimeout(function() {
+        if (!dualMonitorWindow || dualMonitorWindow.closed) return;
+        try {
+          dualMonitorWindow.resizeTo(768, 512);
+          var d = 0;
+          d = 768 - dualMonitorWindow.innerWidth;      // scarto dovuto alle cornici
+          if (d > 0) dualMonitorWindow.resizeBy(d, 512 - dualMonitorWindow.innerHeight);
+        } catch (e) {}
+        applyOutputSize();
+      }, 400);
+    }
+    Dom.on('ledwall-btn', 'click', goLedwall);
+
     // Dual Monitor classico: mirror a tutto schermo in Full HD (layout matrice OFF)
     Dom.on('dual-monitor-classic-btn', 'click', function() {
       matrixLayoutMode = false;
@@ -6186,6 +6379,7 @@
         // Rilascia i comandi quando si disattiva, così il gioco non resta "incollato"
         keyLeft = keyRight = keyFaster = keySlower = false;
       }
+      resetAutopilotState();   // niente manovre ereditate dall'attivazione precedente
     }
     window.toggleAutopilot = toggleAutopilot;
 
