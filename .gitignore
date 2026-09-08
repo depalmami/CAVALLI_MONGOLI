@@ -41,3 +41,7 @@ yarn-error.log*
 # Self-signed TLS material — chiavi private, MAI committare
 ssl/
 *.pem
+
+# Font del Poplar: licenze commerciali di terzi (Grilli Type, Dinamo) + il font-logo
+# del festival. Servono solo a generare i PNG in locale, non vanno committati.
+assets/fonts/poplar/
