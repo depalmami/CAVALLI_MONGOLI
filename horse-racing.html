@@ -728,6 +728,7 @@
                 <option value='square'>Square (500x500)</option>
                 <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
                 <option value='ledwall'>LEDWALL 768x512 (3:2 nativo)</option>
+                <option value='ledwall2to1'>LEDWALL 1536x768 (2:1 — Doss)</option>
               </select>
             </div>
             <div>
@@ -965,6 +966,10 @@
               <span class="material-icons text-base">desktop_windows</span>
               Dual Monitor classico (Full HD)
             </button>
+            <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-red-600 text-white text-sm font-bold rounded hover:opacity-90 transition-opacity" id="ledwall-doss-btn"
+                    title="Allinea in un colpo render, misura d'uscita e finestra sul ledwall del Doss">
+              🟥 LEDWALL DOSS 1536×768 esatto
+            </button>
             <button class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-emerald-600 text-white text-sm font-medium rounded hover:opacity-90 transition-opacity" id="ledwall-btn">
               <span class="material-icons text-base">tv</span>
               LEDWALL 768×512 esatto
@@ -979,6 +984,7 @@
                 <option value="auto">Auto — come la finestra</option>
                 <option value="768x512">LEDWALL 768×512</option>
                 <option value="1536x1024">LEDWALL 1536×1024 (2×)</option>
+                <option value="1536x768">LEDWALL 1536×768 (Doss)</option>
                 <option value="2304x768">Matrice 2304×768</option>
                 <option value="1920x1080">Full HD 1920×1080</option>
               </select>
@@ -1091,6 +1097,7 @@
           <option value='square'>Square (500x500)</option>
           <option value='game32'>Gioco 3:2 nativo (1152x768)</option>
           <option value='ledwall'>LEDWALL 768x512 (3:2 nativo)</option>
+          <option value='ledwall2to1'>LEDWALL 1536x768 (2:1 — Doss)</option>
         </select>
       </td>
     </tr>
@@ -6249,6 +6256,7 @@
         case 'square': w = 500;  h = 500;  ratio=w/width; break;
         case 'game32': w = 1152; h = 768;  ratio=w/width; break;  // render nativo 3:2 per banda centrale live
         case 'ledwall':w = 768;  h = 512;  ratio=w/width; break;  // render nativo 1:1 sul ledwall 768x512
+        case 'ledwall2to1': w = 1536; h = 768; ratio=w/width; break;  // il ledwall del Doss: 2:1
       }
       reset({ width: w, height: h })
       Dom.blur(ev);
@@ -6478,28 +6486,34 @@
     // la finestra invece dei pixel veri del pannello l'immagine viene tagliata.
     // Qui render, uscita e finestra valgono tutti 768x512, quindi e' una copia
     // pixel a pixel.
-    function goLedwall() {
+    function goLedwall(W, H, valoreRender, valoreUscita) {
+      W = W || 768; H = H || 512;
+      valoreRender = valoreRender || 'ledwall';
+      valoreUscita = valoreUscita || '768x512';
       matrixLayoutMode = false;
       var mt = Dom.get('matrix-layout-toggle'); if (mt) mt.checked = false;
-      reset({ width: 768, height: 512 });
+      reset({ width: W, height: H });
       var rs = document.querySelectorAll('#resolution');
-      for (var i = 0; i < rs.length; i++) rs[i].value = 'ledwall';
-      var os = Dom.get('output-size'); if (os) os.value = '768x512';
+      for (var i = 0; i < rs.length; i++) rs[i].value = valoreRender;
+      var os = Dom.get('output-size'); if (os) os.value = valoreUscita;
       if (!isDualMonitorMode) openDualMonitorMode(); else applyOutputSize();
       // la finestra alla misura esatta del pannello: se resta piu' grande,
       // il pannello ne mostra solo un pezzo
       setTimeout(function() {
         if (!dualMonitorWindow || dualMonitorWindow.closed) return;
         try {
-          dualMonitorWindow.resizeTo(768, 512);
-          var d = 0;
-          d = 768 - dualMonitorWindow.innerWidth;      // scarto dovuto alle cornici
-          if (d > 0) dualMonitorWindow.resizeBy(d, 512 - dualMonitorWindow.innerHeight);
+          dualMonitorWindow.resizeTo(W, H);
+          var d = W - dualMonitorWindow.innerWidth;    // scarto dovuto alle cornici
+          if (d > 0) dualMonitorWindow.resizeBy(d, H - dualMonitorWindow.innerHeight);
         } catch (e) {}
         applyOutputSize();
       }, 400);
     }
-    Dom.on('ledwall-btn', 'click', goLedwall);
+    Dom.on('ledwall-btn', 'click', function() { goLedwall(768, 512, 'ledwall', '768x512'); });
+
+    // Il ledwall del Doss: 1536x768, cioe' 2:1. Come sopra, i tre valori vanno
+    // allineati insieme — se se ne mette a posto uno solo tornano bande nere o tagli.
+    Dom.on('ledwall-doss-btn', 'click', function() { goLedwall(1536, 768, 'ledwall2to1', '1536x768'); });
 
     // Dual Monitor classico: mirror a tutto schermo in Full HD (layout matrice OFF)
     Dom.on('dual-monitor-classic-btn', 'click', function() {

@@ -36,24 +36,26 @@ Nel banco di regia, riquadro rosso sotto i pulsanti dei livelli:
   vuole lo sfondo notturno ma i livelli nei loro colori.
 - **↻ Ricarica asset Poplar** — vedi sotto, non è opzionale.
 
-## Uscita video — LEDWALL
+## Uscita video — LEDWALL 1536×768
 
-Bottone **"Dual Monitor classico (Full HD)"**: manda 1920×1080, che è anche il preset di
-render di default. Niente layout a bande, niente testo laterale: per questa data non ci
-sono i pannelli laterali.
+Il muro del Doss è **1536×768**, cioè 2:1. C'è un bottone che fa tutto:
 
-### ⚠️ La domanda da riportare dal sopralluogo
+> 🟥 **LEDWALL DOSS 1536×768 esatto**
 
-**Qual è la risoluzione che vuole il processore del ledwall in ingresso, e qual è quella
-nativa dei pannelli?**
+Allinea in un colpo le tre cose che devono coincidere — **render, misura d'uscita e
+finestra** — e spegne il layout a bande. È la lezione che ci è già costata una serata: se
+se ne mette a posto una sola, tornano le bande nere o l'immagine tagliata.
 
-È l'unica cosa che non si può indovinare da casa, e se sbagliata si vede subito: bande
-nere ai lati, oppure immagine tagliata. Nel menù "Misura d'uscita" ci sono già Full HD,
-768×512, 1536×1024 e 2304×768; se il muro è un'altra misura va aggiunto un preset — sono
-due righe, basta sapere il numero.
+Poi: sposta la finestra che si apre sul ledwall e mandala a schermo intero.
 
-Lezione delle volte scorse: **render, misura d'uscita e finestra devono coincidere tutti
-e tre.** Se uno solo è diverso tornano le bande nere o i tagli.
+Se serve rimetterli a mano: preset di render `LEDWALL 1536x768 (2:1 — Doss)`, misura
+d'uscita `LEDWALL 1536×768 (Doss)`. Sono rimasti tutti i preset di prima (768×512,
+1536×1024, matrice 2304×768, Full HD) per le altre date.
+
+**Da controllare sul posto:** che il processore del ledwall accetti davvero 1536×768 in
+ingresso senza riscalare. Se pretende un segnale standard (tipico: 1920×1080) e scala lui,
+allora conviene lasciare Full HD e lasciargli fare il lavoro — ma va guardato, perché una
+riscalatura da 1920 a 1536 ammorbidisce il testo dei cartelloni.
 
 ### I neri, al buio, sul LED
 
