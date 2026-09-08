@@ -12,11 +12,40 @@ Nel banco di regia, riquadro rosso sotto i pulsanti dei livelli:
   vuole lo sfondo notturno ma i livelli nei loro colori.
 - **↻ Ricarica asset Poplar** — vedi sotto, non è opzionale.
 
-## Uscita video
+## Uscita video — LEDWALL
 
-Bottone **"Dual Monitor classico (Full HD)"**. Il preset di render è già Full HD
-(1920×1080) di default: non serve toccare altro. Niente layout a bande, niente testo
-laterale — per questa data non ci sono i pannelli laterali.
+Bottone **"Dual Monitor classico (Full HD)"**: manda 1920×1080, che è anche il preset di
+render di default. Niente layout a bande, niente testo laterale: per questa data non ci
+sono i pannelli laterali.
+
+### ⚠️ La domanda da riportare dal sopralluogo
+
+**Qual è la risoluzione che vuole il processore del ledwall in ingresso, e qual è quella
+nativa dei pannelli?**
+
+È l'unica cosa che non si può indovinare da casa, e se sbagliata si vede subito: bande
+nere ai lati, oppure immagine tagliata. Nel menù "Misura d'uscita" ci sono già Full HD,
+768×512, 1536×1024 e 2304×768; se il muro è un'altra misura va aggiunto un preset — sono
+due righe, basta sapere il numero.
+
+Lezione delle volte scorse: **render, misura d'uscita e finestra devono coincidere tutti
+e tre.** Se uno solo è diverso tornano le bande nere o i tagli.
+
+### I neri, al buio, sul LED
+
+Suoniamo a sole calato e lo sfondo è una notturna: **metà dell'immagine sta sotto
+luminanza 8 su 255**. Il ledwall il nero vero lo fa benissimo (pixel spento) ed è il suo
+punto di forza — ma i grigi *bassi*, quelli sì, sono il suo punto debole, e a luminosità
+ridotta peggiorano.
+
+Guarda il pannello vero, non il portatile, e decidi:
+
+- le zone scure fanno **fasce** o virano di colore → `python3 tools/led-pass.py`
+- il cielo notturno è **nero pulito** → non fare niente. Il ritocco alzerebbe il nero e lo
+  farebbe diventare grigio slavato.
+
+Se banda ancora: `python3 tools/led-pass.py 20`. Se il nero è slavato:
+`python3 tools/led-pass.py --annulla`. Dopo ogni lancio, **↻ Ricarica asset Poplar**.
 
 ## ⚠️ La cache: il problema che farà perdere tempo
 

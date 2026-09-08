@@ -45,3 +45,9 @@ ssl/
 # Font del Poplar: licenze commerciali di terzi (Grilli Type, Dinamo) + il font-logo
 # del festival. Servono solo a generare i PNG in locale, non vanno committati.
 assets/fonts/poplar/
+
+# Backup creato da tools/led-pass.py sul posto, non va committato
+images/poplar/_originali/
+
+# Cache di Python
+__pycache__/
