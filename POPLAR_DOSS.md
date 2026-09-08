@@ -3,6 +3,30 @@
 Set site-specific per la data al Poplar Festival. **Non è un livello**: è uno strato che si
 appoggia sopra a tutti e sette, e si spegne con un interruttore se qualcosa non va.
 
+## Partire da zero (procedura provata su un clone pulito)
+
+⚠️ **Il lavoro NON è su `master`.** Clonando e basta si ottiene il gioco senza la modalità.
+
+```bash
+git clone https://github.com/depalmami/CAVALLI_MONGOLI.git
+cd CAVALLI_MONGOLI
+git checkout poplar-doss          # <-- senza questo non c'è niente di tutto il resto
+python3 -m http.server 8901 --bind 127.0.0.1
+```
+
+Poi apri **http://127.0.0.1:8901/horse-racing.html**
+
+Non serve `npm install`, non serve `node server.js`: quelli servono solo alla telecamera
+del telefono, che per una prova di schermo non c'entra. Serve solo python3, che sul Mac
+c'è già. (Il `--bind 127.0.0.1` non è pignoleria: senza, su alcuni Mac il server ascolta
+solo in IPv6 e il browser non lo trova.)
+
+Verifica che sia tutto a posto: premi **8**. Se compaiono i cartelloni rossi del Poplar e
+lo sfondo diventa Trento di notte, ci siamo.
+
+Per mandarlo sul ledwall: bottone **"Dual Monitor classico (Full HD)"**, sposta la
+finestra che si apre sul pannello, schermo intero.
+
 ## Accenderla
 
 Nel banco di regia, riquadro rosso sotto i pulsanti dei livelli:
