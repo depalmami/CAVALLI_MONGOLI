@@ -5421,7 +5421,13 @@
       if (webcamActive && webcamVideo) {
         drawWebcamFrame(context, 0, 0, renderWidth, renderHeight);
       } else {
-        Render.background(context, skyImage, renderWidth, renderHeight, skyRect, scorrimentoCielo, resolution * skySpeed * playerY);
+        // L'offset verticale (che segue la quota: sulle salite il cielo scende)
+        // lascia scoperta una fascia in cima, dove si vede il fondo nero della
+        // tela. Con i cieli di serie si nota poco; con Hydra, luminoso, diventa
+        // una banda nera evidente. Per il cielo dal vivo l'offset va a zero:
+        // copre tutta l'altezza e la banda sparisce.
+        Render.background(context, skyImage, renderWidth, renderHeight, skyRect, scorrimentoCielo,
+                          hydraInCielo ? 0 : (resolution * skySpeed * playerY));
         Render.background(context, hillsImage, renderWidth, renderHeight, hillsRect, hillOffset, resolution * hillSpeed * playerY);
       }
       Render.background(context, treesImage, renderWidth, renderHeight, treesRect, treeOffset, resolution * treeSpeed * playerY);
