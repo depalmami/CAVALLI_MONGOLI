@@ -5310,11 +5310,30 @@
         { x: 0, y: 0, w: customBackgroundLayers.trees.width, h: customBackgroundLayers.trees.height } :
         BACKGROUND.TREES;
 
+      // CIELO HYDRA — la giunta non si nasconde: si elimina.
+      //
+      // Render.background mostra layer.w/2 per volta e, arrivato in fondo,
+      // riavvolge affiancando la coda alla testa: se i due bordi non combaciano
+      // lì nasce una riga netta verticale. Con un'animazione dal vivo non si può
+      // preparare la giunta in anticipo come si fa con una foto.
+      //
+      // Però il riavvolgimento avviene SOLO se lo scorrimento è diverso da zero.
+      // Azzerandolo, Render.background fa un solo disegno e la giunta non esiste
+      // proprio. Il cielo non segue più le curve, ma un'animazione si muove già
+      // per conto suo.
+      //
+      // Il rettangolo va dichiarato largo il DOPPIO della tela, perché il gioco
+      // ne mostra sempre metà: così quella metà è la composizione intera e non se
+      // ne perde il lato destro.
+      var hydraInCielo = hydraOn && hydraCanvas && customBackgroundLayers.sky === hydraCanvas;
+      if (hydraInCielo) skyRect = { x: 0, y: 0, w: hydraCanvas.width * 2, h: hydraCanvas.height };
+      var scorrimentoCielo = hydraInCielo ? 0 : skyOffset;
+
       // Camera background: se la camera è attiva, sostituisce sky+hills su ogni livello
       if (webcamActive && webcamVideo) {
         drawWebcamFrame(context, 0, 0, renderWidth, renderHeight);
       } else {
-        Render.background(context, skyImage, renderWidth, renderHeight, skyRect, skyOffset, resolution * skySpeed * playerY);
+        Render.background(context, skyImage, renderWidth, renderHeight, skyRect, scorrimentoCielo, resolution * skySpeed * playerY);
         Render.background(context, hillsImage, renderWidth, renderHeight, hillsRect, hillOffset, resolution * hillSpeed * playerY);
       }
       Render.background(context, treesImage, renderWidth, renderHeight, treesRect, treeOffset, resolution * treeSpeed * playerY);
