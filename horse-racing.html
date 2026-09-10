@@ -5056,51 +5056,77 @@
     // RENDER HUD ON DUAL MONITOR
     //=========================================================================
 
+    // HUD del SECONDO SCHERMO.
+    //
+    // Non è quello dell'anteprima: quello è DOM, e sul ledwall arriva solo ciò che
+    // sta dentro la tela. Qui va ridisegnato con le API di canvas. Finora erano due
+    // cose diverse — nell'anteprima l'arcade, sul muro la vecchia barra rossa in
+    // Verdana. Ecco perché sulla proiezione "non cambiava niente". Ora combaciano.
     function renderHudOnDualMonitor() {
       if (!dualMonitorCtx) return;
-
-      // Don't show HUD during intro or title screens
       if (mainIntroActive || mainCurrentTitleFrame > 0) return;
 
       var ctx = dualMonitorCtx;
-      var canvasWidth = dualMonitorCanvas.width;
-      var canvasHeight = dualMonitorCanvas.height;
+      var W = dualMonitorCanvas.width, H = dualMonitorCanvas.height;
+      var u       = Math.max(1, Math.round(H / 96));   // unità di scala
+      var corpo   = u * 5, pad = u * 3;
+      var bordo   = Math.max(2, Math.round(u * 0.9));
+      var margine = u * 4;
+      var famiglia = '"ArcadePixel", "Courier New", monospace';
+      var CREMA = '#f4ecd8', GIALLO = '#ffd23f', CIANO = '#45e0ff', SPENTO = '#7a86b8';
 
-      // HUD styling
-      var fontSize = Math.floor(canvasHeight / 25); // Responsive font size
-      var padding = Math.floor(canvasHeight / 40);
-      var hudHeight = fontSize + padding * 2;
-
-      // Background bar
-      ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
-      ctx.fillRect(0, 0, canvasWidth, hudHeight);
-
-      // Border
-      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-      ctx.fillRect(0, hudHeight, canvasWidth, 2);
-
-      // Text styling
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.font = fontSize + 'px Verdana, Geneva, sans-serif';
-      ctx.textBaseline = 'middle';
-
-      var textY = hudHeight / 2;
-
-      // Speed (right)
-      var speedText = (hud.speed.value || 0) + ' km/h';
-      var speedWidth = ctx.measureText(speedText).width;
-      ctx.fillText(speedText, canvasWidth - speedWidth - padding, textY);
-
-      // Current lap time (left)
-      var currentTimeText = 'Time: ' + (hud.current_lap_time.value || '0.0');
-      ctx.fillText(currentTimeText, padding, textY);
-
-      // Fast lap time (center)
-      if (hud.fast_lap_time.value) {
-        var fastTimeText = 'Fastest Lap: ' + hud.fast_lap_time.value;
-        var fastTimeWidth = ctx.measureText(fastTimeText).width;
-        ctx.fillText(fastTimeText, (canvasWidth - fastTimeWidth) / 2, textY);
+      function largo(t) {
+        var l = pad * 2, i;
+        for (i = 0; i < t.length; i++) {
+          ctx.font = (t[i].piccolo ? Math.round(corpo * 0.62) : corpo) + 'px ' + famiglia;
+          l += ctx.measureText(t[i].t).width + (i ? u * 2 : 0);
+        }
+        return l;
       }
+
+      function riquadro(x, y, t, coloreBordo, evidenziato) {
+        var l = largo(t), alt = corpo + pad * 2, i;
+        ctx.fillStyle = 'rgba(0,0,0,.85)';
+        ctx.fillRect(x + u * 1.5, y + u * 1.5, l, alt);          // ombra a scalino
+        ctx.fillStyle = evidenziato ? '#2a1c00' : '#100c1c';
+        ctx.fillRect(x, y, l, alt);
+        ctx.strokeStyle = coloreBordo; ctx.lineWidth = bordo;
+        ctx.strokeRect(x + bordo / 2, y + bordo / 2, l - bordo, alt - bordo);
+        var cx = x + pad;
+        ctx.textBaseline = 'middle';
+        for (i = 0; i < t.length; i++) {
+          ctx.font = (t[i].piccolo ? Math.round(corpo * 0.62) : corpo) + 'px ' + famiglia;
+          ctx.fillStyle = t[i].colore;
+          ctx.fillText(t[i].t, cx, y + alt / 2);
+          cx += ctx.measureText(t[i].t).width + u * 2;
+        }
+        return l;
+      }
+
+      var elBest = document.getElementById('fast_lap_time');
+      var record = !!(elBest && elBest.classList.contains('fastest'));
+      var x = margine, y = margine;
+
+      x += riquadro(x, y, [{t:'TIME', colore:SPENTO, piccolo:true},
+                           {t:String(hud.current_lap_time.value || '0.0'), colore:GIALLO}], CREMA) + u * 3;
+
+      if (hud.last_lap_time && hud.last_lap_time.value) {
+        x += riquadro(x, y, [{t:'LAST', colore:SPENTO, piccolo:true},
+                             {t:String(hud.last_lap_time.value), colore:GIALLO}], CREMA) + u * 3;
+      }
+
+      if (hud.fast_lap_time && hud.fast_lap_time.value) {
+        var tb = [{t:'BEST', colore:SPENTO, piccolo:true},
+                  {t:String(hud.fast_lap_time.value), colore:GIALLO}];
+        // centrato, ma mai sopra al gruppo di sinistra: con LAST visibile i due
+        // riquadri si sovrapponevano
+        var bx = Math.max(x, Math.round((W - largo(tb)) / 2));
+        riquadro(bx, y, tb, record ? GIALLO : CREMA, record);
+      }
+
+      var tv = [{t:String(hud.speed.value || 0), colore:CIANO},
+                {t:'KM/H', colore:'#2f7f95', piccolo:true}];
+      riquadro(W - margine - largo(tv), y, tv, CIANO);
     }
 
     //=========================================================================
@@ -5347,9 +5373,10 @@
           dualMonitorCtx.save();
           L.sides.forEach(function(r) { drawMatrixSide(dualMonitorCtx, r, L.scale, nowTs); });
           dualMonitorCtx.restore();
-          dualMonitorCtx.filter = 'none';
           var c = L.center;
+          dualMonitorCtx.filter = canvas.style.filter || 'none';
           dualMonitorCtx.drawImage(canvas,      0, 0, width, height, c.x, c.y, c.w, c.h);
+          dualMonitorCtx.filter = 'none';
           dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, c.x, c.y, c.w, c.h);
         } else {
           // --- MIRROR classico ---
@@ -5359,7 +5386,12 @@
           var k  = Math.min(dw / width, dh / height);
           var iw = Math.round(width * k), ih = Math.round(height * k);
           var ix = Math.round((dw - iw) / 2), iy = Math.round((dh - ih) / 2);
+          // il filtro del livello vive su canvas.style.filter, che è un effetto di
+          // composizione: drawImage copia i pixel e se lo lascia indietro. Senza
+          // questo, sul ledwall i livelli uscivano senza la loro gradazione.
+          dualMonitorCtx.filter = canvas.style.filter || 'none';
           dualMonitorCtx.drawImage(canvas,      0, 0, width, height, ix, iy, iw, ih);
+          dualMonitorCtx.filter = 'none';   // titoli e HUD restano non filtrati
           dualMonitorCtx.drawImage(titleCanvas, 0, 0, width, height, ix, iy, iw, ih);
           renderHudOnDualMonitor();
         }
