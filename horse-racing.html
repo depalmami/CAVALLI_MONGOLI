@@ -543,6 +543,34 @@
             <span class="text-[10px] opacity-60">Club</span>
           </button>
         </div>
+        <!-- CIELO HYDRA: animazione dal vivo al posto del cielo del livello -->
+        <div class="mt-3 p-2 rounded bg-cyan-50 dark:bg-cyan-950 border border-cyan-300 dark:border-cyan-700 space-y-2">
+          <button id="hydra-toggle" onclick="toggleHydra()" type="button"
+                  class="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gray-200 dark:bg-gray-700 text-sm font-bold rounded transition-colors">
+            🌀 CIELO HYDRA — OFF
+          </button>
+          <textarea id="hydra-codice" rows="4" spellcheck="false"
+                    class="w-full px-2 py-1.5 font-mono text-[11px] leading-snug rounded bg-white dark:bg-gray-900 border border-cyan-300 dark:border-cyan-700 text-gray-900 dark:text-cyan-100"
+                    placeholder="codice Hydra — si incolla tale e quale da hydra.ojack.xyz">osc(20, 0.1, 1.2).kaleid(5).rotate(0.2).out(o0)</textarea>
+          <div class="flex items-center gap-2">
+            <button onclick="eseguiDaRiquadro()" type="button"
+                    class="flex-1 py-1.5 px-2 text-xs font-bold rounded bg-cyan-600 text-white hover:opacity-90">▶ Esegui (Ctrl+Invio)</button>
+            <select id="hydra-esempi" onchange="if(this.value){document.getElementById('hydra-codice').value=this.value; eseguiDaRiquadro(); this.selectedIndex=0;}"
+                    class="flex-1 min-w-0 px-1 py-1.5 text-xs rounded bg-white dark:bg-gray-800 border border-cyan-300 dark:border-cyan-600 text-gray-900 dark:text-white">
+              <option value="">esempi…</option>
+              <option value="osc(20, 0.1, 1.2).kaleid(5).rotate(0.2).out(o0)">kaleidoscopio</option>
+              <option value="noise(3, 0.1).color(0.9, 0.3, 0.2).out(o0)">nuvole calde</option>
+              <option value="voronoi(8, 0.3, 0.2).color(0.2, 0.6, 1).out(o0)">celle blu</option>
+              <option value="gradient(0.3).hue(0.4).modulate(osc(6), 0.3).out(o0)">gradiente mosso</option>
+              <option value="solid(0,0,0).out(o0)">nero (spegni)</option>
+            </select>
+          </div>
+          <div id="hydra-errore" class="text-[10px] text-red-600 dark:text-red-300 font-mono" style="display:none"></div>
+          <div class="text-[10px] text-cyan-800 dark:text-cyan-200 leading-snug">
+            Sostituisce solo il CIELO. Vince sul livello e sulla modalità Poplar; spegnendolo torna il cielo del livello.
+          </div>
+        </div>
+
         <!-- MODALITÀ POPLAR: strato site-specific sopra qualunque livello (tasto 8) -->
         <div class="mt-3 p-2 rounded bg-red-50 dark:bg-red-950 border border-red-300 dark:border-red-700">
           <button id="poplar-mode-btn" onclick="togglePoplarMode()" type="button"
@@ -1229,6 +1257,8 @@
 
   <script src="stats.js"></script>
   <script src="common.js"></script>
+  <!-- Hydra: copia locale, non da CDN — in location la rete non è garantita -->
+  <script src="vendor/hydra-synth.js" onerror="console.warn('hydra-synth non caricato — il cielo Hydra resterà spento')"></script>
   <!-- socket.io: available only when served via server.js; fails silently otherwise -->
   <script src="/socket.io/socket.io.js" onerror="console.info('socket.io not available — webcam disabled')"></script>
   <!-- QR code generator per il link iPad/phone — funziona offline una volta cached -->
@@ -1740,6 +1770,103 @@
           : 'Doss Trento · 11 set — asset in images/poplar/';
       }
     }
+
+    //-------------------------------------------------------------------------
+    // CIELO HYDRA — il cielo del livello diventa un'animazione dal vivo.
+    //
+    // L'aggancio è più semplice di quanto sembri: il cielo viene disegnato con
+    // ctx.drawImage(), che accetta un <canvas> esattamente come un'immagine.
+    // Quindi il cielo non deve DIVENTARE un'immagine: può ESSERE la tela di
+    // Hydra. Niente conversioni, niente letture di pixel per fotogramma.
+    //
+    // TRAPPOLA, verificata: Hydra con makeGlobal (il modo predefinito, quello del
+    // sito) scrive dentro window i nomi speed, width, height, time e update.
+    // Nel gioco quei nomi sono già presi: speed è la velocità del cavallo,
+    // width/height le dimensioni della tela e update È LA FUNZIONE DEL CICLO DI
+    // GIOCO. Al primo osc() il gioco si fermerebbe. Per questo makeGlobal resta
+    // false e il codice dell'utente viene eseguito in uno scope suo, con le
+    // funzioni del synth iniettate: così il codice copiato dal sito funziona
+    // identico, senza prefissi, ma niente tocca window.
+    //-------------------------------------------------------------------------
+    var HYDRA_W = 1280, HYDRA_H = 480;   // stessa misura degli altri cieli
+    var hydraOn      = false;
+    var hydraSynth   = null;             // istanza
+    var hydraCanvas  = null;             // la tela che finisce nel cielo
+    var hydraUltimo  = '';               // ultimo codice eseguito
+
+    function hydraPronto() {
+      if (hydraSynth) return true;
+      if (typeof Hydra !== 'function') { hydraErrore('hydra-synth non caricato (vendor/hydra-synth.js)'); return false; }
+      hydraCanvas = document.createElement('canvas');
+      hydraCanvas.width = HYDRA_W; hydraCanvas.height = HYDRA_H;
+      // fuori schermo ma NEL documento: certe implementazioni WebGL lo pretendono
+      hydraCanvas.style.cssText = 'position:absolute;left:-99999px;top:0;pointer-events:none';
+      document.body.appendChild(hydraCanvas);
+      try {
+        hydraSynth = new Hydra({ canvas: hydraCanvas, detectAudio: false,
+                                 makeGlobal: false, width: HYDRA_W, height: HYDRA_H });
+      } catch (e) { hydraErrore('avvio fallito: ' + e.message); return false; }
+      return true;
+    }
+
+    function hydraErrore(msg) {
+      var el = document.getElementById('hydra-errore');
+      if (el) { el.textContent = msg || ''; el.style.display = msg ? 'block' : 'none'; }
+      if (msg) console.warn('Hydra:', msg);
+    }
+
+    // Esegue il codice nello scope del synth: nessun globale toccato.
+    function hydraEsegui(codice) {
+      if (!hydraPronto()) return false;
+      var s = hydraSynth.synth;
+      var nomi = Object.keys(s), valori = nomi.map(function(k) { return s[k]; });
+      try {
+        new Function(nomi.join(','), '"use strict";\n' + codice).apply(null, valori);
+        hydraUltimo = codice; hydraErrore('');
+        try { localStorage.setItem('horseRacing_hydraCodice', codice); } catch(_) {}
+        return true;
+      } catch (e) { hydraErrore(e.message); return false; }
+    }
+
+    // Va chiamata DOPO applyLevelBackgrounds e dopo la modalità Poplar: il cielo
+    // dal vivo è una scelta esplicita della regia, quindi vince su tutto.
+    function applyHydraSky() {
+      if (!hydraOn || !hydraCanvas) return;
+      skyAnim.frames = [];              // se no updateSkyAnimation lo riscrive subito
+      customBackgroundLayers.sky = hydraCanvas;
+    }
+
+    function setHydraSky(on) {
+      hydraOn = !!on;
+      if (hydraOn) {
+        if (!hydraPronto()) { hydraOn = false; aggiornaHydraUI(); return; }
+        if (!hydraUltimo) hydraEsegui(document.getElementById('hydra-codice') ?
+                                      document.getElementById('hydra-codice').value : '');
+        applyHydraSky();
+      } else if (typeof currentLevel !== 'undefined' && currentLevel > 0) {
+        applyLevelBackgrounds(currentLevel);   // ritorna al cielo del livello
+      }
+      aggiornaHydraUI();
+    }
+
+    function aggiornaHydraUI() {
+      var b = document.getElementById('hydra-toggle');
+      if (!b) return;
+      b.textContent = hydraOn ? '🌀 CIELO HYDRA — ON' : '🌀 CIELO HYDRA — OFF';
+      b.classList.toggle('bg-cyan-600', hydraOn);
+      b.classList.toggle('text-white', hydraOn);
+      b.classList.toggle('bg-gray-200', !hydraOn);
+      b.classList.toggle('dark:bg-gray-700', !hydraOn);
+    }
+
+    window.setHydraSky   = setHydraSky;
+    window.hydraEsegui   = hydraEsegui;
+    window.toggleHydra   = function() { setHydraSky(!hydraOn); };
+    window.eseguiDaRiquadro = function() {
+      var t = document.getElementById('hydra-codice');
+      if (!t) return;
+      if (hydraEsegui(t.value) && !hydraOn) setHydraSky(true);
+    };
 
     var LEVEL_PRESETS = {
       1: {
@@ -5694,6 +5821,7 @@
 
       applyPoplarOverrides();   // la modalità Poplar si appoggia sopra al livello
       applyPoplarColors();      // ...e porta i colori del livello verso la notte
+      applyHydraSky();          // il cielo dal vivo vince su tutto: è scelta della regia
     }
 
     function updateLevelTransition() {
@@ -6627,6 +6755,16 @@
         ev.preventDefault();
         toggleAutopilot();
       }
+    });
+
+    // Ctrl+Invio dentro il riquadro Hydra esegue il codice
+    document.addEventListener('DOMContentLoaded', function() {
+      var t = document.getElementById('hydra-codice');
+      if (!t) return;
+      try { var salvato = localStorage.getItem('horseRacing_hydraCodice'); if (salvato) t.value = salvato; } catch(_) {}
+      t.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); eseguiDaRiquadro(); }
+      });
     });
 
     // MODALITÀ POPLAR: tasto 8, accanto ai tasti 1-7 dei livelli
