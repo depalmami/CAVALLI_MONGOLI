@@ -6927,6 +6927,16 @@
       }
     });
 
+    // Il font a pixel va CHIESTO esplicitamente: la tela non richiede i font da
+    // sola, e l'HUD del secondo schermo si disegna con ctx.font. Se il font non e'
+    // ancora arrivato, ripiega sul monospace in silenzio — sul ledwall si vedrebbe
+    // un HUD col carattere sbagliato nei primi secondi, senza nessun errore.
+    document.addEventListener('DOMContentLoaded', function() {
+      if (document.fonts && document.fonts.load) {
+        document.fonts.load('16px ArcadePixel').catch(function() {});
+      }
+    });
+
     // Ctrl+Invio dentro il riquadro Hydra esegue il codice
     document.addEventListener('DOMContentLoaded', function() {
       var t = document.getElementById('hydra-codice');
