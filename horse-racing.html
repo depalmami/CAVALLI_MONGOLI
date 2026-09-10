@@ -216,9 +216,91 @@
       height: 100%;
       pointer-events: none;
     }
-    #hud {
-      max-width: 100% !important;
+    /* ── HUD ARCADE ────────────────────────────────────────────────────────
+       Sovrascrive lo stile di serie di common.css (Verdana e barra rossa
+       translucida, il vestito originale del motore). Il font è nel repo:
+       in location la rete non è garantita. */
+    @font-face {
+      font-family: 'ArcadePixel';
+      src: url('vendor/font/PressStart2P.woff2') format('woff2');
+      font-display: block;   /* block, non swap: meglio un attimo di vuoto che
+                                vedere Verdana e poi un salto a font caricato */
     }
+
+    #hud {
+      max-width: none !important;
+      width: 100% !important;
+      background: none !important;      /* via la barra rossa: sotto c'è il cielo */
+      border-bottom: none !important;
+      padding: 14px 16px !important;
+      display: flex !important;
+      align-items: flex-start;
+      gap: 10px;
+      font-family: 'ArcadePixel', 'Courier New', monospace !important;
+      font-size: 15px !important;
+      line-height: 1;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+
+    /* i float di common.css romperebbero il flex */
+    #hud #speed, #hud #current_lap_time, #hud #last_lap_time, #hud #fast_lap_time {
+      float: none !important;
+      width: auto !important;
+      text-align: left !important;
+    }
+    #hud #current_lap_time { order: 1; }
+    #hud #last_lap_time    { order: 2; }
+    #hud #fast_lap_time    { order: 3; margin: 0 auto !important; }  /* al centro */
+    #hud #speed            { order: 4; }
+
+    /* il riquadro: bordo spesso e ombra dura, senza sfocature — è la firma
+       grafica dei cabinati, e per di più regge su qualunque cielo ci sia dietro */
+    #hud .hud {
+      display: flex !important;
+      align-items: baseline;
+      gap: 8px;
+      background: #100c1c !important;
+      color: #f4ecd8 !important;
+      border: 3px solid #f4ecd8 !important;
+      border-radius: 0 !important;
+      padding: 9px 11px !important;
+      margin: 0 !important;
+      box-shadow: 5px 5px 0 0 rgba(0,0,0,.85) !important;   /* ombra a scalino */
+      transition: none !important;                          /* niente dissolvenze da 2s */
+    }
+    #hud .hud i {
+      font-style: normal;
+      font-size: 0.62em;
+      color: #7a86b8;          /* etichetta smorzata: conta il numero */
+      letter-spacing: 1px;
+      position: relative;
+      top: -1px;
+    }
+    #hud .value {
+      color: #ffd23f !important;   /* giallo da cabinato */
+      font-weight: normal !important;
+      text-shadow: 2px 2px 0 #6b3d00;
+    }
+    #hud #speed { border-color: #45e0ff !important; }
+    #hud #speed .value { color: #45e0ff !important; text-shadow: 2px 2px 0 #063d4d; font-size: 1.35em; }
+    #hud #speed i { color: #2f7f95; }
+
+    /* record: la classe .fastest la mette il gioco su best e last */
+    #hud .fastest {
+      background: #2a1c00 !important;
+      border-color: #ffd23f !important;
+      animation: hudRecord .5s steps(2, end) infinite;  /* steps: lampeggio netto,
+                                                           non una dissolvenza */
+    }
+    @keyframes hudRecord {
+      0%   { box-shadow: 5px 5px 0 0 rgba(0,0,0,.85), 0 0 0 3px #ffd23f; }
+      100% { box-shadow: 5px 5px 0 0 rgba(0,0,0,.85), 0 0 0 3px transparent; }
+    }
+
+    /* a schermo intero (ledwall) va letto da lontano */
+    #racer:fullscreen #hud,
+    #racer:-webkit-full-screen #hud { font-size: 22px !important; padding: 22px 26px !important; }
 
     /* Intro screen animation */
     @keyframes pulse {
@@ -1209,10 +1291,10 @@
       <img id="main-title-image" style="width: 100%; height: 100%; object-fit: cover;" />
     </div>
     <div id="hud">
-      <span id="speed"            class="hud"><span id="speed_value" class="value">0</span> km/h</span>
-      <span id="current_lap_time" class="hud">Time: <span id="current_lap_time_value" class="value">0.0</span></span>
-      <span id="last_lap_time"    class="hud">Last Lap: <span id="last_lap_time_value" class="value">0.0</span></span>
-      <span id="fast_lap_time"    class="hud">Fastest Lap: <span id="fast_lap_time_value" class="value">0.0</span></span>
+      <span id="speed"            class="hud"><span id="speed_value" class="value">0</span><i>km/h</i></span>
+      <span id="current_lap_time" class="hud"><i>time</i><span id="current_lap_time_value" class="value">0.0</span></span>
+      <span id="last_lap_time"    class="hud"><i>last</i><span id="last_lap_time_value" class="value">0.0</span></span>
+      <span id="fast_lap_time"    class="hud"><i>best</i><span id="fast_lap_time_value" class="value">0.0</span></span>
     </div>
     <div id="canvas-wrapper">
       <canvas id="canvas">
