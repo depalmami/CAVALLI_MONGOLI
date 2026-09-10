@@ -5668,18 +5668,24 @@
     }
 
     function applyLevelBackgrounds(levelNum) {
+      // Il cielo animato va riagganciato PRIMA dell'uscita anticipata qui sotto.
+      // Altrimenti, se si cambia livello mentre i suoi sfondi stanno ancora
+      // caricando, resta in scena il cielo del livello PRECEDENTE — e nessuno lo
+      // corregge più, perché a fine caricamento non c'è nessun riaggancio.
+      // Capita col livello 1, che ha 121 fotogrammi caricati uno per uno.
+      // Si ripara da solo: qui si assegna l'ARRAY, che è lo stesso che il
+      // caricatore continua a riempire, quindi l'animazione parte appena arriva.
+      var frames = levelSkyFrames[levelNum] || [];
+      skyAnim.frames       = frames;
+      skyAnim.currentFrame = 0;
+      skyAnim.lastTime     = 0;
+
       var bg = levelBackgrounds[levelNum];
       if (!bg) return;
       // For each layer: use level image if present, otherwise restore null (= default spritesheet)
       customBackgroundLayers.sky   = bg.sky   || null;
       customBackgroundLayers.hills = bg.hills || null;
       customBackgroundLayers.trees = bg.trees || null;
-
-      // Set up sky animation for this level (overrides the static sky if frames exist)
-      var frames = levelSkyFrames[levelNum] || [];
-      skyAnim.frames       = frames;
-      skyAnim.currentFrame = 0;
-      skyAnim.lastTime     = 0; // will be initialised on first render tick
 
       // If animated frames exist, use frame 0 immediately as the active sky layer
       if (frames.length > 0) {
