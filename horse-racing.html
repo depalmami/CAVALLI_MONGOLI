@@ -1803,7 +1803,11 @@
       hydraCanvas.style.cssText = 'position:absolute;left:-99999px;top:0;pointer-events:none';
       document.body.appendChild(hydraCanvas);
       try {
-        hydraSynth = new Hydra({ canvas: hydraCanvas, detectAudio: false,
+        // autoLoop FALSE di proposito: il tick lo dà il gioco, in cima a render().
+        // Con due requestAnimationFrame indipendenti (il suo e quello del gioco)
+        // l'ordine non è garantito: il gioco leggeva la tela DOPO che il browser
+        // l'aveva già composta e svuotata, e il cielo appariva solo a lampi.
+        hydraSynth = new Hydra({ canvas: hydraCanvas, detectAudio: false, autoLoop: false,
                                  makeGlobal: false, width: HYDRA_W, height: HYDRA_H });
       } catch (e) { hydraErrore('avvio fallito: ' + e.message); return false; }
       return true;
@@ -1830,6 +1834,24 @@
 
     // Va chiamata DOPO applyLevelBackgrounds e dopo la modalità Poplar: il cielo
     // dal vivo è una scelta esplicita della regia, quindi vince su tutto.
+    var hydraUltimoTick = 0;
+
+    // Chiamata in cima a render(): Hydra disegna e il gioco legge subito dopo,
+    // nello stesso task. Così la tela è sempre piena quando serve.
+    function hydraTick() {
+      if (!hydraOn || !hydraSynth) return;
+      var ora = (window.performance && performance.now) ? performance.now() : Date.now();
+      var dt  = hydraUltimoTick ? Math.min(100, ora - hydraUltimoTick) : 16;
+      hydraUltimoTick = ora;
+      try {
+        hydraSynth.tick(dt);
+      } catch (e) {
+        // spegnere evita una valanga di eccezioni, una per fotogramma
+        hydraErrore('errore durante il disegno: ' + e.message);
+        hydraOn = false; aggiornaHydraUI();
+      }
+    }
+
     function applyHydraSky() {
       if (!hydraOn || !hydraCanvas) return;
       skyAnim.frames = [];              // se no updateSkyAnimation lo riscrive subito
@@ -5213,6 +5235,9 @@
     }
 
     function render() {
+
+      hydraTick();   // Hydra disegna adesso, un attimo prima che il gioco lo legga
+
 
       // Render to main canvas (level filter applied via canvas.style.filter)
       renderToCanvas(ctx, width, height);
