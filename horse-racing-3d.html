@@ -1262,10 +1262,32 @@ const BODY_BEND    = 1.0;
 // cavallo teneva la testa girata di 43° per tutta la curva. Così una HARD dà 0.54,
 // una MEDIUM 0.36, e il massimo resta riservato a curva stretta + sterzata insieme.
 const ROAD_TURN_K  = 0.09;   // quanto ce la piega la curva della strada
+// velocità laterale massima credibile (playerX/s): lo sterzo arriva a 2, l'IA a ~2.4.
+// Serve a non leggere come "velocità" un salto istantaneo di posizione: il calcio
+// spostava il rivale di 0.35 in un colpo, che valeva 42/s e un'imbardata di 83°.
+const LAT_RATE_MAX = 2.5;
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x-a)/(b-a))); return t*t*(3-2*t); };
+
+//=========================================================================
+// CURVE D'ANIMAZIONE DEL COMBATTIMENTO
+// Prima un attacco era uno scatto laterale che andava e tornava (seno), uguale
+// per chi colpisce e per chi incassa: leggeva come un cavallo che scivola, non
+// come un colpo. Qui le tre fasi classiche dell'animazione d'azione.
+//=========================================================================
+const ATK_DUR = 0.36;               // durata del colpo di chi attacca, in secondi
+// preparazione (si carica all'indietro) → colpo secco → recupero morbido.
+// t in [0,1] → valore firmato, picco +1 all'istante del colpo (t = 0.42)
+function curvaColpo(t) {
+  if (t < 0.28) return -0.35 * Math.sin(t/0.28 * Math.PI/2);
+  if (t < 0.42) { const u = (t - 0.28)/0.14; return -0.35 + 1.35*u*u; }
+  const u = (t - 0.42)/0.58; return 1 - u*u*(3 - 2*u);
+}
+// reazione di chi incassa: impulso e oscillazione smorzata (t in secondi, ~0.5 s)
+function curvaReazione(t) { return 1.5 * Math.exp(-t*6.5) * Math.sin(t*24); }
 
 // temporanei riusati da shapeTurn (niente allocazioni per osso per frame)
 const _bq = new THREE.Quaternion(), _bq2 = new THREE.Quaternion(), _bax = new THREE.Vector3();
+const _fwdAx = new THREE.Vector3();
 
 class HorseActor {
   constructor(tintHex = 0xffffff) {
@@ -1293,8 +1315,12 @@ class HorseActor {
     this.actGallop = this.actWalk = this.actIdle = null;
     this.w = { idle: 1, walk: 0, gallop: 0 };   // pesi andature smussati (parte da fermo)
     this.hitFlash = 0;                          // impulso emissivo rosso quando il cavallo viene colpito
-    this.punch = 0; this.punchDir = 0;          // affondo di chi attacca (scatto verso il bersaglio e ritorno)
-    this.knock = 0; this.knockDir = 0;          // rinculo di chi viene colpito (spinto di lato e ritorno)
+    this.atk = null;                            // colpo in corso { t, dir, peso }: 0 → 1 in ATK_DUR
+    this.hit = null;                            // reazione in corso { t, dir, forza }, t in secondi
+    this.testaColpo = 0;                        // piega extra di collo e testa durante colpi e reazioni
+    // caduta del rivale abbattuto: molla sotto-smorzata sull'angolo di rollio del
+    // gruppo, così quando tocca terra rimbalza invece di fermarsi di colpo
+    this.cadT = 0; this.cadDir = 1; this.cadAng = 0; this.cadV = 0;
     this.basePos = new THREE.Vector3();         // posizione "pulita" pre-wobble: la camera insegue QUESTA,
                                                  // non group.position (altrimenti il lookAt insegue anche
                                                  // l'affondo del giocatore e lo annulla visivamente)
@@ -1372,6 +1398,7 @@ class HorseActor {
       if (!o.isBone) return;
       const f = FLESSIONE.find(([re]) => re.test(o.name));
       if (f) this.shape.push({ bone: o, gain: f[1] * BODY_BEND, pendolo: !!f[2],
+                               collo: /^(Neck[123]|Head)$/i.test(o.name),
                                animata: animata(o.name), base: o.quaternion.clone() });
     });
     this.group.add(this.model);
@@ -1385,7 +1412,7 @@ class HorseActor {
     const hb = this.heading - this.steerYaw;      // asse di marcia (stesso segno di update)
     for (const s of this.shape) {
       if (!s.animata) s.bone.quaternion.copy(s.base);
-      if (Math.abs(this.turn) < 1e-4) continue;
+      if (Math.abs(this.turn) + Math.abs(s.collo ? this.testaColpo : 0) < 1e-4) continue;
       s.bone.parent.getWorldQuaternion(_bq).invert();
       if (s.pendolo) _bax.set(Math.sin(hb), 0, Math.cos(hb));   // coda: pendolo attorno all'avanti
       else           _bax.set(0, 1, 0);                          // schiena/collo: imbardata
@@ -1395,7 +1422,10 @@ class HorseActor {
       // le ossa attorno al su del MONDO. Verificato con un A/B allo stesso fotogramma
       // d'animazione: è l'unico modo di isolare la piega dal galoppo, che da solo
       // muove la testa di centinaia di unità.
-      s.bone.quaternion.premultiply(_bq2.setFromAxisAngle(_bax, -this.turn * s.gain));
+      // al collo e alla testa si somma lo scatto del colpo (stessa convenzione di
+      // turn: positivo = verso destra schermo, verificata con l'A/B a fotogramma fisso)
+      const extra = s.collo ? this.testaColpo : 0;
+      s.bone.quaternion.premultiply(_bq2.setFromAxisAngle(_bax, -(this.turn + extra) * s.gain));
     }
   }
   setMode(mode) {
@@ -1411,9 +1441,47 @@ class HorseActor {
     this.heading = la.heading;
   }
   flashHit() { this.hitFlash = 1; }             // impulso rosso visibile in 3D quando incassa un colpo
-  lunge(dir) { this.punch = 1; this.punchDir = dir; }     // dir: -1 sinistra, +1 destra, 0 = dritto (calcio)
-  knockback(dir) { this.knock = 1; this.knockDir = dir || (Math.random() < 0.5 ? -1 : 1); }
+  // dir: -1 sinistra, +1 destra (convenzione di playerX), 0 = in avanti (calcio/sgroppata)
+  attacca(dir, peso = 1) { this.atk = { t: 0, dir, peso }; }
+  colpito(dir, forza = 1) { this.hit = { t: 0, dir: dir || (Math.random() < 0.5 ? -1 : 1), forza }; }
+  cadi(dir) { this.cadT = 1; this.cadDir = dir || 1; }
+  rialzati() { this.cadT = 0; }
+  rimettiInPiedi() { this.cadT = 0; this.cadAng = 0; this.cadV = 0; this.atk = null; this.hit = null; }
+  lunge(dir) { this.attacca(dir); }             // nomi vecchi, tenuti per compatibilità
+  knockback(dir) { this.colpito(dir); }
   update(dt, speedPct) {
+    // ── animazioni di combattimento: cosa aggiungono all'assetto in questo frame ──
+    let aC = 0, aDir = 0, aPeso = 1;              // colpo di chi attacca
+    if (this.atk) {
+      this.atk.t += dt / ATK_DUR;
+      if (this.atk.t >= 1) this.atk = null;
+      else { aC = curvaColpo(this.atk.t); aDir = this.atk.dir; aPeso = this.atk.peso; }
+    }
+    let rC = 0, rDir = 0, rSpinta = 0, rForza = 1; // reazione di chi incassa
+    if (this.hit) {
+      this.hit.t += dt;
+      if (this.hit.t >= 0.5) this.hit = null;
+      else {
+        rC = curvaReazione(this.hit.t); rDir = this.hit.dir; rForza = this.hit.forza;
+        rSpinta = this.hit.t < 0.3 ? Math.sin(Math.PI * this.hit.t/0.3) : 0;
+      }
+    }
+    // caduta: molla sotto-smorzata (ζ≈0.58) → un rimbalzo quando tocca terra.
+    // Sotto-passi da 1/120 s, altrimenti con un frame lungo la molla esplode.
+    for (let h = dt; h > 1e-6; h -= 1/120) {
+      const k = Math.min(h, 1/120);
+      const bersaglio = this.cadT * 1.42 * this.cadDir;         // ~81°: sul fianco
+      this.cadV += ((bersaglio - this.cadAng) * 60 - this.cadV * 9) * k;
+      this.cadAng += this.cadV * k;
+    }
+    const aTerra = Math.min(1, Math.abs(this.cadAng) / 1.42);    // 0 in piedi, 1 disteso
+    // rollio (+ = verso destra schermo, come bank), imbardata (− = verso destra,
+    // come steerYaw), beccheggio (+ = muso giù). Il calcio (dir 0) è una sgroppata.
+    const rollX  = aC*aDir*0.26*aPeso + rC*rDir*0.30*rForza;
+    const yawX   = -(aC*aDir*0.20 + rC*rDir*0.12*rForza);
+    const pitchX = aDir === 0 && this.atk ? aC*0.28 : Math.max(0, aC)*0.10*aPeso;
+    this.testaColpo = aC*aDir*0.9 + rC*rDir*0.6*rForza;
+
     if (this.hitFlash > 0) {
       this.hitFlash = Math.max(0, this.hitFlash - dt*2.5);
       if (this.mode === 'sprite') {
@@ -1436,6 +1504,9 @@ class HorseActor {
       // billboard cilindrico: ruota verso la camera restando in piedi
       this.billboard.rotation.y = Math.atan2(camera.position.x - this.group.position.x,
                                              camera.position.z - this.group.position.z);
+      // il piano guarda la camera: +z lo ruota in senso antiorario visto da lei,
+      // quindi per inclinare verso destra schermo serve il segno meno
+      this.billboard.rotation.z = -rollX * 0.9;
     } else if (this.model) {
       // assetto: imbardata pista + sterzo, rollio in curva, beccheggio
       // SEGNO: un offset laterale POSITIVO (verso destra schermo) corrisponde a un
@@ -1443,9 +1514,9 @@ class HorseActor {
       // + il muso puntava dalla parte OPPOSTA al moto: era questo il "sembra un'auto
       // che derapa", e c'era da prima che toccassimo l'assetto. Verificato proiettando
       // muso e spostamento reale sullo SCHERMO, non confrontando numeri fra loro.
-      this.model.rotation.y = this.heading + MODEL_YAW - this.steerYaw;
-      this.model.rotation.z = this.bank;
-      this.model.rotation.x = this.pitch;
+      this.model.rotation.y = this.heading + MODEL_YAW - this.steerYaw + yawX;
+      this.model.rotation.z = this.bank + rollX;
+      this.model.rotation.x = this.pitch + pitchX;
       if (this.mixer) {
         // pesi andatura per velocità (idle→walk→gallop) con transizione morbida
         const gW = smooth(0.22, 0.55, speedPct);
@@ -1462,41 +1533,42 @@ class HorseActor {
         const sp = speedPct * MAX_SPEED;
         this.actGallop.timeScale = (sp / GALLOP_STRIDE) * this.durG;
         if (this.actWalk) this.actWalk.timeScale = (sp / WALK_STRIDE) * this.durW;
-        this.mixer.update(dt);
+        this.mixer.update(dt * (1 - 0.95*aTerra));   // un cavallo disteso non galoppa
         this.shapeTurn();     // DOPO il mixer: la piega si somma alla posa animata
       }
     }
-    // affondo/rinculo del combattimento: scatto laterale che va e torna (funziona sia su
-    // sprite sia su modello perché sposta il group, non ruota una parte specifica)
-    if (this.punch > 0 || this.knock > 0) {
-      const rgtX = -Math.cos(this.heading), rgtZ = Math.sin(this.heading);
-      const fwdX =  Math.sin(this.heading), fwdZ = Math.cos(this.heading);
-      if (this.punch > 0) {
-        this.punch = Math.max(0, this.punch - dt*3.4);
-        const k = Math.sin(this.punch * Math.PI);          // 0→1→0 mentre punch scende da 1 a 0
-        this.group.position.x += (rgtX*this.punchDir*260 + fwdX*160) * k;
-        this.group.position.z += (rgtZ*this.punchDir*260 + fwdZ*160) * k;
-      }
-      if (this.knock > 0) {
-        this.knock = Math.max(0, this.knock - dt*3.8);
-        const k = Math.sin(this.knock * Math.PI);
-        this.group.position.x += rgtX*this.knockDir*380 * k;
-        this.group.position.z += rgtZ*this.knockDir*380 * k;
-      }
+    // spinte: il colpo porta il corpo verso il bersaglio (e prima un filo indietro,
+    // nella preparazione), la reazione lo sbatte di lato. Spostano il group, quindi
+    // valgono per sprite e modello; la camera segue basePos e non le annulla.
+    const rgtX = -Math.cos(this.heading), rgtZ = Math.sin(this.heading);
+    const fwdX =  Math.sin(this.heading), fwdZ = Math.cos(this.heading);
+    const lat = aC*aDir*300*aPeso + rSpinta*rDir*380*rForza;
+    const avanti = Math.max(0, aC) * (aDir === 0 ? 260 : 170);
+    this.group.position.x += rgtX*lat + fwdX*avanti;
+    this.group.position.z += rgtZ*lat + fwdZ*avanti;
+    // caduta: il GRUPPO rolla attorno all'asse di marcia, con perno nel punto
+    // d'appoggio a terra — il cavallo finisce disteso sul fianco accanto a dove era
+    if (Math.abs(this.cadAng) > 1e-3 || this.cadT) {
+      _fwdAx.set(fwdX, 0, fwdZ);
+      this.group.quaternion.setFromAxisAngle(_fwdAx, this.cadAng);
+    } else if (this.group.quaternion.w !== 1) {
+      this.group.quaternion.identity();
     }
+    this.blob.visible = (this.mode === 'sprite') && aTerra < 0.12;   // l'ombra-blob non si ribalta
   }
 }
 
 const player = new HorseActor(0xffffff);
 // RIVALI — guerrieri mongoli con salute e AND che combattono (stile Road Redemption)
 const RIVAL_DEFS = [
-  { tint: 0xffc9a3, name: 'Batu',    skill: 0.82, pos: 1500 },
-  { tint: 0xa9c8ff, name: 'Ganzo',   skill: 0.88, pos: 2600 },
-  { tint: 0xd6ffb3, name: 'Temujin', skill: 0.85, pos: -900 },
-  { tint: 0xffb3d9, name: 'Altan',   skill: 0.92, pos: 3400 },
+  // stile = arma "di firma", solo estetica: ognuno colpisce in modo riconoscibile
+  { tint: 0xffc9a3, name: 'Batu',    skill: 0.82, pos: 1500, stile: 'mace'  },
+  { tint: 0xa9c8ff, name: 'Ganzo',   skill: 0.88, pos: 2600, stile: 'saber' },
+  { tint: 0xd6ffb3, name: 'Temujin', skill: 0.85, pos: -900, stile: 'whip'  },
+  { tint: 0xffb3d9, name: 'Altan',   skill: 0.92, pos: 3400, stile: 'saber' },
 ];
 const opponents = RIVAL_DEFS.map((d, i) => ({
-  actor: new HorseActor(d.tint), name: d.name, skill: d.skill, tint: d.tint,
+  actor: new HorseActor(d.tint), name: d.name, skill: d.skill, tint: d.tint, stile: d.stile,
   pos: ((d.pos % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
   lat: (i % 2 ? 0.45 : -0.45), targetLat: (i % 2 ? 0.45 : -0.45),
   spd0: MAX_SPEED * d.skill, speed: MAX_SPEED * d.skill,
@@ -1566,8 +1638,10 @@ function addPopup(who, off, text, color) { popups.push({ who, off, text, color, 
 function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   if (pAtkCd > 0) return;
   pAtkCd = curWeapon.ranged ? 0.42 : 0.26;
-  player.lunge(side);      // il giocatore scatta SEMPRE all'input di attacco, anche se va a vuoto —
-                            // altrimenti un colpo senza bersaglio in range non produce nessun feedback
+  // il colpo parte SEMPRE all'input, anche a vuoto: senza, un attacco senza
+  // bersaglio in range non darebbe nessun feedback
+  player.attacca(side, curWeapon.key === 'mace' ? 1.25 : 1);
+  fendenti.colpo(player, side, curWeapon.ranged ? 'bow' : curWeapon.key);
   const latR = LAT_RANGE * (curWeapon.reach || 1);
   let best = null, bestAbs = 1e9;
   for (const o of opponents) {
@@ -1588,12 +1662,20 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   const dmg = (curWeapon.oneShot ? 999 : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
   critical = false;
   if (curWeapon.stun) best.atkCd = Math.max(best.atkCd, 2.4);   // la mazza stordisce
-  hitOpponent(best, dmg, curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null));
+  const label = curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null);
+  if (curWeapon.ranged) {
+    // la freccia deve ARRIVARE prima che il bersaglio reagisca
+    const o = best;
+    frecce.scocca(player, o.actor, () => { if (o.state === 'race') hitOpponent(o, dmg, label); });
+  } else {
+    hitOpponent(best, dmg, label);
+    fermaImmagine({ fists: 0.03, whip: 0.035, saber: 0.06, mace: 0.07 }[curWeapon.key] || 0.04);
+  }
   if (isFinite(curWeapon.uses) && --curWeapon.uses <= 0) equipWeapon('fists');   // arma esaurita
 }
 function playerKick() {
   if (pAtkCd > 0) return; pAtkCd = 0.34;
-  player.lunge(0);          // il calcio è un affondo in avanti, sempre visibile anche a vuoto
+  player.attacca(0);        // sgroppata: il calcio si vede anche a vuoto
   let best = null, bestAbs = 1e9;
   for (const o of opponents) {
     if (o.state !== 'race') continue;
@@ -1603,18 +1685,22 @@ function playerKick() {
   }
   if (!best) return;
   const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
-  best.targetLat = best.lat + dir*1.2; best.lat += dir*0.35;
-  best.health -= 10; best.flash = 1; best.actor.flashHit(); best.actor.knockback(dir);
+  // la spinta laterale si applica in ~0.15 s (vedi updateAI), non di colpo; la
+  // regola "oltre il bordo = abbattuto" guarda comunque dove la spinta lo porta
+  best.targetLat = best.lat + dir*1.2; best.spintaLat = (best.spintaLat || 0) + dir*0.35;
+  best.health -= 10; best.flash = 1; best.actor.flashHit(); best.actor.colpito(dir, 1.35);
+  { const bp = best.actor.group.position; fendenti.onda(bp.x, bp.y, bp.z); }
+  fermaImmagine(0.05);
   shake = Math.max(shake, 0.4);
   nitro = Math.min(MAX_NITRO, nitro + 3);
   addPopup(best, 900, '💥', '#fff');
   { const bp = best.actor.group.position;
     hitSpark.burst(bp.x, bp.y + HORSE_HEIGHT*0.8, bp.z, 0xd9c9a3, 14, 700); }
-  if (Math.abs(best.lat) > 1.05 || best.health <= 0) wipe(best, 'kick');
+  if (Math.abs(best.lat + best.spintaLat) > 1.05 || best.health <= 0) wipe(best, 'kick');
 }
 function hitOpponent(o, dmg, label) {
   o.health -= dmg; o.flash = 1; o.actor.flashHit();
-  o.actor.knockback(Math.sign(o.lat - playerX) || 1);
+  o.actor.colpito(Math.sign(o.lat - playerX) || 1, curWeapon.key === 'mace' ? 1.4 : 1);
   shake = Math.max(shake, 0.35);
   nitro = Math.min(MAX_NITRO, nitro + 4);          // l'aggressività carica il nitro
   addPopup(o, 900, label || ('-' + Math.round(dmg)), '#ffe08a');
@@ -1625,6 +1711,11 @@ function hitOpponent(o, dmg, label) {
 function wipe(o, cause) {
   if (o.state !== 'race') return;
   o.state = 'wipe'; o.wipeT = 3.5; o.health = 0;
+  // cade dal lato verso cui poi scivola fuori (la deriva del 'wipe' è verso l'esterno)
+  o.actor.cadi(Math.sign(o.lat) || (Math.random() < 0.5 ? -1 : 1));
+  { const q = o.actor.group.position;
+    hitSpark.burst(q.x, q.y + 300, q.z, 0xd9c9a3, 18, 1400); fendenti.onda(q.x, q.y, q.z); }
+  fermaImmagine(0.1);
   kills++; const cash = 40 + ((Math.random()*40)|0);
   money += cash; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
   addPopup(o, 1200, '+$' + cash, '#7fffa0'); shake = Math.max(shake, 0.7);
@@ -1636,10 +1727,15 @@ function updateAI(dt) {
   if (freeRoam) return;                // modalità libera: nessun rivale si muove né attacca
   for (const o of opponents) {
     if (o.flash > 0) o.flash -= dt*3;
+    if (o.spintaLat) {                                  // spinta del calcio, graduale
+      const d = Math.abs(o.spintaLat) < 1e-3 ? o.spintaLat : o.spintaLat * Math.min(1, dt*9);
+      o.lat += d; o.spintaLat -= d;
+    }
     if (o.state === 'wipe') {
       o.speed = Math.max(MAX_SPEED*0.15, accel(o.speed, DECEL*1.6, dt));
       o.lat += (Math.sign(o.lat) || 1) * 0.5 * dt;
       o.wipeT -= dt;
+      if (o.wipeT < 0.7) o.actor.rialzati();          // si rimette in piedi prima di ripartire
       if (o.wipeT <= 0) { o.state = 'race'; o.health = o.hp0*0.7; o.targetLat = limit(o.lat, -0.7, 0.7); }
     } else {
       const g = gapTo(o.pos);                       // + davanti al giocatore
@@ -1662,9 +1758,11 @@ function updateAI(dt) {
       if (Math.abs(g) < ATK_RANGE && Math.abs(o.lat - playerX) < LAT_RANGE && o.atkCd <= 0) {
         o.atkCd = 1.2 + Math.random();
         const atkDir = Math.sign(playerX - o.lat) || 1;   // il rivale scatta verso il giocatore
-        o.actor.lunge(atkDir);
-        if (blocking) { critical = true; o.actor.knockback(-atkDir); addPopup(o, 900, 'PARATA!', '#8ff'); }
-        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); player.knockback(atkDir);
+        o.actor.attacca(atkDir);
+        fendenti.colpo(o.actor, atkDir, o.stile);
+        if (blocking) { critical = true; o.actor.colpito(-atkDir, 0.8); fendenti.parata(player, -atkDir);
+                        addPopup(o, 900, 'PARATA!', '#8ff'); }
+        else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); player.colpito(atkDir, 1);
                shake = Math.max(shake, 0.5); addPopup(o, 900, '⚔', '#ff6b6b');
                const pp = player.group.position;
                hitSpark.burst(pp.x, pp.y + HORSE_HEIGHT*1.0, pp.z, 0xff4444, 10);
@@ -2242,6 +2340,207 @@ const hitSpark = (() => {
 })();
 
 //=========================================================================
+// FENDENTI — la scia luminosa di ogni colpo, diversa per arma.
+// Uno shader disegna un arco di corona circolare: la "testa" della lama corre
+// lungo l'arco (u da 0 a 1) e dietro lascia una coda che sfuma. Il colore esce
+// oltre 1 apposta: il bloom lo fa brillare. L'arco SEGUE chi colpisce — a
+// 11000 unità/s, in 0.2 s il cavallo avanza di 2200: un arco fermo nel mondo
+// resterebbe indietro a metà colpo.
+//=========================================================================
+const fendenti = (() => {
+  const vs = `varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+  const fsArco = `uniform vec3 colore; uniform float p; uniform float forza;
+    varying vec2 vUv;
+    void main(){
+      // la lama percorre l'arco nel primo 45% (rallentando in fondo), poi l'arco
+      // INTERO resta e sfuma: con una coda corta si vedeva solo una striscia
+      float hp = 1.0 - pow(1.0 - min(1.0, p/0.45), 2.0);
+      float d = hp - vUv.x;                          // distanza dietro la testa della lama
+      if (d < 0.0) discard;                          // lì la lama non è ancora passata
+      float coda  = exp(-d*1.6);
+      float bordo = max(0.0, 1.0 - abs(vUv.y - 0.5)*2.0);
+      float fine  = 1.0 - smoothstep(0.45, 1.0, p);  // dopo il colpo sfuma tutto
+      float a = coda * pow(bordo, 0.55) * fine;
+      vec3 c = mix(colore, vec3(1.0), pow(bordo, 3.0)*0.8) * forza;   // anima bianca
+      gl_FragColor = vec4(c, clamp(a*1.15, 0.0, 1.0));
+    }`;
+  // [raggio, spessore, angolo iniziale, angolo finale, colore, durata, luminosità]
+  // Angoli nel piano laterale-verticale: +X verso il bersaglio, +Y in alto. Da
+  // in alto-dentro a in basso-fuori: un fendente diagonale verso il bersaglio.
+  const STILI = {
+    fists: { r: 560,  sp: 150, a0: 2.2, a1: -0.4, col: 0xffe3b0, dur: 0.24, forza: 1.3 },
+    whip:  { r: 1300, sp: 80,  a0: 2.4, a1: -0.9, col: 0xff8f2e, dur: 0.30, forza: 1.5, schiocco: true },
+    mace:  { r: 680,  sp: 250, a0: 1.9, a1: -0.2, col: 0xc9d3e3, dur: 0.28, forza: 1.3 },
+    saber: { r: 1150, sp: 230, a0: 2.3, a1: -0.7, col: 0x5fd8ff, dur: 0.28, forza: 1.6 },
+    bow:   { r: 420,  sp: 80,  a0: 1.5, a1: 0.5,  col: 0xd9b27a, dur: 0.16, forza: 1.1 },   // strattone della corda
+  };
+  const geoCache = {};
+  function arco(st) {
+    const k = st.r + '|' + st.sp + '|' + st.a0 + '|' + st.a1;
+    if (geoCache[k]) return geoCache[k];
+    const SEG = 28, pos = [], uv = [], idx = [];
+    for (let i = 0; i <= SEG; i++) {
+      const u = i/SEG, a = st.a0 + (st.a1 - st.a0)*u;
+      for (const [rr, v] of [[st.r - st.sp/2, 0], [st.r + st.sp/2, 1]]) {
+        pos.push(Math.cos(a)*rr, Math.sin(a)*rr, 0); uv.push(u, v);
+      }
+      if (i < SEG) { const b = i*2; idx.push(b, b+1, b+2, b+1, b+3, b+2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    return geoCache[k] = g;
+  }
+  const POOL = 14, archi = [];
+  for (let i = 0; i < POOL; i++) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { colore: { value: new THREE.Color() }, p: { value: 0 }, forza: { value: 1 } },
+      // fusione NORMALE e non additiva: sommare luce a un cielo già chiaro non si
+      // vede quasi (verificato a schermo), mentre una scia che copre lo sfondo sì.
+      // L'anima resta oltre 1, quindi il bloom la fa comunque brillare.
+      vertexShader: vs, fragmentShader: fsArco, transparent: true, depthWrite: false,
+      blending: THREE.NormalBlending, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(arco(STILI.fists), mat);
+    m.visible = false; m.frustumCulled = false; scene.add(m);
+    archi.push({ m, t: 0, dur: 1, chi: null, dir: 1, st: null, schioccato: false });
+  }
+  let cursore = 0;
+  // chi = HorseActor che colpisce, dir = lato del bersaglio (-1/+1), stile = chiave arma
+  function colpo(chi, dir, stile) {
+    if (!dir) return;                                   // il calcio usa l'onda, non l'arco
+    const st = STILI[stile] || STILI.fists;
+    const a = archi[cursore]; cursore = (cursore + 1) % POOL;
+    a.m.geometry = arco(st);
+    a.m.material.uniforms.colore.value.setHex(st.col);
+    a.m.material.uniforms.forza.value = st.forza;
+    a.t = 0; a.dur = st.dur; a.chi = chi; a.dir = dir; a.st = st; a.schioccato = false;
+    a.m.visible = true;
+    posa(a);
+  }
+  const _v = new THREE.Vector3();
+  function posa(a) {
+    const g = a.chi.group.position, h = a.chi.heading;
+    const rx = -Math.cos(h), rz = Math.sin(h), fx = Math.sin(h), fz = Math.cos(h);
+    a.m.position.set(g.x + rx*a.dir*380 + fx*120, g.y + HORSE_HEIGHT*0.62, g.z + rz*a.dir*380 + fz*120);
+    // ruotato di h attorno a Y, il +X locale punta a SINISTRA della pista: per
+    // mettere l'arco dal lato del bersaglio serve scale.x = −dir
+    a.m.rotation.set(0, h, 0);
+    a.m.scale.set(-a.dir, 1, 1);
+  }
+
+  // ── onda d'urto a terra (calcio) e anello di parata ──
+  const anelloGeo = new THREE.RingGeometry(0.72, 1, 48);
+  const POOL_O = 6, onde = [];
+  for (let i = 0; i < POOL_O; i++) {
+    const m = new THREE.Mesh(anelloGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true,
+      opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    m.visible = false; scene.add(m);
+    onde.push({ m, t: 0, dur: 1, r0: 1, r1: 1, a: 1, chi: null, dir: 0, verticale: false });
+  }
+  let cursoreO = 0;
+  function nuovaOnda(o) {
+    const w = onde[cursoreO]; cursoreO = (cursoreO + 1) % POOL_O;
+    Object.assign(w, o, { t: 0 }); w.m.material.color.setHex(o.col); w.m.visible = true;
+    return w;
+  }
+  // calcio: l'onda si allarga a terra sotto chi la prende
+  function onda(x, y, z) {
+    const w = nuovaOnda({ col: 0xe8d9b0, dur: 0.38, r0: 250, r1: 1900, a: 0.9, chi: null, verticale: false });
+    w.m.position.set(x, y + 30, z); w.m.rotation.set(-Math.PI/2, 0, 0);
+  }
+  // parata: un anello azzurro in piedi, dal lato da cui arriva il colpo
+  function parata(chi, dir) {
+    nuovaOnda({ col: 0x7fe3ff, dur: 0.24, r0: 280, r1: 1150, a: 1.0, chi, dir, verticale: true });
+  }
+
+  function update(dt) {
+    for (const a of archi) {
+      if (!a.m.visible) continue;
+      a.t += dt / a.dur;
+      if (a.t >= 1) { a.m.visible = false; continue; }
+      posa(a);
+      a.m.material.uniforms.p.value = a.t;
+      // frusta: lo schiocco è una scintilla in punta quando la lama arriva in fondo
+      if (a.st.schiocco && !a.schioccato && a.t > 0.42) {   // quando la lama arriva in fondo
+        a.schioccato = true;
+        _v.set(Math.cos(a.st.a1)*a.st.r, Math.sin(a.st.a1)*a.st.r, 0);
+        a.m.localToWorld(_v);
+        hitSpark.burst(_v.x, _v.y, _v.z, 0xffd27a, 7, 1300);
+      }
+    }
+    for (const w of onde) {
+      if (!w.m.visible) continue;
+      w.t += dt / w.dur;
+      if (w.t >= 1) { w.m.visible = false; continue; }
+      const e = 1 - Math.pow(1 - w.t, 3);                 // si allarga veloce e rallenta
+      const r = w.r0 + (w.r1 - w.r0)*e;
+      w.m.scale.set(r, r, r);
+      w.m.material.opacity = w.a * (1 - w.t);
+      if (w.verticale && w.chi) {                          // segue il cavallo che para
+        const g = w.chi.group.position, h = w.chi.heading;
+        w.m.position.set(g.x - Math.cos(h)*w.dir*420, g.y + HORSE_HEIGHT*0.75, g.z + Math.sin(h)*w.dir*420);
+        w.m.rotation.set(0, h, 0);
+      }
+    }
+  }
+  return { colpo, onda, parata, update, STILI, __archi: archi };
+})();
+
+//=========================================================================
+// FRECCE — l'arco adesso tira una freccia VERA. Prima il danno arrivava
+// all'istante e il bersaglio reagiva prima che qualcosa fosse partito; ora la
+// freccia vola (tempo ∝ distanza) e colpo, scintille e popup scattano quando
+// arriva. La traiettoria interpola fra le posizioni CORRENTI di arciere e
+// bersaglio, così non manca mai un cavallo che nel frattempo è avanzato.
+//=========================================================================
+const frecce = (() => {
+  const asta = new THREE.CylinderGeometry(14, 14, 900, 6); asta.rotateX(Math.PI/2);
+  const punta = new THREE.ConeGeometry(40, 150, 6); punta.rotateX(Math.PI/2); punta.translate(0, 0, 520);
+  const matAsta = new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 0.8 });
+  const matPunta = new THREE.MeshStandardMaterial({ color: 0xcfd6df, metalness: 0.7, roughness: 0.35 });
+  const matScia = new THREE.MeshBasicMaterial({ color: 0xffe2a8, transparent: true, opacity: 0.55,
+    depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const sciaGeo = new THREE.PlaneGeometry(70, 1600); sciaGeo.rotateX(Math.PI/2); sciaGeo.translate(0, 0, -800);
+  const POOL = 8, voli = [];
+  for (let i = 0; i < POOL; i++) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(asta, matAsta), new THREE.Mesh(punta, matPunta), new THREE.Mesh(sciaGeo, matScia));
+    g.visible = false; scene.add(g);
+    voli.push({ g, t: 0, dur: 1, da: null, a: null, arrivo: null });
+  }
+  let cursore = 0;
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), P = new THREE.Vector3();
+  function scocca(da, a, arrivo) {
+    const v = voli[cursore]; cursore = (cursore + 1) % POOL;
+    const d = da.group.position.distanceTo(a.group.position);
+    Object.assign(v, { t: 0, dur: Math.max(0.12, d/42000), da, a, arrivo });
+    v.g.visible = true;
+  }
+  function update(dt) {
+    for (const v of voli) {
+      if (!v.g.visible) continue;
+      v.t += dt / v.dur;
+      if (v.t >= 1) {
+        v.g.visible = false;
+        const q = v.a.group.position;
+        hitSpark.burst(q.x, q.y + HORSE_HEIGHT*0.9, q.z, 0xffe2a8, 9, 900);
+        if (v.arrivo) v.arrivo();
+        continue;
+      }
+      A.copy(v.da.group.position); A.y += HORSE_HEIGHT*1.05;
+      B.copy(v.a.group.position);  B.y += HORSE_HEIGHT*0.85;
+      P.lerpVectors(A, B, v.t); P.y += Math.sin(Math.PI*v.t) * 260;   // parabola lieve
+      v.g.position.copy(P);
+      B.sub(A); B.y += Math.cos(Math.PI*v.t) * 260 * Math.PI;         // tangente della parabola
+      v.g.lookAt(P.x + B.x, P.y + B.y, P.z + B.z);
+    }
+  }
+  return { scocca, update };
+})();
+
+//=========================================================================
 // PARTY MODE a tempo — TAP TEMPO che fa rimbalzare alberi e luce in modo comico
 //=========================================================================
 const party = (() => {
@@ -2738,7 +3037,7 @@ function eventFor(i) {
 }
 function respawnRivals(i) {
   opponents.forEach((o, k) => {
-    o.state = 'race'; o.hp0 = 100 + i*18; o.health = o.hp0;
+    o.state = 'race'; o.hp0 = 100 + i*18; o.health = o.hp0; o.actor.rimettiInPiedi();
     o.spd0 = MAX_SPEED * (o.skill + Math.min(0.22, i*0.025));
     o.speed = o.spd0; o.atkCd = 1 + k*0.4; o.laneCd = Math.random()*2; o.flash = 0;
     // accanto al giocatore, dovunque parta la tappa: con la partenza fissa a 0
@@ -2873,6 +3172,7 @@ function begin() {                          // primo avvio, a caricamento finito
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
+  fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
@@ -2898,16 +3198,25 @@ function interpWrap(prev, cur, alpha) {
   return prev + d * alpha;                            // posToWorld applica il modulo
 }
 
+// FERMO-IMMAGINE sui colpi a segno: per qualche centesimo di secondo il tempo di
+// gioco quasi si ferma. È il trucco più economico per dare PESO a un colpo; la
+// camera e l'overlay dello show restano in tempo reale.
+let hitStop = 0;
+function fermaImmagine(sec) { hitStop = Math.max(hitStop, sec); }
+
 function frame(now) {
   requestAnimationFrame(frame);
   let frameDt = (now - last)/1000;
   last = now;
   if (frameDt > 0.25) frameDt = 0.25;                // dopo un tab in background non rincorrere
+  // tempo di GIOCO: rallentato al 6% durante il fermo-immagine
+  let dtG = frameDt;
+  if (hitStop > 0) { hitStop -= frameDt; dtG = frameDt * 0.06; }
 
   // avanza la fisica a passi fissi; accumula il tempo reale trascorso
   // (la simulazione gira solo durante l'evento: briefing/shop/game-over la congelano)
   if (game.state === 'racing') {
-    acc += frameDt;
+    acc += dtG;
     while (acc >= FIXED_DT) {
       prevPosition = position;
       prevPlayerX  = playerX;
@@ -2928,7 +3237,10 @@ function frame(now) {
                prevPlayerX + (playerX - prevPlayerX) * alpha);
   // assetto del giocatore: punta dove va, si inclina verso l'interno, arcua il corpo
   {
-    const latRate     = (playerX - prevPlayerX) / FIXED_DT;            // unità playerX/sec
+    // limitata a una velocità che un cavallo può davvero avere: un salto di
+    // posizione (calcio, R, inizio tappa) altrimenti vale decine di unità/s e
+    // gira il corpo di 80° per un istante
+    const latRate     = limit((playerX - prevPlayerX) / FIXED_DT, -LAT_RATE_MAX, LAT_RATE_MAX);
     // angolo VERO della velocità rispetto all'asse pista: con STEER_K=1 il corpo ci
     // si allinea esattamente, quindi la deriva (corpo che non punta dove va) è nulla
     const steerTarget = Math.atan2(latRate * ROAD_WIDTH, Math.max(speed, 1)) * STEER_K;
@@ -2946,19 +3258,19 @@ function frame(now) {
     player.pitch    += (pitchTarget - player.pitch)    * kk;
     player.turn     += (turnTarget  - player.turn)     * kk;
   }
-  player.update(frameDt, sp);                         // animazioni avanzano col tempo reale
+  player.update(dtG, sp);                             // animazioni avanzano col tempo di gioco
   prevSpeed = speed;
   // polvere ai piedi del giocatore, un po' dietro lungo la direzione di marcia
   {
     const pp = player.group.position, ph = player.heading;
-    dust.update(frameDt, pp.x - Math.sin(ph)*300, pp.y, pp.z - Math.cos(ph)*300, sp, speed > 0);
+    dust.update(dtG, pp.x - Math.sin(ph)*300, pp.y, pp.z - Math.cos(ph)*300, sp, speed > 0);
   }
   if (!freeRoam) for (const o of opponents) {
     o.actor.place(interpWrap(o.prevPos ?? o.pos, o.pos, alpha), o.lat);
     // stesso assetto del giocatore: prima i rivali NON imbardavano affatto, quindi
     // cambiando corsia traslavano di lato restando puntati dritti (granchio)
     const oSp    = o.speed/MAX_SPEED;
-    const oLat   = (o.lat - (o.prevLat ?? o.lat)) / FIXED_DT;
+    const oLat   = limit((o.lat - (o.prevLat ?? o.lat)) / FIXED_DT, -LAT_RATE_MAX, LAT_RATE_MAX);
     const oSteer = Math.atan2(oLat * ROAD_WIDTH, Math.max(o.speed, 1)) * STEER_K;
     const oRoad  = curveAt(o.pos) * oSp;
     const ob     = limit(oRoad*BANK_K + oSteer*BANK_STEER_K, -BANK_MAX, BANK_MAX);
@@ -2966,10 +3278,12 @@ function frame(now) {
     o.actor.bank     += (ob     - o.actor.bank)     * kk;
     o.actor.steerYaw += (oSteer - o.actor.steerYaw) * kkYaw;
     o.actor.turn     += (oTurn  - o.actor.turn)     * kk;
-    o.actor.update(frameDt, oSp);
+    o.actor.update(dtG, oSp);
   }
   updatePickups(frameDt);                // casse-arma: rotazione, bob, raccolta
-  hitSpark.update(frameDt);              // scintille d'impatto sui colpi
+  hitSpark.update(dtG);                  // scintille d'impatto sui colpi
+  fendenti.update(dtG);                  // scie dei colpi, onde del calcio, anelli di parata
+  frecce.update(dtG);                    // frecce in volo (il danno arriva all'arrivo)
   party.update(frameDt);                 // party mode: alberi e luce a tempo
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
 

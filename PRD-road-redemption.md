@@ -601,6 +601,66 @@ precedente (misurato: stesso identico 60). Per il margine vero serve `--disable-
 --disable-frame-rate-limit` e aspettare `domcontentloaded` (con frame illimitati `networkidle2`
 non arriva mai): **547 fps prima, 541 dopo**, differenza dell'1% dentro il rumore.
 
+## 9.14 Animazioni degli attacchi (2026-09-23)
+
+Prima un attacco era uno scatto laterale del gruppo che andava e tornava (seno), uguale per
+chi colpisce e per chi incassa: leggeva come un cavallo che scivola, non come un colpo. E il
+takedown non aveva animazione: il rivale rallentava e scivolava di lato per 3.5 s.
+
+**Chi colpisce** — tre fasi (`curvaColpo`, 0.36 s): *preparazione* (si carica dal lato
+opposto), *colpo secco* (accelera verso il bersaglio), *recupero* morbido. La curva guida
+rollio, imbardata, beccheggio, spinta laterale e — tramite le ossa di collo e testa, con la
+stessa convenzione di `turn` — uno scatto della testa verso il bersaglio. Il calcio è una
+**sgroppata** (beccheggio: prima si impenna, poi muso giù).
+
+**Chi incassa** — impulso e oscillazione smorzata (`curvaReazione`, 0.5 s): spinta laterale,
+rollio e testa che frusta nella direzione del colpo. La mazza colpisce più forte (×1.4).
+
+**Abbattuto = cade.** Il gruppo rolla di ~81° attorno all'asse di marcia, con perno nel punto
+d'appoggio: finisce disteso sul fianco accanto a dove correva. L'angolo è una molla
+sotto-smorzata (ζ≈0.58), così quando tocca terra rimbalza; sotto-passi da 1/120 s perché con
+un frame lungo la molla esplodeva. Da disteso le zampe smettono di galoppare, l'ombra-blob si
+spegne; 0.7 s prima di rientrare si rialza.
+
+**Effetti per arma** (`fendenti`): uno shader disegna un arco di corona in cui la lama percorre
+l'arco nel primo 45% della durata e poi l'arco intero sfuma. Pugni, frusta (lunga e sottile,
+con schiocco di scintille in punta), mazza (corta e spessa), sciabola (ampia, azzurra). Ogni
+rivale ha un'arma "di firma" solo estetica, così i suoi colpi si riconoscono. Onda di polvere
+a terra sul calcio, anello azzurro sulla parata.
+
+**Frecce vere** (`frecce`): prima il danno arrivava all'istante e il bersaglio reagiva prima che
+qualcosa fosse partito. Ora la freccia vola (tempo ∝ distanza, lieve parabola) interpolando fra
+le posizioni CORRENTI dei due cavalli, e colpo, scintille e popup scattano all'arrivo.
+
+**Fermo-immagine** (`fermaImmagine`): sui colpi a segno il tempo di gioco scende al 6% per
+30–100 ms secondo l'arma (takedown 100 ms). La camera e l'overlay dello show restano in tempo
+reale. Misurato: a 200 km/h, in 100 ms si fanno 1200 unità normalmente e 100 durante il fermo.
+
+**Tre cose emerse verificando, non a occhio:**
+- *Scie additive invisibili sul cielo.* Sommare luce a un cielo già chiaro non si vede quasi:
+  fusione NORMALE con anima bianca oltre 1 (il bloom la fa brillare comunque), più spesse e più
+  basse, così passano davanti ai corpi. E con una coda corta si vedeva solo una striscia: ora la
+  lama traccia tutto l'arco e poi sfuma l'arco intero.
+- *Il calcio girava il rivale di 83°.* `best.lat += 0.35` in un colpo solo valeva una velocità
+  laterale apparente di 42/s (un cavallo ne fa al massimo 2.4), che l'imbardata traduceva in 83°
+  per un istante. Due correzioni: `LAT_RATE_MAX = 2.5` limita la velocità laterale che guida
+  l'imbardata (protegge da qualunque salto: calcio, R, inizio tappa), e la spinta del calcio si
+  applica in ~0.15 s (`spintaLat`). La regola di gioco è identica: "oltre il bordo = abbattuto"
+  guarda dove la spinta porterà il rivale. Ora a 194 km/h lo scarto è 23°.
+- *I versi, verificati a schermo* (lezione dell'imbardata invertita): la preparazione carica a
+  sinistra (-16 px) e il colpo va a destra (+61 px); la scia compare dal lato del bersaglio; il
+  rivale cade verso l'esterno, dove poi scivola.
+
+**Verifiche** (`attacchi.js`, `calcio.js`, `fermo.js`, primi piani a scena ferma): 9/9 controlli
+d'animazione in spazio schermo; calcio in mezzo alla strada = spinto ma in gara, vicino al bordo
+= abbattuto; il pilota automatico vince ancora una tappa a metà viaggio con vita mai sotto 100;
+~500 fps senza vsync.
+
+**Nota per i test**: spostare `o.lat` di colpo richiede anche `o.prevLat`, altrimenti anche nel
+test l'imbardata legge un salto (è lo stesso difetto del calcio). E la deriva centrifuga sui
+tornanti HARD a piena velocità supera lo sterzo (già noto dal 2D): tenendo premuto destra si
+può comunque finire a sinistra.
+
 ### Cosa resta del 2D da portare
 ~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
 ~~`localStorage persistence`~~ (§9.10) · `level system` (livelli tematici + sprite per livello) ·
