@@ -563,6 +563,44 @@ portato a 24 per restare multiplo del passo.
 3.5M triangoli, **120 fps** in 6 punti sparsi, caricamento 1.5s; pilota automatico ancora
 vince l'evento; proiezione, matrice e persistenza invariate.
 
+## 9.13 Il viaggio: il tracciato diventa una traversata a tappe (2026-09-23)
+
+Richiesta: «sistemiamo la lunghezza del tracciato 3D e consolidiamolo».
+
+**Il problema vero della lunghezza.** `startEvent()` rimetteva `position = 0` a ogni evento,
+e gli eventi erano lunghi 380k–1.2M unità su un tracciato di 10.4M. Il giocatore rivedeva
+quindi sempre lo stesso primo 4–10% di strada: il 90% del tracciato costruito in §9.12 non lo
+vedeva mai nessuno. E alla fine fisica la posizione si riavvolgeva a zero con un teletrasporto.
+
+**Correzione — 12 tappe fino a Karakorum.** Un evento è una tappa, e ogni tappa parte **dove
+finisce la precedente**: la corsa completa attraversa tutto il tracciato. Le tappe crescono
+del 15% l'una (da 2.2 a 5.8 km, 48 km in tutto) e hanno i nomi di una vera traversata della
+Mongolia da est a ovest: Kherlen, guado dell'Onon, Burkhan Khaldun, piana del Tuul, colline di
+Khustai, dune di Elsen Tasarkhai, valle dell'Orkhon, cascate di Ulaan Tsutgalan, monti Khangai,
+rovine di Khar Balgas, Erdene Zuu, **Karakorum**. Dopo l'ultima tappa: schermata d'arrivo e
++10 XP. La fine del viaggio (`FINE_VIAGGIO`) sta 30 segmenti prima della fine fisica, così il
+traguardo scatta **prima** del riavvolgimento e non nello stesso passo di fisica.
+
+Due conseguenze corrette: i rivali ora ripartono **accanto al giocatore** (con la partenza
+fissa a 0 sarebbero rimasti milioni di unità indietro), e l'HUD al posto di "Giro/Ultimo" (un
+giro dura 15 minuti, non aveva senso) mostra tappa, barra del viaggio e km a Karakorum —
+`UNITA_KM` è coerente col tachimetro (1 unità = 4.63 mm).
+
+**Portali di tappa.** L'inizio di ogni tappa si vede sulla strada: un arco con lo striscione
+del nome (canvas-texture), bandiere di preghiera nei cinque colori, e un *ovoo* (il cumulo di
+pietre sacro dei passi mongoli) alla base di ogni palo. L'arrivo a Karakorum è dorato. Pali a
+lat ±2.5, appena fuori dalla banchina calpestabile (±2.4): il cavallo non li attraversa mai.
+
+**Verifiche** (`viaggio.js`, `regressione.js`): tappe 1→4 partono a 48.2 / 46.0 / 43.5 / 40.6 km
+da Karakorum, cioè ognuna dove finiva la precedente; rivali tutti accanto al giocatore a ogni
+partenza; tappe che si allungano; arrivo a Karakorum dopo la 12ª. Il pilota automatico vince
+una tappa **a metà viaggio** (tappa 5): vita mai sotto 100, 0 uscite di strada, 193 km/h.
+
+**Nota sulle misure di fps:** Chrome headless ora limita a **60 fps** anche la versione
+precedente (misurato: stesso identico 60). Per il margine vero serve `--disable-gpu-vsync
+--disable-frame-rate-limit` e aspettare `domcontentloaded` (con frame illimitati `networkidle2`
+non arriva mai): **547 fps prima, 541 dopo**, differenza dell'1% dentro il rumore.
+
 ### Cosa resta del 2D da portare
 ~~`gamepad`~~ · ~~`pilota automatico`~~ (§9.9) · `audio reactivity` · `pause menu` ·
 ~~`localStorage persistence`~~ (§9.10) · `level system` (livelli tematici + sprite per livello) ·

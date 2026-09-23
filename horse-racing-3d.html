@@ -41,6 +41,10 @@
            backdrop-filter:blur(3px); pointer-events:none; }
   #hud-left   { top:8px; left:8px; line-height:1.45; }
   #hud-left b { font-size:19px; }
+  #viaggio { width:170px; height:5px; background:rgba(255,255,255,.18); border-radius:3px;
+             margin:4px 0 2px; overflow:hidden; }
+  #viaggio-fill { height:100%; width:0; background:linear-gradient(90deg,#38a169,#ffd166); }
+  #viaggio-km { font-size:11px; opacity:.8; }
   #hud-combat { top:8px; left:50%; transform:translateX(-50%); min-width:230px; text-align:center; }
   #hud-help   { bottom:8px; left:50%; transform:translateX(-50%); font-size:10.5px; white-space:nowrap; }
   .cbar { display:flex; align-items:center; gap:6px; margin:2px 0; }
@@ -117,7 +121,9 @@
 
       <div id="hud-left" class="panel">
         <b><span id="speed">0</span></b> km/h<br>
-        Giro: <span id="laptime">0.0</span>s &nbsp; Ultimo: <span id="lastlap">—</span>
+        <span id="tappa-nome">Tappa 1 · Fiume Kherlen</span>
+        <div id="viaggio"><div id="viaggio-fill"></div></div>
+        <span id="viaggio-km"></span>
       </div>
 
       <div id="hud-combat" class="panel">
@@ -375,6 +381,52 @@ const SEME = 12345;
 
 const N = segments.length;
 const TRACK_LENGTH = N * SEGMENT_LENGTH;
+
+//=========================================================================
+// IL VIAGGIO — il tracciato è una traversata a tappe fino a Karakorum.
+//
+// Prima ogni evento ripartiva da position=0: gli eventi erano lunghi da 380k
+// a 1.2M unità su un tracciato di 10.4M, quindi il giocatore rivedeva sempre
+// lo stesso primo 4-10% di strada e il resto non lo vedeva mai nessuno. Ora
+// ogni tappa parte dove finisce la precedente: la corsa completa attraversa
+// TUTTO il tracciato, e la lunghezza smette di essere un numero e diventa il
+// viaggio. Le tappe crescono di lunghezza (+15% l'una): all'inizio si scalda
+// la mano, verso Karakorum si corre di più.
+//=========================================================================
+const TAPPE = [
+  { nome: 'Fiume Kherlen',            motto: "All'alba, dalle rive del Kherlen: comincia il viaggio." },
+  { nome: "Guado dell'Onon",          motto: 'Il fiume dove nacque Temüjin. I predoni aspettano al guado.' },
+  { nome: 'Burkhan Khaldun',          motto: 'La montagna sacra: salite ripide e aria sottile.' },
+  { nome: 'Piana del Tuul',           motto: "Erba fino all'orizzonte: qui si corre a briglia sciolta." },
+  { nome: 'Colline di Khustai',       motto: 'Le colline dei cavalli selvaggi. Occhio alle curve.' },
+  { nome: 'Dune di Elsen Tasarkhai',  motto: 'Un mare di sabbia in mezzo alla steppa.' },
+  { nome: "Valle dell'Orkhon",        motto: 'La valle degli imperi. I rivali si fanno cattivi.' },
+  { nome: 'Cascate di Ulaan Tsutgalan', motto: 'Il fiume rosso precipita nella gola.' },
+  { nome: 'Monti Khangai',            motto: 'Tornanti fra i larici, e nessuno che ti aspetti.' },
+  { nome: 'Rovine di Khar Balgas',    motto: 'Le mura della vecchia capitale uigura.' },
+  { nome: 'Erdene Zuu',               motto: 'Le 108 stupa del monastero: la capitale è vicina.' },
+  { nome: 'Karakorum',                motto: "La capitale dell'impero. Arrivaci vivo." },
+];
+// Si arriva un po' PRIMA della fine fisica del tracciato, dove la posizione
+// si riavvolge a zero: il traguardo deve scattare prima del riavvolgimento,
+// non nello stesso passo di fisica.
+const FINE_VIAGGIO = TRACK_LENGTH - 30*SEGMENT_LENGTH;
+const tappaInizio = (() => {
+  const pesi = TAPPE.map((_, i) => 1 + 0.15*i);
+  const tot = pesi.reduce((a, b) => a + b, 0);
+  const out = [];
+  let acc = 0;
+  for (const w of pesi) { out.push(Math.round(FINE_VIAGGIO * acc/tot)); acc += w; }
+  out.push(FINE_VIAGGIO);
+  return out;
+})();
+// in che tappa si trova una posizione lungo pista
+function tappaDi(pos) {
+  for (let k = TAPPE.length - 1; k >= 0; k--) if (pos >= tappaInizio[k]) return k;
+  return 0;
+}
+// 1 unità = 4.63 mm, coerente col tachimetro (MAX_SPEED 12000 unità/s = 200 km/h)
+const UNITA_KM = 200/3.6/12000/1000;
 
 //=========================================================================
 // CENTERLINE 3D — qui le curve diventano VERE: integriamo "curve" in un
@@ -1047,6 +1099,85 @@ const trees = (() => {
   });
   scene.add(posts);
 }
+
+//=========================================================================
+// PORTALI DI TAPPA — l'inizio di ogni tappa si vede SULLA STRADA, non solo
+// nell'HUD: un arco con lo striscione del nome, le bandiere di preghiera nei
+// cinque colori delle steppe e un ovoo (il cumulo di pietre sacro che si trova
+// sui passi mongoli) alla base di ogni palo. L'arrivo a Karakorum è dorato.
+// I pali stanno a lat ±2.5, appena fuori dalla banchina calpestabile (±2.4):
+// il cavallo non ci passa mai attraverso.
+//=========================================================================
+const portali = (() => {
+  const dove = tappaInizio.map((pos, k) => ({ pos, k, arrivo: k === TAPPE.length }));
+  const LAT = 2.5, ALTO = 2700, n = dove.length;
+  const P = new THREE.Vector3(), Q = new THREE.Vector3();
+  const M = new THREE.Matrix4(), rot = new THREE.Quaternion(), S = new THREE.Vector3(1,1,1);
+  const su = new THREE.Vector3(0,1,0);
+
+  const pali   = new THREE.InstancedMesh(new THREE.CylinderGeometry(55, 70, 1, 7),
+                   new THREE.MeshStandardMaterial({ color:0x6b4a2b, roughness:0.9 }), n*2);
+  const ovoo   = new THREE.InstancedMesh(new THREE.ConeGeometry(430, 560, 8),
+                   new THREE.MeshStandardMaterial({ color:0x8d8a80, roughness:1, flatShading:true }), n*2);
+  const trave  = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 90, 90),
+                   new THREE.MeshStandardMaterial({ color:0x5a3d22, roughness:0.9 }), n);
+  const NFL = 14;                                        // bandiere per portale
+  const flag   = new THREE.InstancedMesh(new THREE.PlaneGeometry(260, 360),
+                   new THREE.MeshStandardMaterial({ color:0xffffff, side:THREE.DoubleSide, roughness:0.8 }), n*NFL);
+  const COLORI = [0x1f5fd1, 0xffffff, 0xd0312d, 0x2e9e4f, 0xf2c230].map(c => new THREE.Color(c));
+  for (const m of [pali, ovoo, trave]) { m.castShadow = true; m.receiveShadow = true; }
+  flag.castShadow = true;
+
+  const striscioni = [];
+  dove.forEach((d, i) => {
+    posToWorld(d.pos, 0, P, Q);                          // Q.heading = direzione della pista qui
+    const h = Q.heading, rx = -Math.cos(h), rz = Math.sin(h);
+    const yStrada = P.y, span = LAT*ROAD_WIDTH*2;
+    for (const lato of [-1, 1]) {                        // pali e ovoo
+      const x = P.x + rx*lato*LAT*ROAD_WIDTH, z = P.z + rz*lato*LAT*ROAD_WIDTH;
+      const yBase = Math.min(yStrada, groundAt(x, z)) - 80;
+      const alto = yStrada + ALTO - yBase;
+      M.compose(Q.set(x, yBase + alto/2, z), rot.identity(), S.set(1, alto, 1));
+      pali.setMatrixAt(i*2 + (lato > 0 ? 1 : 0), M);
+      M.compose(Q.set(x, yBase + 250, z), rot.setFromAxisAngle(su, i*1.7 + lato), S.set(1, 1, 1));
+      ovoo.setMatrixAt(i*2 + (lato > 0 ? 1 : 0), M);
+    }
+    rot.setFromAxisAngle(su, h);                         // trave di traverso alla pista
+    M.compose(Q.set(P.x, yStrada + ALTO - 60, P.z), rot, S.set(span, 1, 1));
+    trave.setMatrixAt(i, M);
+    for (let f = 0; f < NFL; f++) {                      // bandiere appese alla trave
+      const t = (f + 0.5)/NFL - 0.5, off = t * span * 0.94;
+      M.compose(Q.set(P.x + rx*off, yStrada + ALTO - 260, P.z + rz*off), rot, S.set(1, 1, 1));
+      flag.setMatrixAt(i*NFL + f, M);
+      flag.setColorAt(i*NFL + f, COLORI[f % COLORI.length]);
+    }
+    // striscione col nome: guarda chi ARRIVA, quindi la sua faccia punta all'indietro
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 160;
+    const g = cv.getContext('2d');
+    g.fillStyle = d.arrivo ? '#b8860b' : '#123a8c'; g.fillRect(0, 0, 1024, 160);
+    g.strokeStyle = d.arrivo ? '#fff3b0' : '#ffd166'; g.lineWidth = 10; g.strokeRect(8, 8, 1008, 144);
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '900 30px Impact, "Arial Black", sans-serif';
+    g.fillText(d.arrivo ? 'ARRIVO' : (d.k === 0 ? 'PARTENZA' : 'TAPPA ' + (d.k + 1)), 512, 40);
+    let fs = 78; g.font = `900 ${fs}px Impact, "Arial Black", sans-serif`;
+    const testo = (d.arrivo ? 'KARAKORUM' : TAPPE[d.k].nome).toUpperCase();
+    while (g.measureText(testo).width > 960 && fs > 30) { fs -= 4; g.font = `900 ${fs}px Impact, "Arial Black", sans-serif`; }
+    g.fillText(testo, 512, 104);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = maxAniso;
+    const w = span*0.62;
+    const st = new THREE.Mesh(new THREE.PlaneGeometry(w, w*160/1024),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7,
+        emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.35 }));
+    st.position.set(P.x, yStrada + ALTO - 520, P.z);
+    st.rotation.y = h + Math.PI;
+    st.castShadow = true;
+    scene.add(st);
+    striscioni.push(st);
+  });
+  for (const m of [pali, ovoo, trave, flag]) scene.add(m);
+  return { striscioni, n };
+})();
 
 //=========================================================================
 // CAVALLI — Opzione A (sprite billboard) vs Opzione B (modello 3D animato)
@@ -2595,20 +2726,24 @@ function applyUpgrades() {
 function eventFor(i) {
   const cyc = ['race', 'takedown', 'survival', 'time'];
   const type = i === 0 ? 'race' : cyc[i % cyc.length];
-  // dist scalata sul giro reale (TRACK_LENGTH ~1.34M unità): l'evento 0 dura ~30-35s reali,
-  // non i ~7s che si ottenevano coi vecchi placeholder (45000 = solo il 3% del giro)
-  const dist = 380000 + i*70000, need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
+  // un evento = una tappa del viaggio: parte dove finisce la precedente
+  const k = Math.min(i, TAPPE.length - 1);
+  const inizio = tappaInizio[k], dist = tappaInizio[k+1] - inizio;
+  const need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
   const title = { race:'🏁 GARA', takedown:'⚔️ RAZZIA', survival:'🛡️ SOPRAVVIVENZA', time:'⏱️ CONTRO IL TEMPO' }[type];
   const desc = { race:'Taglia il traguardo davanti a tutti.', takedown:'Abbatti '+need+' rivali prima del traguardo.',
                  survival:'Arriva vivo al traguardo: i rivali sono più aggressivi.', time:'Raggiungi il traguardo prima che scada il tempo.' }[type];
-  return { type, dist, need, time, title, desc };
+  return { type, dist, need, time, title, desc, inizio, indice: k, tappa: TAPPE[k],
+           ultima: k === TAPPE.length - 1 };
 }
 function respawnRivals(i) {
   opponents.forEach((o, k) => {
     o.state = 'race'; o.hp0 = 100 + i*18; o.health = o.hp0;
     o.spd0 = MAX_SPEED * (o.skill + Math.min(0.22, i*0.025));
     o.speed = o.spd0; o.atkCd = 1 + k*0.4; o.laneCd = Math.random()*2; o.flash = 0;
-    o.pos = ((800 + k*650) % TRACK_LENGTH + TRACK_LENGTH) % TRACK_LENGTH;
+    // accanto al giocatore, dovunque parta la tappa: con la partenza fissa a 0
+    // un rivale sarebbe rimasto milioni di unità indietro
+    o.pos = (((position + 800 + k*650) % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
     o.lat = o.targetLat = (k % 2 ? 0.45 : -0.45);
   });
 }
@@ -2616,7 +2751,7 @@ function startEvent() {
   const ev = eventFor(game.eventIndex);
   Object.assign(game, { type: ev.type, target: ev.dist, need: ev.need, time: ev.time, timeLeft: ev.time,
                         dist: 0, killsThisEvent: 0, state: 'racing' });
-  position = prevPosition = 0; playerX = prevPlayerX = 0; speed = 0; started = true;
+  position = prevPosition = ev.inizio; playerX = prevPlayerX = 0; speed = 0; started = true;
   respawnRivals(game.eventIndex); hideScreen();
 }
 function objectiveText() {
@@ -2644,13 +2779,24 @@ function checkGame() {
 function winEvent() {
   game.state = 'won';
   money += 30 + game.eventIndex*10; game.xp += 3 + game.eventIndex;
+  if (eventFor(game.eventIndex).ultima) return renderArrivo();
   renderShop();
+}
+function renderArrivo() {
+  game.xp += 10;                                    // il viaggio completo vale un bonus
+  showScreen(`
+    <h1>🏯 KARAKORUM</h1>
+    <h2>Viaggio compiuto: ${TAPPE.length} tappe, ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} km di steppa</h2>
+    <p>Punteggio <b>${score}</b> &nbsp; Takedown <b>${kills}</b> &nbsp; 💰 $<b>${money}</b></p>
+    <p>⭐ <b>${game.xp}</b> XP (+10 per l'arrivo) — restano per il prossimo viaggio</p>
+    <button class="big" id="b-restart">🐎 NUOVO VIAGGIO</button>`);
+  D('b-restart').onclick = () => resetRun();
 }
 function renderShop() {
   const nx = eventFor(game.eventIndex + 1);
   showScreen(`
-    <h1>✅ VITTORIA</h1>
-    <h2>Evento ${game.eventIndex + 1} superato · punteggio ${score}</h2>
+    <h1>✅ ${eventFor(game.eventIndex).tappa.nome.toUpperCase()}</h1>
+    <h2>Tappa ${game.eventIndex + 1} di ${TAPPE.length} superata · punteggio ${score}</h2>
     <p>💰 $<b>${money}</b> &nbsp; ⭐ <b>${game.xp}</b> XP &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH}</p>
     <div class="shopgrid">
       <button id="b-heal">❤️ Cura +60 · $40</button>
@@ -2660,7 +2806,7 @@ function renderShop() {
       <button id="b-hp">❤️ +Salute max · 3⭐</button>
       <button id="b-nt">⚡ +Nitro max · 2⭐</button>
     </div>
-    <p style="opacity:.75">Prossimo: <b>${nx.title}</b> — ${nx.desc}</p>
+    <p style="opacity:.75">Prossima tappa: <b>${nx.tappa.nome}</b> · ${nx.title} — ${nx.desc}</p>
     <button class="big" id="b-next">VIA! →</button>`);
   D('b-heal').disabled  = money < 40 || pHealth >= MAX_HEALTH;
   D('b-nitro').disabled = money < 25 || nitro >= MAX_NITRO;
@@ -2679,11 +2825,13 @@ function renderShop() {
 function loseEvent(reason) {
   game.state = 'dead';
   showScreen(`
-    <h1>💀 FINE CORSA</h1>
+    <h1>💀 VIAGGIO INTERROTTO</h1>
     <h2>${reason}</h2>
-    <p>Eventi superati: <b>${game.eventIndex}</b> &nbsp; Punteggio: <b>${score}</b> &nbsp; Takedown totali: <b>${kills}</b></p>
+    <p>Caduto a <b>${eventFor(game.eventIndex).tappa.nome}</b> — tappa ${game.eventIndex + 1} di ${TAPPE.length},
+       ${Math.round(100*position/FINE_VIAGGIO)}% della strada per Karakorum</p>
+    <p>Punteggio: <b>${score}</b> &nbsp; Takedown totali: <b>${kills}</b></p>
     <p>⭐ XP accumulato: <b>${game.xp}</b> — resta per la prossima corsa (upgrade permanenti)</p>
-    <button class="big amber" id="b-restart">🔄 NUOVA CORSA</button>`);
+    <button class="big amber" id="b-restart">🔄 NUOVO VIAGGIO</button>`);
   D('b-restart').onclick = () => resetRun();
 }
 function resetRun() {
@@ -2710,9 +2858,11 @@ function showBriefing() {
   game.state = 'briefing';
   const ev = eventFor(game.eventIndex);
   showScreen(`
-    <h1>${ev.title}</h1>
-    <h2>${ev.desc}</h2>
-    <p>Evento ${game.eventIndex + 1} &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; ⭐ ${game.xp} XP</p>
+    <p style="letter-spacing:.14em;opacity:.7;margin:0">TAPPA ${ev.indice + 1} DI ${TAPPE.length}</p>
+    <h1>${ev.tappa.nome}</h1>
+    <p style="font-style:italic;opacity:.8">${ev.tappa.motto}</p>
+    <h2>${ev.title} — ${ev.desc}</h2>
+    <p>${(ev.dist*UNITA_KM).toFixed(1)} km &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; ⭐ ${game.xp} XP</p>
     <p style="opacity:.7"><b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost · raccogli le casse-arma 📦</p>
     <button class="big" id="b-go">VIA! →</button>`);
   D('b-go').onclick = () => startEvent();
@@ -2723,7 +2873,7 @@ function begin() {                          // primo avvio, a caricamento finito
 window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
-  segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE,
+  segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
   get kills(){return kills}, get score(){return score}, get money(){return money},
@@ -2842,8 +2992,12 @@ function frame(now) {
   proiezione.disegna();                  // ricompone le tre tele sul secondo schermo
 
   $('speed').textContent   = Math.round(speed/60);
-  $('laptime').textContent = currentLapTime.toFixed(1);
-  $('lastlap').textContent = lastLapTime ? lastLapTime.toFixed(1)+'s' : '—';
+  {
+    const k = tappaDi(position), frac = Math.min(1, position/FINE_VIAGGIO);
+    $('tappa-nome').textContent = `Tappa ${k+1}/${TAPPE.length} · ${TAPPE[k].nome}`;
+    $('viaggio-fill').style.width = (frac*100).toFixed(1) + '%';
+    $('viaggio-km').textContent = `${Math.max(0, (FINE_VIAGGIO - position)*UNITA_KM).toFixed(1)} km a Karakorum`;
+  }
 }
 
 const isFile = location.protocol === 'file:';
