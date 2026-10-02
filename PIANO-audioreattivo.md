@@ -410,3 +410,31 @@ Lezioni pagate (sono anche nei commenti del codice):
 
 **Da provare a mano** (non si può da headless): bus IAC con Ableton (Sync attivo) e
 BlackHole come ingresso vero; calibrare l'anticipo visivo con un click in sala.
+
+### 2 ottobre 2026 — Fase 2 fatta: SMARMELLA
+`3d/smarmella.js` (passaggio di post) e `3d/centralina.js` (manopola, livelli, auto-regia,
+limitatore); card «🌀 Smarmella» in console, tasti **0–4**.
+- **Due mezzi passaggi** dopo l'OutputPass: STATO (barile, caleidoscopio, glitch, aberrazione,
+  zoom radiale + FEEDBACK del frame prima) e FINITURA (bruciato, viraggio, saturazione,
+  **tinta** con la palette dello show, posterizza, pixel, scanline, grana, vignetta, lampo).
+  La finitura sta fuori dal giro di feedback, se no vignetta e viraggio si sommano all'infinito.
+- **Cinque livelli** (Diretta · Groove · Festa · Rave · APRI TUTTO) mescolati dalla manopola.
+  Sorgenti in più: `giro` (0→1 su 8 battute), `onda`, `dopoDrop` (2 battute piene + 2 di
+  sfumatura), `frase1` (prima battuta di ogni frase), `scoppio` (lampo secco del drop).
+- **Auto-regia**: pausa → 25 %, salita → rampa 50→75 %, drop → 100 % di colpo per 8 battute,
+  poi 75 %. Sul pezzo di prova segue la struttura senza nessuno alla console.
+- **Luce = di serie × party × centralina**: prima il party sovrascriveva sole/bloom/esposizione.
+- **Limitatore** (acceso di default): ≤ 3 lampi al secondo contando insieme strobo, colpo di
+  luce del party, flash e bruciato; lampi entro 60 ms = uno solo. Un lampo negato scende al 10 %.
+- La scritta 3D non diventa più una barra bianca: il suo bagliore cala quando il bloom è aperto.
+
+Misure: SMARMELLA 0 = nessun valore diverso dal gioco di prima e passaggio spento (test
+`centralina`); 1080p senza vsync **317 fps a 0, 269 fps ad APRI TUTTO** (~0,5 ms/frame);
+limitatore: con rullante a 7,5 colpi/s e strobo a 3/s, massimo 3 lampi in ogni secondo.
+
+Lezioni:
+- **Il "più chiaro" canale per canale sbianca tutto**: fra copie virate di colore il massimo
+  per canale tende al grigio-bianco. Le scie scelgono per LUMINANZA.
+- **Un caleidoscopio a metà è solo sporco**: va pieno (dopo il drop, inizio frase) o niente.
+- **Il lampo del drop agganciato all'impulso `drop` (0,6 s) era mezzo secondo di bianco**:
+  serve un impulso secco (`drop⁴`).

@@ -101,6 +101,13 @@
   #mu-lettura { font-size:12px; color:var(--tenue); margin-top:6px; min-height:1.4em; }
   #mu-player { width:100%; margin:6px 0; display:none; }
   #perf { font-variant-numeric:tabular-nums; }
+  .sm-testa { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:2px; }
+  #sm-nome { font-size:22px; font-weight:900; letter-spacing:.02em; }
+  #sm-val { font-size:15px; }
+  #sm-macro { height:26px; }
+  .sm-livelli { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:8px 0; }
+  .sm-livelli button { padding:8px 4px; font-size:16px; font-weight:800; line-height:1.1; }
+  .sm-livelli button small { display:block; font-size:9.5px; font-weight:600; opacity:.85; white-space:nowrap; }
 </style>
 <!-- Three.js 0.160 VENDORATO in vendor/three (solo i file usati + le loro dipendenze):
      in location la rete non è garantita, e un CDN che non risponde vuol dire niente show.
@@ -212,6 +219,22 @@
       </div>
     </div>
 
+    <!-- ══ SMARMELLA ══ -->
+    <div class="card" id="card-smarmella">
+      <h2>🌀 Smarmella</h2>
+      <div class="sm-testa"><span id="sm-nome">Diretta</span><span class="val" id="sm-val">0%</span></div>
+      <input type="range" id="sm-macro" min="0" max="100" step="1" value="0">
+      <div class="sm-livelli">
+        <button data-liv="0">0<small>Diretta</small></button><button data-liv="1">1<small>Groove</small></button>
+        <button data-liv="2">2<small>Festa</small></button><button data-liv="3">3<small>Rave</small></button>
+        <button data-liv="4">4<small>APRI TUTTO</small></button>
+      </div>
+      <label class="spunta"><input type="checkbox" id="sm-auto"> 🤖 Auto-regia: segue pausa · salita · drop</label>
+      <label class="spunta"><input type="checkbox" id="sm-limita" checked> 🛡 Limita i lampi (≤ 3 al secondo)</label>
+      <div class="nota">Tasti <b>0–4</b>. A 0 il gioco è identico a prima. Il limitatore protegge chi soffre di
+        epilessia fotosensibile: col pubblico tienilo acceso.</div>
+    </div>
+
     <!-- ══ REGIA ══ -->
     <div class="card">
       <h2>🤖 Regia — mani libere</h2>
@@ -310,6 +333,8 @@ import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { creaMusica } from './3d/musica.js';
 import { collegaPannelloMusica } from './3d/pannello-musica.js';
+import { PassoSmarmella } from './3d/smarmella.js';
+import { creaCentralina } from './3d/centralina.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -603,6 +628,13 @@ composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.22, 0.3, 1.1);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
+// SMARMELLA: feedback + deformazioni + finitura, DOPO il tone mapping. Spento a 0:
+// la pipeline torna quella di sopra, pixel per pixel (vedi 3d/smarmella.js)
+const smarmella = new PassoSmarmella();
+composer.addPass(smarmella);
+// la luce "di serie": party e centralina la MOLTIPLICANO, non la sovrascrivono,
+// così due effetti insieme non si pestano e a riposo si torna esattamente qui
+const LUCE0 = { sole: sun.intensity, cielo: hemi.intensity, espo: renderer.toneMappingExposure, bloom: bloom.strength };
 
 //=========================================================================
 // VISTA — risoluzione LOGICA del gioco, condivisa da scena 3D e overlay 2D.
@@ -2242,7 +2274,8 @@ const preferenze = (() => {
   const CHIAVE = 'cm3d.console.v1';
   const CAMPI = ['live-flash','live-bonus','live-text','live-palette','live-cycle','live-3d','live-int',
                  'ap-on','proj-mode','proj-res','proj-hud',
-                 'side-on','side-text','side-speed','side-size','party-gain'];
+                 'side-on','side-text','side-speed','side-size','party-gain',
+                 'sm-macro','sm-auto','sm-limita'];
   let rinvio = null;
   function salva() {
     clearTimeout(rinvio);
@@ -2277,6 +2310,31 @@ const preferenze = (() => {
   return { carica, salva, dimentica() { try { localStorage.removeItem(CHIAVE); } catch {} } };
 })();
 
+// SMARMELLA — fader, livelli, auto-regia, limitatore
+function sceltaLivello(n) {
+  centralina.setAuto(false); $('sm-auto').checked = false;
+  centralina.livello(n);
+  $('sm-macro').value = Math.round(centralina.macro * 100);
+  preferenze.salva();
+}
+$('sm-macro').oninput = e => {
+  // solo un tocco VERO spegne l'auto-regia (il ripristino delle preferenze no)
+  if (e.isTrusted && centralina.auto) { centralina.setAuto(false); $('sm-auto').checked = false; }
+  centralina.setMacro(+e.target.value / 100);
+};
+$('sm-auto').onchange   = e => centralina.setAuto(e.target.checked);
+$('sm-limita').onchange = e => centralina.setLimita(e.target.checked);
+document.querySelectorAll('.sm-livelli button').forEach(b => b.onclick = () => sceltaLivello(+b.dataset.liv));
+let smT = 0;
+function pannelloSmarmella(now) {           // 10 volte al secondo: nome, percentuale, fader se guida l'auto-regia
+  if (now - smT < 100) return; smT = now;
+  $('sm-nome').textContent = centralina.nomeLivello();
+  $('sm-val').textContent = Math.round(centralina.liscia * 100) + '%';
+  if (centralina.auto) $('sm-macro').value = Math.round(centralina.macro * 100);
+  document.querySelectorAll('.sm-livelli button').forEach(b =>
+    b.classList.toggle('active', +b.dataset.liv === Math.round(centralina.liscia * 4)));
+}
+
 // SHOW LIVE — flash strobo + scritta lampeggiante (sincronizzati al tap tempo)
 $('live-flash').onchange   = e => live.setFlash(e.target.checked);
 $('live-bonus').onchange   = e => live.setBonus(e.target.checked);
@@ -2294,6 +2352,7 @@ addEventListener('keydown', e => {
   if (staScrivendo(e)) return;
   const k = e.key.toLowerCase();
   if (k === 'u') musica.uno();       // "questo è l'uno": rimette in fase battito e battuta
+  if (k.length === 1 && k >= '0' && k <= '4') sceltaLivello(+k);   // SMARMELLA: 0 Diretta … 4 APRI TUTTO
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 'c') cycleCamera();
   if (k === 't') party.tap();        // tap tempo
@@ -2621,6 +2680,7 @@ const frecce = (() => {
 //=========================================================================
 const musica = creaMusica();
 const pannelloMusica = collegaPannelloMusica(musica);
+const centralina = creaCentralina(musica);   // SMARMELLA 0…1: dalla musica ai parametri
 
 //=========================================================================
 // PARTY MODE a tempo — alberi e luce che rimbalzano in modo comico.
@@ -2628,15 +2688,16 @@ const pannelloMusica = collegaPannelloMusica(musica);
 // moduli di prima (live, text3d) e tiene la molla e l'interruttore (P).
 //=========================================================================
 const party = (() => {
-  const SUN_I = sun.intensity, HEMI_I = hemi.intensity, EXPO = renderer.toneMappingExposure, BLOOM = bloom.strength;
   let fxOn = false;
+  const luce = { sole: 1, cielo: 1, espo: 1, bloom: 1 };   // moltiplicatori: li applica applicaLuce()
   let s = 0, v = 0;                      // s,v = molla (offset elastico)
   let gain = 6;                          // intensità (1 = base; 6 ≈ +500%), regolata dallo slider
   const beatCbs = [];                    // callback eseguite ad ogni beat (flash/scritte live)
   const $i = document.getElementById('party-info');
   function setHud() { if ($i) $i.textContent = `🎉 ${musica.bpm.toFixed(1)} BPM · ${musica.fonte}${fxOn ? '' : ' · alberi off'}`; }
   // a ogni battito: notifica i sottoscrittori (flash/testo) e, se la distorsione è attiva, SCATTO a molla
-  musica.on('battito', () => { for (const f of beatCbs) f(); if (fxOn) { s = 1; v = 0; } });
+  // il colpo di luce del party è un lampo a tutto schermo: passa dal limitatore (se negato, solo un sussulto)
+  musica.on('battito', () => { for (const f of beatCbs) f(); if (fxOn) { s = centralina.chiediLampo(performance.now()) ? 1 : 0.25; v = 0; } });
   function tap() { musica.tap(); fxOn = true; setHud(); }
   function toggle() { fxOn = !fxOn; setHud(); }   // P: accende/spegne SOLO la distorsione alberi+luce
   let hudT = 0;
@@ -2644,22 +2705,33 @@ const party = (() => {
     if ((hudT += dt) > 0.25) { hudT = 0; setHud(); }
     const h = Math.min(dt, 0.033);       // molla sotto-critica che riporta lo scatto a 0 con rimbalzo
     v += (-55*s - 9*v) * h; s += v * h;
-    if (Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) return;          // a riposo: nessun lavoro extra
+    if (Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) {                 // a riposo: nessun lavoro extra
+      luce.sole = luce.cielo = luce.espo = luce.bloom = 1; return;
+    }
     // DISTORSIONE alberi: scala piena con l'intensità (effetto molto marcato)
     const ts = (s >= 0 ? s : s*0.45) * gain;   // sbilancia verso l'INGRANDIMENTO
     trees.pulse(Math.min(20, Math.max(0.12, 1 + ts*0.6)),
                 Math.min(20, Math.max(0.12, 1 + ts*1.1)));          // squash&stretch comico
     // LUCE: curva più dolce + tetti, così lampeggia forte senza sbiancare tutto
     const ls = (s >= 0 ? s : s*0.6) * gain;
-    sun.intensity  = SUN_I  * Math.min(3.2, Math.max(0.1, 1 + ls*0.18));
-    hemi.intensity = HEMI_I * Math.min(2.6, Math.max(0.1, 1 + ls*0.14));
-    renderer.toneMappingExposure = EXPO * Math.min(1.6, Math.max(0.45, 1 + ls*0.05));
-    bloom.strength = Math.min(2.0, BLOOM * (1 + Math.max(0, s*gain)*0.9));
+    luce.sole  = Math.min(3.2, Math.max(0.1, 1 + ls*0.18));
+    luce.cielo = Math.min(2.6, Math.max(0.1, 1 + ls*0.14));
+    luce.espo  = Math.min(1.6, Math.max(0.45, 1 + ls*0.05));
+    luce.bloom = 1 + Math.max(0, s*gain)*0.9;
   }
-  return { tap, toggle, update, setGain(g) { gain = g; },
+  return { tap, toggle, update, luce, setGain(g) { gain = g; },
            onBeat(fn) { beatCbs.push(fn); }, bpmNow: () => musica.bpm, periodNow: () => musica.periodo,
            isClock: () => true };
 })();
+
+// luce finale = di serie × party (molla sul battito) × centralina (SMARMELLA)
+function applicaLuce() {
+  const L = party.luce, v = centralina.v;
+  sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'];
+  hemi.intensity = LUCE0.cielo * L.cielo;
+  renderer.toneMappingExposure = LUCE0.espo * L.espo * v['luce.esposizione'];
+  bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
+}
 
 //=========================================================================
 // LIVE VISUALS — overlay 2D a tempo (portato dal gioco 2D usato nei live):
@@ -2740,7 +2812,7 @@ const live = (() => {
   // ad ogni beat: colpo di strobo + (se attivo) cambio colore + impulso glow 3D
   party.onBeat(() => {
     lastBeatMs = performance.now();
-    if (flashOn) flashUntil = lastBeatMs + 80;
+    if (flashOn && centralina.chiediLampo(lastBeatMs)) flashUntil = lastBeatMs + 80;   // ≤ 3 lampi al secondo
     if (bonusOn && cycle) { pal = randPal(); text3d.setPalette(pal); }
   });
 
@@ -2763,7 +2835,10 @@ const live = (() => {
 
       // --- MODALITÀ 3D: scritta estrusa in scena, glow neon pulsante col beat ---
       if (mode3d && text3d.isReady()) {
-        const glow = 1.2 + Math.exp(-(now - lastBeatMs)/110) * 2.8;   // impulso emissivo sul beat
+        // impulso emissivo sul beat, ma più il bloom è aperto più il bagliore si
+        // abbassa: al massimo della festa la scritta diventava una barra bianca illeggibile
+        const apertura = Math.max(1, bloom.strength / LUCE0.bloom);
+        const glow = Math.min(2.2, 1.0 + Math.exp(-(now - lastBeatMs)/110) * 1.8) / Math.sqrt(apertura);
         text3d.pose(scaleX, scaleY, glow);
         text3d.show(true);
         return;                                                       // niente disegno 2D
@@ -3242,7 +3317,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { musica, party, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { musica, party, centralina, smarmella, sceltaLivello, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3279,6 +3354,7 @@ function fermaImmagine(sec) { hitStop = Math.max(hitStop, sec); }
 
 // contatore in console: fps e ms di lavoro del frame (CPU, render compreso)
 const perf = { fps: 60, ms: 0, t: 0, el: document.getElementById('perf') };
+let fovLiscio = camera.fov;            // FOV di velocità, smussato; il pugno si somma sopra senza accumularsi
 function frame(now) {
   requestAnimationFrame(frame);
   const t0 = performance.now();
@@ -3362,12 +3438,19 @@ function frame(now) {
   frecce.update(dtG);                    // frecce in volo (il danno arriva all'arrivo)
   musica.aggiorna();                     // orecchie: orologio, colpi, bande, sezioni → eventi
   party.update(frameDt);                 // party mode: alberi e luce a tempo
+  centralina.aggiorna(frameDt, performance.now());   // SMARMELLA: musica → parametri
+  smarmella.accendi(centralina.attiva);
+  smarmella.imposta(centralina.post, now/1000);
+  smarmella.tinte(live.palette());       // la tinta del post segue la palette dello show
+  applicaLuce();
+  pannelloSmarmella(now);
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
 
   updateCamera(frameDt);
   // FOV dinamico: si allarga con la velocità → forte senso di velocità
   const fovTarget = 66 + (speed/MAX_SPEED) * 16;
-  camera.fov += (fovTarget - camera.fov) * (1 - Math.pow(0.02, frameDt));
+  fovLiscio += (fovTarget - fovLiscio) * (1 - Math.pow(0.02, frameDt));
+  camera.fov = fovLiscio + centralina.v['camera.fov'];   // + il pugno della cassa (0 a SMARMELLA 0)
   camera.updateProjectionMatrix();
   // scuotimento camera sui colpi/takedown
   if (shake > 0) { const s = shake*300; camera.position.x += (Math.random()-0.5)*s; camera.position.y += (Math.random()-0.5)*s; }
