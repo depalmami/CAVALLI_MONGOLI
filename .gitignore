@@ -51,3 +51,6 @@ images/poplar/_originali/
 
 # Cache di Python
 __pycache__/
+
+# Tracce di prova generate da tools/orecchie/gen-tracce.js (si rigenerano)
+tools/orecchie/tracce/

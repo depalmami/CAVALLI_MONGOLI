@@ -92,12 +92,24 @@
   #screen button { font-size:13px; padding:9px 11px; width:100%; }
   #screen .big { font-size:15px; padding:11px 20px; margin-top:10px; background:var(--acc); }
   #screen .amber { background:#c98a3a; }
+
+  /* ── MUSICA: la card larga in cima alla regia ── */
+  #card-musica { grid-column:1 / -1; }
+  .mu-colonne { display:grid; grid-template-columns:minmax(280px,1fr) 2fr; gap:18px; align-items:start; }
+  @media (max-width:820px) { .mu-colonne { grid-template-columns:1fr; } }
+  #mu-meter { width:100%; height:150px; display:block; border-radius:8px; background:#0b0e14; }
+  #mu-lettura { font-size:12px; color:var(--tenue); margin-top:6px; min-height:1.4em; }
+  #mu-player { width:100%; margin:6px 0; display:none; }
+  #perf { font-variant-numeric:tabular-nums; }
 </style>
+<!-- Three.js 0.160 VENDORATO in vendor/three (solo i file usati + le loro dipendenze):
+     in location la rete non è garantita, e un CDN che non risponde vuol dire niente show.
+     Stessa versione che prima arrivava da jsdelivr: nessun cambio di comportamento. -->
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
   }
 }
 </script>
@@ -110,7 +122,10 @@
       <h1>🐎 Cavalli Mongoli — 3D</h1>
       <p>Banco di regia per il live. Il gioco vero va sul secondo schermo.</p>
     </div>
-    <div id="pad-stato" class="nota">nessun pad collegato</div>
+    <div style="text-align:right">
+      <div id="pad-stato" class="nota">nessun pad collegato</div>
+      <div id="perf" class="nota">—</div>
+    </div>
   </div>
 
   <!-- ══ ANTEPRIMA ══ -->
@@ -135,15 +150,67 @@
 
       <div id="hud-help" class="panel">
         ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost ·
-        <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>R</b> riparti
+        <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno · <b>R</b> riparti
       </div>
 
       <div id="screen"><div class="box" id="screen-box"></div></div>
-      <div id="loading">🐎 Caricamento…<small>(serve internet per Three.js e il modello)</small></div>
+      <div id="loading">🐎 Caricamento…<small>(tutto in locale: non serve internet)</small></div>
+      <script>
+        // Con Three.js locale, da doppio click (file://) il browser blocca i moduli e
+        // non partirebbe NIENTE, nemmeno il messaggio d'errore del modulo: lo diciamo qui.
+        if (location.protocol === 'file:') document.getElementById('loading').innerHTML =
+          '<div class="err">Pagina aperta con doppio click (<code>file://</code>): il browser blocca i moduli locali. ' +
+          'Avvia il server nella cartella del progetto con <code>python3 -m http.server 8901 --bind 127.0.0.1</code> ' +
+          'e apri <b>http://127.0.0.1:8901/horse-racing-3d.html</b>.</div>';
+      </script>
     </div>
   </div>
 
   <div class="griglia">
+
+    <!-- ══ MUSICA ══ -->
+    <div class="card" id="card-musica">
+      <h2>🎧 Musica — le orecchie del gioco</h2>
+      <div class="mu-colonne">
+        <div>
+          <div class="riga"><label for="mu-fonte">Tempo da</label>
+            <select id="mu-fonte" style="width:auto; flex:1.4">
+              <option value="auto">Automatico (MIDI › audio › tap)</option>
+              <option value="midi">Solo clock MIDI</option>
+              <option value="audio">Solo analisi audio</option>
+              <option value="libero">Libero (tap)</option>
+            </select></div>
+          <select id="mu-ingresso"><option value="">— ingresso predefinito —</option></select>
+          <div class="bottoni">
+            <button id="mu-attiva">🎙 Ascolta ingresso</button>
+            <button id="mu-file">📁 File audio…</button>
+            <button id="mu-midi">🎹 MIDI</button>
+            <button id="mu-ferma">■</button>
+          </div>
+          <input type="file" id="mu-file-in" accept="audio/*" hidden>
+          <audio id="mu-player" controls></audio>
+          <label class="spunta"><input type="checkbox" id="mu-monitor" checked> Fai sentire il file in cuffia</label>
+          <div>Guadagno analisi: <span class="val" id="mu-trim-val">0 dB</span>
+            <input type="range" id="mu-trim" min="-24" max="24" step="1" value="0"></div>
+          <div>Anticipo visivo: <span class="val" id="mu-anticipo-val">0 ms</span>
+            <input type="range" id="mu-anticipo" min="-100" max="250" step="5" value="0"></div>
+        </div>
+        <div>
+          <canvas id="mu-meter"></canvas>
+          <div id="mu-lettura"></div>
+          <div class="bottoni">
+            <button id="mu-tap">Tap <span class="tasto" style="color:#fff">T</span></button>
+            <button id="mu-uno">È l’uno <span class="tasto" style="color:#fff">U</span></button>
+            <button id="mu-x2">×2</button>
+            <button id="mu-d2">×½</button>
+          </div>
+          <div id="mu-stato" class="nota"></div>
+          <div class="nota">Stesso Mac di Ableton: l’ingresso è <b>BlackHole</b> (uscita di Live su BlackHole o
+            su un dispositivo aggregato) e il MIDI è il <b>bus IAC</b> con <i>Sync</i> attivo.
+            L’anticipo si regola al soundcheck finché lampo e click coincidono.</div>
+        </div>
+      </div>
+    </div>
 
     <!-- ══ REGIA ══ -->
     <div class="card">
@@ -241,6 +308,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+import { creaMusica } from './3d/musica.js';
+import { collegaPannelloMusica } from './3d/pannello-musica.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1585,7 +1654,11 @@ const accel  = (v, a, dt) => v + a*dt;
 let position = 0, speed = 0, playerX = 0;
 let currentLapTime = 0, lastLapTime = null, started = false;
 const keys = {};
+// scrivendo nei campi di testo della console (la scritta, il codice) i tasti NON vanno al gioco:
+// prima digitare «CAVALLI MONGOLI» cambiava camera, attaccava, accendeva il pilota…
+const staScrivendo = e => e.target && e.target.matches && e.target.matches('input[type=text], textarea');
 addEventListener('keydown', e => {
+  if (staScrivendo(e)) return;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
   keys[e.key.toLowerCase()] = true;
 });
@@ -2218,7 +2291,9 @@ function cycleCamera() {
   $('btn-camera').textContent = 'Camera: ' + CAM_MODES[camMode];
 }
 addEventListener('keydown', e => {
+  if (staScrivendo(e)) return;
   const k = e.key.toLowerCase();
+  if (k === 'u') musica.uno();       // "questo è l'uno": rimette in fase battito e battuta
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 'c') cycleCamera();
   if (k === 't') party.tap();        // tap tempo
@@ -2541,33 +2616,32 @@ const frecce = (() => {
 })();
 
 //=========================================================================
-// PARTY MODE a tempo — TAP TEMPO che fa rimbalzare alberi e luce in modo comico
+// MUSICA — le orecchie: un orologio solo per tutto lo show (MIDI › audio › tap).
+// Vive in 3d/musica.js; qui si crea e basta. Tutto ciò che va a tempo lo legge.
+//=========================================================================
+const musica = creaMusica();
+const pannelloMusica = collegaPannelloMusica(musica);
+
+//=========================================================================
+// PARTY MODE a tempo — alberi e luce che rimbalzano in modo comico.
+// Il TEMPO non è più suo: arriva da `musica`. party resta l'adattatore per i
+// moduli di prima (live, text3d) e tiene la molla e l'interruttore (P).
 //=========================================================================
 const party = (() => {
   const SUN_I = sun.intensity, HEMI_I = hemi.intensity, EXPO = renderer.toneMappingExposure, BLOOM = bloom.strength;
-  let fxOn = false, clockOn = false, bpm = 120, period = 0.5, nextBeat = 0;
-  let s = 0, v = 0, taps = [];          // s,v = molla (offset elastico); taps = tempi dei tap
+  let fxOn = false;
+  let s = 0, v = 0;                      // s,v = molla (offset elastico)
   let gain = 6;                          // intensità (1 = base; 6 ≈ +500%), regolata dallo slider
   const beatCbs = [];                    // callback eseguite ad ogni beat (flash/scritte live)
   const $i = document.getElementById('party-info');
-  function setHud() { if ($i) $i.textContent = clockOn ? `🎉 ${bpm} BPM${fxOn ? '' : ' · alberi off'}` : 'spento'; }
-  // beat: notifica i sottoscrittori (flash/testo) e, se la distorsione è attiva, dà lo SCATTO a molla
-  function beat() { for (const f of beatCbs) f(); if (fxOn) { s = 1; v = 0; } }
-  function tap() {
-    const now = performance.now()/1000;
-    if (taps.length && now - taps[taps.length-1] > 2) taps = [];   // pausa lunga = nuova battuta
-    taps.push(now); if (taps.length > 6) taps.shift();
-    if (taps.length >= 2) {
-      let sum = 0; for (let i = 1; i < taps.length; i++) sum += taps[i]-taps[i-1];
-      bpm = Math.max(40, Math.min(240, Math.round(60 / (sum/(taps.length-1)))));
-      period = 60/bpm;
-    }
-    clockOn = true; fxOn = true; nextBeat = now + period; beat(); setHud();
-  }
+  function setHud() { if ($i) $i.textContent = `🎉 ${musica.bpm.toFixed(1)} BPM · ${musica.fonte}${fxOn ? '' : ' · alberi off'}`; }
+  // a ogni battito: notifica i sottoscrittori (flash/testo) e, se la distorsione è attiva, SCATTO a molla
+  musica.on('battito', () => { for (const f of beatCbs) f(); if (fxOn) { s = 1; v = 0; } });
+  function tap() { musica.tap(); fxOn = true; setHud(); }
   function toggle() { fxOn = !fxOn; setHud(); }   // P: accende/spegne SOLO la distorsione alberi+luce
+  let hudT = 0;
   function update(dt) {
-    const now = performance.now()/1000;
-    if (clockOn) while (now >= nextBeat) { nextBeat += period; beat(); }
+    if ((hudT += dt) > 0.25) { hudT = 0; setHud(); }
     const h = Math.min(dt, 0.033);       // molla sotto-critica che riporta lo scatto a 0 con rimbalzo
     v += (-55*s - 9*v) * h; s += v * h;
     if (Math.abs(s) < 1e-4 && Math.abs(v) < 1e-4) return;          // a riposo: nessun lavoro extra
@@ -2583,8 +2657,8 @@ const party = (() => {
     bloom.strength = Math.min(2.0, BLOOM * (1 + Math.max(0, s*gain)*0.9));
   }
   return { tap, toggle, update, setGain(g) { gain = g; },
-           onBeat(fn) { beatCbs.push(fn); }, bpmNow: () => bpm, periodNow: () => period,
-           isClock: () => clockOn };
+           onBeat(fn) { beatCbs.push(fn); }, bpmNow: () => musica.bpm, periodNow: () => musica.periodo,
+           isClock: () => true };
 })();
 
 //=========================================================================
@@ -2599,7 +2673,7 @@ const text3d = (() => {
     emissiveIntensity: 1.4, metalness: 0.2, roughness: 0.35 });
   let font = null, mesh = null, curText = '', ready = false;
   new FontLoader().load(
-    'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json',
+    'vendor/three/examples/fonts/helvetiker_bold.typeface.json',
     f => { font = f; ready = true; if (curText) rebuild(); },
     undefined, () => console.warn('Font 3D non disponibile (resto sulla scritta 2D)'));
   function rebuild() {
@@ -2682,8 +2756,7 @@ const live = (() => {
     // SCRITTA lampeggiante che rimbalza a tempo (squash&stretch + bob)
     if (bonusOn) {
       const elapsed = now - bonusStart;
-      const periodMs = Math.max(80, party.periodNow()*1000);
-      const phase = (elapsed % periodMs) / periodMs;
+      const phase = musica.fase;                       // rimbalzo agganciato al battito vero
       const inAir = Math.abs(Math.sin(phase*Math.PI)), landing = 1 - inAir, k = intensity;
       const scaleY = 1 + 0.18*k*inAir - 0.10*k*landing;
       const scaleX = 1 - 0.12*k*inAir + 0.08*k*landing;
@@ -3169,7 +3242,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { musica, party, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3204,8 +3277,11 @@ function interpWrap(prev, cur, alpha) {
 let hitStop = 0;
 function fermaImmagine(sec) { hitStop = Math.max(hitStop, sec); }
 
+// contatore in console: fps e ms di lavoro del frame (CPU, render compreso)
+const perf = { fps: 60, ms: 0, t: 0, el: document.getElementById('perf') };
 function frame(now) {
   requestAnimationFrame(frame);
+  const t0 = performance.now();
   let frameDt = (now - last)/1000;
   last = now;
   if (frameDt > 0.25) frameDt = 0.25;                // dopo un tab in background non rincorrere
@@ -3284,6 +3360,7 @@ function frame(now) {
   hitSpark.update(dtG);                  // scintille d'impatto sui colpi
   fendenti.update(dtG);                  // scie dei colpi, onde del calcio, anelli di parata
   frecce.update(dtG);                    // frecce in volo (il danno arriva all'arrivo)
+  musica.aggiorna();                     // orecchie: orologio, colpi, bande, sezioni → eventi
   party.update(frameDt);                 // party mode: alberi e luce a tempo
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
 
@@ -3304,6 +3381,7 @@ function frame(now) {
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
   combatHud.draw(frameDt);               // barre vita nemici, popup, vignetta danno
   proiezione.disegna();                  // ricompone le tre tele sul secondo schermo
+  pannelloMusica.disegna(frameDt);       // meter della console (non va in proiezione)
 
   $('speed').textContent   = Math.round(speed/60);
   {
@@ -3312,6 +3390,9 @@ function frame(now) {
     $('viaggio-fill').style.width = (frac*100).toFixed(1) + '%';
     $('viaggio-km').textContent = `${Math.max(0, (FINE_VIAGGIO - position)*UNITA_KM).toFixed(1)} km a Karakorum`;
   }
+  perf.ms  += (performance.now() - t0 - perf.ms) * 0.1;
+  perf.fps += (1/Math.max(frameDt, 1e-3) - perf.fps) * 0.1;
+  if (now - perf.t > 500 && perf.el) { perf.t = now; perf.el.textContent = `${perf.fps.toFixed(0)} fps · ${perf.ms.toFixed(1)} ms/frame`; }
 }
 
 const isFile = location.protocol === 'file:';

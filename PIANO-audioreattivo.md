@@ -1,0 +1,412 @@
+# PIANO — Cavalli Mongoli 3D: «Apri tutto, smarmella!»
+
+> Piano di ammodernamento di `horse-racing-3d.html`, il punto più avanti del progetto.
+> Obiettivo: un gioco che **smarmella completamente a ritmo di musica**, con un **HUD nuovo**
+> che si veda anche in proiezione. Piano scritto il 1 ottobre 2026 su `master` @ `12b764e`.
+> Il PRD del combattimento (`PRD-road-redemption.md`) resta valido: questo piano ci si
+> appoggia sopra, non lo sostituisce.
+
+---
+
+## 1. In una riga
+
+**La musica diventa l'orologio del gioco.** Un solo modulo ascolta (MIDI da Ableton, ingresso
+audio, tap), produce uno stato `musica` (battito, fase, battuta, cassa, bassi, sezione…), e
+tutto il resto — post-processing, mondo, cavalli, camera, HUD, combattimento — lo legge
+attraverso una **centralina** con una manopola sola: **SMARMELLA**, da 0 (il gioco di oggi,
+identico) a 1 (delirio totale).
+
+---
+
+## 2. Da dove partiamo
+
+### Cosa c'è già e funziona
+- Three.js 0.160 (WebGL2), pipeline `RenderPass → UnrealBloom → OutputPass`, ACES, ombre che
+  seguono il giocatore, cielo `Sky`, terreno heightfield, 12 tappe fino a Karakorum
+  (52101 segmenti, ~48 km), combattimento completo, pilota automatico, gamepad, proiezione sul
+  secondo schermo, console di regia con persistenza.
+- **Show a tempo** (`party` + `live` + `text3d`): tap tempo T, alberi che rimbalzano, luce e
+  bloom che pulsano, flash strobo, scritta 2D/3D con 8 palette.
+- Nel 2D: un **livello audio unico** (microfono/file → shake/zoom) e il **cielo Hydra**
+  (`vendor/hydra-synth.js`). Il 3D di audio non ha nulla.
+- Sulla macchina: **Ableton Live 12 Suite**, **BlackHole 16ch** già installato, Apple M5 Pro.
+
+### Cosa manca o è debole
+| Problema | Perché conta |
+|---|---|
+| Il battito esiste solo se qualcuno **tappa**. Nessuna analisi audio, nessun MIDI. | Senza orecchie non c'è audioreattività: c'è un metronomo manuale. |
+| Ogni effetto è cablato a mano (`party.update` tocca alberi, sole, bloom). | Ogni nuovo effetto = nuovo codice. Serve una matrice, non altri `if`. |
+| **L'HUD del giocatore è DOM** (`#hud-left`, `#hud-combat`, `#hud-help`) e la proiezione ricompone solo le **tele** (`proiezione.tele()`). | **Il pubblico non vede mai** velocità, vita, nitro, tappa. Solo le barre dei rivali, se attivate. |
+| HUD con emoji e font di sistema. | Il 2D ha già un HUD da cabinato (Press Start 2P, `ffe23bc`); il 3D è rimasto indietro. |
+| Three.js e il font della scritta 3D arrivano **da CDN**. | In location la rete non è garantita: il 2D ha già vendorato Hydra e il font per questo. |
+| `trees.pulse` ricalcola **tutte** le matrici (~12 mila alberi × 3 mesh) sulla CPU a ogni frame. | Oggi pulsa solo sul tap; con l'audio pulserebbe sempre. Va spostato sulla GPU. |
+| Un file unico da 3362 righe. | Ci stanno per entrare 4 sistemi grossi: vanno in moduli loro. |
+
+---
+
+## 3. Principi (le regole che decidono tutto il resto)
+
+1. **La musica è l'orologio.** Tutto ciò che cambia "a scatti" (tagli di camera, cambi scena,
+   banner, colpi del pilota) si **quantizza** su battito / battuta / frase da 4-8 battute.
+2. **Nessun effetto legge l'audio direttamente.** Si legge `musica` (lo stato) o la centralina.
+   Così si cambia sorgente (MIDI, audio, tap) senza toccare un solo effetto.
+3. **SMARMELLA = 0 è il gioco di oggi, pixel per pixel.** È la garanzia di non-regressione e il
+   pulsante di panico in concerto.
+4. **Prima la proiezione.** Ciò che conta per il pubblico deve stare in una tela che
+   `proiezione.tele()` ricompone. Niente più HUD in DOM.
+5. **Zero rete in location.** Tutto vendorato in `vendor/`, come già nel 2D.
+6. **Nuovi sistemi = nuovi moduli.** Niente refactor big-bang del nucleo: i moduli nuovi
+   (`3d/*.js`) ricevono quello che serve con un `init({...})` esplicito.
+7. **Leggibile anche nel delirio.** I numeri dell'HUD non si deformano mai; si muovono cornici,
+   accenti, colori. Il giocatore deve poter giocare a SMARMELLA 0.6.
+8. **Strobo con un tetto.** Limitatore anti-fotosensibilità acceso di default (≤ 3 lampi
+   pieni al secondo), disattivabile solo di proposito.
+
+---
+
+## 4. Architettura
+
+```
+ SORGENTI                    ORECCHIE  (3d/musica.js)          CENTRALINA (3d/centralina.js)     BERSAGLI
+ Ableton MIDI clock  ──┐     clock: bpm, fase, battuta, frase ──┐  scena attiva (preset)       ──┐  post   (3d/smarmella.js)
+ Ableton note / cue  ──┤     colpi: cassa, rullante, charl.     │  matrice sorgente → bersaglio  │  mondo  (terreno, strada,
+ Ingresso audio      ──┼──▶  bande: sub, bassi, medi, alti   ──┼─▶ × quantità × curva × rilascio ├─▶        alberi, paletti, cielo)
+  (BlackHole / scheda) │     energia, brillanza, spettro[64]    │  macro SMARMELLA 0…1           │  cavalli (galoppo a tempo)
+ File audio (prove)  ──┤     sezione: pausa / salita / DROP     │  auto-regia per sezioni        │  camera (regista)
+ Tap tempo           ──┘     eventi: on('cassa'|'battito'|…)  ──┘  limitatore strobo           ──┘  HUD (3d/hud.js), gameplay
+```
+
+### Lo stato `musica` (il contratto fra le orecchie e il resto)
+```js
+musica = {
+  fonte: 'midi' | 'audio' | 'tap' | 'interno',
+  bpm: 128, fase: 0.37,            // 0..1 dentro il battito corrente
+  battito: 213, battuta: 53, faseBattuta: 0.59, frase: 6,   // frase = 8 battute
+  cassa: 0.0, rullante: 0.0, charleston: 0.0,   // impulsi 1 → 0 con rilascio
+  sub: 0.4, bassi: 0.7, medi: 0.3, alti: 0.5,   // inviluppi normalizzati 0..1 (AGC sull'analisi)
+  energia: 0.62, brillanza: 0.48,
+  spettro: Float32Array(64),       // anche come DataTexture per gli shader
+  sezione: 'pausa' | 'salita' | 'groove' | 'drop', drop: 0.0,  // impulso al drop
+  prossimoBattito: 12345.6,        // ms performance.now(), PREVISTO → effetti in anticipo
+};
+musica.on('battito' | 'battuta' | 'frase' | 'cassa' | 'rullante' | 'drop' | 'sezione', fn);
+```
+Il vecchio `party` diventa un **adattatore**: `party.onBeat` → `musica.on('battito')`. Così
+flash, scritta, alberi e luce di oggi seguono la musica vera dal primo giorno, senza riscriverli.
+
+### Una voce della matrice
+```js
+{ da: 'cassa', a: 'post.aberrazione', quanto: 0.8, curva: 'esp', rilascio: 0.12, min: 0, max: 1 }
+```
+Valore finale di un bersaglio = `base(scena) + Σ voci × SMARMELLA`, smussato, con tetti.
+
+---
+
+## 5. Le orecchie — sorgenti, analisi, tempo
+
+### Sorgenti, dalla più affidabile
+| Sorgente | Come | Dà | Note |
+|---|---|---|---|
+| **MIDI da Ableton** | Web MIDI su *IAC Driver* (stesso Mac) o *Rete MIDI* di macOS (due Mac). In Ableton: Sync attivo sull'uscita IAC. | Clock 24 ppqn, Start/Stop, **posizione nel brano**, e le **note vere** di cassa/rullante (una traccia MIDI che ascolta la batteria e esce su IAC). | Precisione al millisecondo, zero falsi positivi. Il battere (l'"uno") è esatto. |
+| **Traccia cue "VISUAL" in Ableton** | Una traccia MIDI con note = comandi (scena, drop, banner, palette). | La regia scritta **dentro l'arrangement**, già sincronizzata col pezzo. | È così che si fanno gli show "a timecode". |
+| **Ingresso audio** | `getUserMedia` su BlackHole (loopback dal master di Ableton) o sulla scheda (mandata dal mixer). | Bande, energia, spettro, attacchi, BPM stimato. | Va **sempre** chiesto con `echoCancellation`, `noiseSuppression`, `autoGainControl` a `false`, altrimenti Chrome "ripulisce" la musica e l'analisi muore. |
+| **File audio** | `<audio>` → MediaElementSource. | Tutto come l'ingresso. | Per provare senza band e per i test automatici. |
+| **Tap** | T, come oggi, + "tap sull'uno" per rimettere in fase la battuta. | BPM e fase. | Sempre disponibile come rete di sicurezza. |
+| **Interno** | Orologio a 120 BPM. | Il minimo vitale. | Se tutto il resto cade, lo show continua. |
+
+Catena di ripiego automatica: **MIDI → audio → tap → interno**, con l'indicatore in console.
+
+### Analisi audio
+- **Spettro per gli occhi** — `AnalyserNode` (fft 2048, smoothing 0) letto a ogni frame:
+  64 bande logaritmiche → `musica.spettro` + una `DataTexture` 64×1 per gli shader.
+- **Attacchi per il tempo** — `AudioWorklet` (`3d/orecchio-worklet.js`) su filtri dedicati
+  (cassa < 120 Hz, rullante 1–4 kHz, charleston > 7 kHz): energia per blocco da 128 campioni
+  (~2,7 ms), soglia adattiva (mediana dell'ultimo secondo × k), refrattario 100 ms. Gli eventi
+  portano il **timestamp audio**, convertito in tempo di pagina con `getOutputTimestamp()`.
+- **AGC sull'analisi, non sull'ingresso**: ogni banda si normalizza sul proprio massimo mobile
+  (8 s, rilascio lento) → funziona uguale a volume da prove e a volume da concerto.
+- **BPM dall'audio**: autocorrelazione dell'inviluppo degli attacchi su 6–8 s, intervallo
+  70–180 con preferenza per 110–150; bottoni **×2 / ÷2** per gli errori d'ottava; la fase si
+  aggancia con un PLL sugli attacchi di cassa. Il battere dall'audio è ambiguo → "tap sull'uno".
+- **Sezioni** (`pausa / salita / groove / drop`): energia su 2 battute contro 16; cassa assente
+  da ≥ 4 battute = pausa; brillanza ed energia in crescita = salita; ritorno della cassa con
+  salto d'energia dopo una pausa = **DROP**. Con la traccia cue di Ableton la sezione è esplicita.
+
+### Latenza (si calibra, non si indovina)
+L'audio analizzato arriva tardi di 20–60 ms; il ledwall aggiunge 1–3 frame; il suono in sala
+viaggia a 343 m/s. Gli effetti agganciati alla griglia usano `prossimoBattito` (sono **previsti**,
+quindi possono partire in anticipo) più uno **slider "anticipo visivo" in ms**. Procedura al
+soundcheck: click in cassa, si muove lo slider finché lampo e click coincidono, si salva.
+
+---
+
+## 6. Cosa smarmella — il catalogo
+
+Ordinato per resa / costo. Ogni voce è un **bersaglio** della centralina, quindi si accende,
+si dosa e si combina dalla regia.
+
+### 6.1 Post-processing — il grosso dell'effetto, quasi gratis
+Pipeline nuova: `RenderPass → Bloom (forza/soglia modulate) → OutputPass (esposizione modulata)
+→ **SMARMELLA** (un unico shader "uber", in LDR) con **feedback** (ping-pong del frame
+precedente)`. Un solo passaggio a tutto schermo: su M5 Pro a 1080p costa pochissimo.
+
+| Effetto | Agganciato di solito a | Note |
+|---|---|---|
+| **Feedback / scie** — il frame precedente rimescolato, zoomato, ruotato, sporcato di rumore, con hue che slitta | energia, sezione | **È lui lo "smarmellamento"**: l'immagine che cola e si fonde. |
+| **Sovraesposizione** — bianco bruciato alla Boris | rullante, drop | In HDR prima del tone mapping: brucia come una luce vera. |
+| Aberrazione cromatica / RGB split | cassa | |
+| Zoom radiale / linee di velocità | bassi, boost | |
+| Pugno a barile (fisheye) | cassa | Pochi gradi: dà il "colpo" senza nausea. |
+| Caleidoscopio / specchio | drop, frase | Livelli alti soltanto. |
+| Glitch a blocchi, slice orizzontali | rullante, fill | |
+| Viraggio colore per scena (le 8 palette dello show come LUT) | battuta, scena | |
+| Posterizza / pixel / scanline CRT | scena "Arcade" | Sul ledwall 768×512 rende benissimo. |
+| Grana | charleston | |
+
+**Livelli di SMARMELLA** (preset della macro, tutto dosabile):
+`0 Diretta` (oggi) · `1 Groove` (luce e FOV a tempo, galoppo a tempo) · `2 Festa` (mondo che
+balla, HUD che pulsa) · `3 Rave` (scie, aberrazioni, laser) · `4 APRI TUTTO` (feedback pieno,
+caleidoscopio, bianco bruciato sul drop).
+
+Attenzione tecnica: lo shader finale scrive già in sRGB (dopo `OutputPass`): non deve
+includere `colorspace_fragment`, o la conversione si applica due volte.
+
+### 6.2 Il mondo balla (shader di vertice, `onBeforeCompile` sui materiali esistenti)
+- **Linee del battito sull'asfalto**: bande luminose disegnate dallo shader della strada a
+  distanza `velocità × tempo al battito k` davanti al cavallo → **ci passa sopra esattamente
+  sul battito**, come in Audiosurf/Thumper. La strada ha già la coordinata lungo-pista nelle UV
+  (`D = i*SEG`), quindi basta un uniform. Costo: zero geometria.
+- **Equalizzatore sulle righe di bordo**: lo spettro (DataTexture) dipinto sulle linee laterali.
+- **Il terreno respira**: onde che partono dal cavallo a ogni cassa, ampiezza dai bassi.
+  Maschera sulla **distanza dal corridoio stradale globale** (attributo per vertice calcolato
+  una volta da `roadDist`): **spostamento zero** nella fascia calpestabile (±4800) e mai sopra
+  `quota strada − VERGE_DROP`. Vedi §11.
+- **Foresta equalizzatore**: ogni albero prende una banda dello spettro (attributo d'istanza) e
+  scala nello shader. Sostituisce `trees.pulse` su CPU (~36 mila matrici a frame).
+- **Paletti a LED**: i ~26 mila paletti rosso/bianco diventano luci che "corrono" lungo la pista
+  a sedicesimi, colore della palette; emissive → il bloom li accende.
+- **Portali delle tappe**: bandiere di preghiera che si accendono sul battere; arrivo di tappa
+  = esplosione di luce sull'"uno" della battuta successiva.
+- **Laser**: piani additivi dall'orizzonte che spazzano sui charleston (seguono la camera,
+  come il cielo — §11).
+- **Cielo e nebbia per sezione**: in pausa il sole scende (crepuscolo), sul drop torna su a
+  scatto; colore e densità della nebbia sull'energia. Scena "notte": stelle + **cielo Hydra**
+  portato dal 2D come texture della cupola, con i valori di `musica` passati a Hydra.
+- **Polvere a tempo**: sbuffi sotto gli zoccoli sulle casse, coriandoli/petali sul drop.
+
+### 6.3 I cavalli
+- **Galoppo a tempo** — il dettaglio che fa sembrare tutto coreografato. Numeri: a velocità
+  piena il passo naturale è 12000 / 5200 = **2,3 falcate al secondo ≈ 138 BPM**. Agganciare una
+  falcata a un battito costa quindi pochissimo pattinamento in tutta la fascia 110–160 BPM
+  (fuori fascia: una falcata ogni due battiti, o due per battito). Il `timeScale` del galoppo
+  si corregge di poco perché lo zoccolo anteriore tocchi terra sul battito.
+- Squash & stretch del cavaliere sulla cassa; criniera/coda più ampie in salita.
+- **Pilota automatico a tempo**: nello show attacca **sui battiti** → ogni colpo cade sulla
+  cassa. Takedown preferibilmente sul drop.
+
+### 6.4 La camera — un regista automatico
+- **Tagli quantizzati**: cambio camera (chase / onboard / tv / orbit) ogni 4 o 8 battute,
+  mai a metà battuta.
+- Cassa = pugno di FOV (+2–4°); rullante = micro-scossa; salita = dolly zoom progressivo
+  (effetto vertigo) + scossa crescente; **drop** = rollio a frusta + 0,4 s di slow-motion e poi
+  scatto di velocità; pausa = orbita lenta cinematografica.
+- Si applica **dopo** `updateCamera` e non insegue il modello animato (lezione §9.3 del PRD).
+
+### 6.5 Testo
+La scritta dello show diventa **tipografia cinetica**: una parola per battito, slam 3D sull'uno,
+frasi preimpostate per pezzo (era già nella lista "da fare" del Poplar).
+
+---
+
+## 7. L'HUD nuovo
+
+### Requisiti
+- **Una tela sola** `hud-overlay` in `teleVista` e **sempre** in `proiezione.tele()`.
+  I tre pannelli DOM spariscono; l'aiuto tasti va nella console, non sul gioco.
+- Disegnata alla risoluzione logica `vista`: deve funzionare a **1920×1080**, **1152×768** e
+  **768×512** (sul ledwall il font a pixel va a multipli interi: 8/16/24/32 px).
+- Glifi ed elementi **pre-renderizzati in cache**, niente `shadowBlur` per frame (era il collo
+  di bottiglia del testo laterale nel 2D). Budget: < 1 ms a frame.
+- **Tre modalità**: `GIOCO` (tutto), `SHOW` (solo il musicale e lo spettacolare: battuta,
+  sezione, combo, banner, tappa) e `PULITO` (niente). Durante il live col pilota, `SHOW`.
+- Reagisce alla musica con misura: cornici, accenti e colori si muovono, **i numeri no**.
+
+### I pezzi
+1. **Tachimetro ad arco** a segmenti, km/h in font a pixel, BPM piccolo sotto; i segmenti
+   pulsano sulla cassa.
+2. **Vita e nitro come VU-meter** a LED; nitro pieno = la barra respira a tempo ("pronto").
+3. **Metronomo di battuta**: 4 tacche + anello di fase; giudizio sui colpi a tempo
+   (PERFETTO / BUONO / FUORI — §8).
+4. **Combo ×N** con moltiplicatore: cresce, trema, si rompe in glitch quando la perdi.
+5. **Striscia del viaggio**: 12 tappe come tacche fino a Karakorum, il cavallo che avanza,
+   nome della tappa in carattere condensato.
+6. **Rivali**: etichette ridisegnate + **frecce a bordo schermo** per chi arriva da dietro.
+7. **Banner** a tutta larghezza: TAPPA · TAKEDOWN · DROP · KO, tipografia cinetica a fette.
+8. **Spettro** sottile sul bordo basso: decorazione e dichiarazione ("qui comanda la musica").
+9. In `SHOW`: etichetta di sezione (PAUSA / SALITA / DROP) e **smarmellometro**.
+
+### Tre direzioni di stile (prima i mockup, poi il codice)
+| | Carattere | Pro | Contro |
+|---|---|---|---|
+| **A · Cabinato** | Press Start 2P, ombra a scalino, colori pieni — come l'HUD del 2D | Coerente col 2D, perfetto sul ledwall | Il meno sorprendente |
+| **B · Khan Rave** | Wipeout/Designers Republic × ornamento mongolo: condensato pesante, linee tecniche sottili, angoli con motivi tradizionali (nodo *ulzii*, meandro), palette dello show | Il più "fico", identitario, nessuno ce l'ha | Più lavoro di disegno |
+| **C · Steppa synthwave** | Cromature, neon, griglie, tramonto | Effetto immediato | Cliché |
+
+**Consiglio: B con i numeri in font a pixel** (ibrido A+B): identità forte, nitidezza sul
+ledwall, continuità col 2D. Il condensato va scelto fra font **OFL** vendorabili (Anton, Big
+Shoulders Display, Oswald…), **non** i font commerciali del Poplar.
+
+---
+
+## 8. Gameplay a ritmo
+
+L'audioreattività non deve restare solo da guardare: chi gioca deve **sentirla nelle mani**.
+- **Colpo a tempo**: attacco entro ±70 ms dal battito = PERFETTO (danno ×2, nitro bonus);
+  entro ±140 ms = BUONO; fuori = colpo normale. **Mai penalizzante**: chi non sente il tempo
+  gioca come oggi.
+- **Combo** di azioni a tempo → moltiplicatore di punti.
+- **Nitro del drop**: se hai il nitro pieno quando arriva il drop, il boost raddoppia →
+  "aspetta il drop".
+- **Rivali che seguono il pezzo**: in pausa si tengono a distanza, in salita stringono,
+  sul drop attaccano tutti insieme.
+- **Casse-arma sulla griglia**: piazzate a `velocità × tempo al battito k`, le prendi sul battito.
+- **Modalità canzone** (ambiziosa, con MIDI): una tappa dura un pezzo; il pilota modula la
+  velocità per **arrivare al portale sull'ultimo colpo del brano**.
+
+---
+
+## 9. La regia
+
+- **Console riorganizzata** in sezioni: *Audio* (sorgente, meter per banda, BPM, anello di
+  fase, anticipo visivo), *SMARMELLA* (fader grande, livelli, auto-regia), *Scene* (griglia di
+  pad), *Matrice* (le voci, modificabili), *HUD* (modalità e stile), *Proiezione* e *Show*
+  (quelle di oggi).
+- **Scene** = preset (base + voci della matrice + palette + stile di regia + modalità HUD),
+  con dissolvenza **quantizzata alla battuta**. Tasti 1–9 e pad MIDI.
+- **MIDI learn** su qualunque controllo (clic destro → muovi una manopola). Va bene qualunque
+  controller, anche Push in modalità utente.
+- **Auto-regia**: senza nessuno alla console, la sezione rilevata guida SMARMELLA
+  (pausa → 1, salita → rampa 2→3, drop → 4 per 8–16 battute, poi rientro).
+- **Setlist**: un preset per pezzo; Ableton manda un Program Change all'inizio di ogni brano.
+- Persistenza: il modulo `preferenze` esteso + **esporta/importa JSON** (backup sulla chiavetta).
+
+---
+
+## 10. Roadmap
+
+Ogni fase si chiude con un commit funzionante e un criterio verificabile. Taglia indicativa
+in sessioni di lavoro (S ≈ 1, M ≈ 2–3, L ≈ 4+).
+
+| Fase | Cosa | Fatto quando | Taglia |
+|---|---|---|---|
+| **0 · Fondamenta** | Branch `audioreattivo` da `master`. Three 0.160 + addons + font helvetiker **in `vendor/`**, importmap locale. Cartella `3d/` per i moduli nuovi. Contatore fps/ms in console. `cm3d.musica` per i test. | Con il **Wi-Fi spento** la pagina parte identica a oggi. | S |
+| **1 · Le orecchie** | `musica.js` + worklet: sorgenti (file, ingresso, MIDI, tap, interno), bande, attacchi, BPM, fase, sezioni, anticipo visivo, meter in console. `party` diventa adattatore. | Click a 128 BPM: errore mediano < 15 ms, nessun falso. Un vostro pezzo: la cassa "si vede" giusta. MIDI da Ableton: 5 minuti senza deriva. Alberi/flash/scritta di oggi seguono la musica. | M |
+| **2 · Smarmella v1** | `smarmella.js`: shader uber + feedback, fader, 5 livelli, limitatore strobo, prima matrice (in codice). | SMARMELLA 0 = screenshot identico a `master`. 4 = delirio. ≥ 60 fps a 1080p con margine (> 200 fps senza vsync). Limitatore misurato ≤ 3 lampi/s. | M |
+| **3 · HUD** | Mockup delle 3 direzioni su screenshot veri alle 3 risoluzioni → scelta → `hud.js` (tela unica, modalità, cache), via i pannelli DOM. | L'HUD **si vede in proiezione** ed è leggibile a 768×512. < 1 ms/frame. | M |
+| **4 · Il mondo balla** | Galoppo a tempo, linee del battito, equalizzatore sulle righe, foresta su GPU, paletti LED, terreno che respira, laser, cielo/nebbia per sezione, polvere, regista automatico. | Fascia calpestabile **misurata** ferma su tutto il tracciato (punti campione inizio/salita/culmine/fondo). Screenshot in 4 punti. fps invariati. | L |
+| **5 · La centralina** | UI della matrice, scene quantizzate, MIDI learn, traccia cue di Ableton, setlist, auto-regia, export/import. | Uno show intero guidato da Ableton senza toccare la console. | M |
+| **6 · Gameplay a ritmo** | Colpo a tempo, combo, rivali per sezione, casse sulla griglia, nitro del drop, pilota a tempo, (modalità canzone). | **Playtest vero** dell'utente con musica (lezione del PRD: le transizioni non bastano). | M |
+| **7 · Pronti per il palco** | Scala di qualità automatica se gli fps calano, catena di ripiego delle sorgenti, **PANICO** (SMARMELLA 0 + strobo off in un tasto), registratore di clip dalla proiezione (per i social), checklist da soundcheck. | Prova generale di 45 minuti senza intoppi, staccando apposta MIDI e audio a metà. | S |
+| **8 · Oltre** (opzionale) | WebGPU + TSL e particelle a milioni; dispositivo Max for Live con inviluppi **per traccia** via WebSocket (`node.script`); Ableton Link fra più macchine; Hydra sulle superfici del mondo. | — | L |
+
+**Ordine consigliato**: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7. I mockup dell'HUD (inizio Fase 3)
+si possono fare in parallelo alla Fase 1, perché non dipendono dal codice. Se c'è una data
+vicina, il minimo da palco è **0 + 1 + 2 + PANICO**: già da solo cambia lo show.
+
+---
+
+## 11. Rischi e trappole già note
+
+Dalle lezioni pagate su questo progetto (memoria + PRD), da rispettare in ogni fase:
+- **Terreno**: mai spostare la fascia calpestabile (±4800) né salire sopra
+  `quota strada − 300`; la maschera usa la distanza dal corridoio **globale**, perché un vertice
+  lontano dal ramo A può essere vicino al ramo B.
+- **Elementi "all'infinito"** (laser, stelle, cupola Hydra) seguono la camera come il cielo,
+  o per l'80% del tracciato spariscono.
+- **Segni**: rollio della camera sul drop e qualsiasi effetto laterale si verificano proiettando
+  in spazio schermo, non confrontando due grandezze calcolate nella stessa convenzione.
+- **Salti di `lat`/`playerX` letti come velocità**: un "salto sulla cassa" si fa sulla
+  grafica (offset del modello), mai sulla posizione fisica.
+- **Effetti additivi sul cielo chiaro non si vedono**: fusione normale con anima > 1.
+- **Proiezione**: ogni tela nuova va aggiunta a `tele()`; la tela WebGL si copia subito dopo il render.
+- **Analisi di una band dal vivo**: chitarre e voce sporcano la cassa → la via robusta è il MIDI
+  da Ableton; l'audio serve per bande, energia e colore.
+- **Permessi** (microfono, MIDI): su `127.0.0.1` si concedono una volta e restano; vanno
+  provati sulla macchina del live **prima** del soundcheck.
+- **Strobo**: limitatore di default + avviso in sala.
+- **Aggiornare Three.js** è un passo a parte (dalla r163 `TextGeometry` usa `depth` e non
+  `height`): ora si vendora la 0.160 così com'è.
+
+---
+
+## 12. Come si verifica (headless, come sempre)
+
+- Chrome con `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream
+  --use-file-for-fake-audio-capture=<file.wav>`: `getUserMedia` riceve il WAV → si prova la
+  **vera** catena d'ingresso, non una scorciatoia.
+- Tracce di prova generate (Python/Node): click a 128 BPM, cassa sola, un pezzo sintetico con
+  pausa → salita → drop annotati; più un pezzo vero dei Cavalli Mongoli.
+- **Metriche**: errore sul battito (ms), falsi positivi al minuto, secondi per agganciare il BPM,
+  sezioni rilevate contro quelle annotate.
+- MIDI: la logica del clock si prova iniettando messaggi finti; la prova vera con Ableton e IAC
+  è manuale.
+- Immagini: **screenshot in punti sparsi del tracciato** (non solo la partenza), confronto
+  pixel a SMARMELLA 0 contro `master`, fps senza vsync coi flag già noti.
+- E soprattutto: **guardarlo con la musica**, per secondi veri. Uno stato che cambia non
+  dimostra che sia bello.
+
+---
+
+## 13. Decisioni aperte (servono dall'utente)
+
+1. **Dal vivo suonate con Ableton** (clip/arrangement) o è tutto suonato? Decide se il cuore è
+   il MIDI (preciso) o l'analisi audio.
+2. **Il gioco gira sullo stesso Mac di Ableton?** Sì → IAC + BlackHole, zero cavi. No → Rete
+   MIDI di macOS + mandata audio dal mixer alla scheda.
+3. **Chi guida durante il live**: pilota automatico + regia, o qualcuno gioca davvero? Sposta
+   il peso fra Fase 4-5 (spettacolo) e Fase 6 (gameplay).
+4. **Stile dell'HUD**: A, B o C — dopo i mockup.
+5. **Prossima data**: decide cosa deve essere pronto per quella sera.
+
+---
+
+## 14. Diario
+
+### 1 ottobre 2026 — Fase 0 e Fase 1 fatte (branch `audioreattivo`)
+**Fase 0.** Three.js 0.160 vendorato in `vendor/three/` (solo i 16 addon usati + le loro
+dipendenze, 1,5 MB) e il font della scritta 3D: con la rete esterna **bloccata** la pagina
+parte con zero richieste fuori da 127.0.0.1. Da `file://` ora compare subito l'istruzione per
+il server (prima, con i moduli locali, sarebbe rimasta su «Caricamento…»). Contatore
+fps · ms/frame in testata. I tasti non vanno più al gioco mentre si scrive nei campi di testo.
+
+**Fase 1.** `3d/musica.js` (orologio unico + sorgenti + analisi), `3d/orecchio.worklet.js`
+(colpi nel thread audio), `3d/pannello-musica.js` (card «Musica» in console). `party` è
+diventato l'adattatore: flash, scritta e alberi seguono già la musica vera; il rimbalzo della
+scritta usa la **fase vera** del battito. Tasto **U** = «è l'uno». In più del piano: evento
+`basso` (colpo grave fuori griglia), e il drop **insegna l'uno** se nessuno l'ha segnato.
+
+Misure (banco `tools/orecchie/`, confermate nel browser vero):
+| | click 128 | pezzo 126 (groove → pausa → salita → drop) |
+|---|---|---|
+| BPM agganciato in | 4,1 s | 4,1 s |
+| orologio − battito vero | +8,0 ± 0,4 ms | +5,6 ± 4,2 ms, nessuno oltre 60 ms |
+| casse giuste / false | 64 / 0 | 119 / 6 |
+| drop | — | 53,85 s (vero 53,83) |
+| pausa / salita | — | +1,9 s / +2,4 s di ritardo |
+| MIDI clock simulato (jitter ±1,5 ms) | 127,99–128,05 BPM, «uno» dallo Start | |
+
+Lezioni pagate (sono anche nei commenti del codice):
+- **Il basso in levare passa per cassa** se si guarda solo l'energia sotto 100 Hz: a tempo
+  agganciato, un colpo grave a più di ¼ di battito dalla griglia è `basso`.
+- **La rullata della salita passava per cassa** dopo una pausa lunga (soglia ormai bassa) e
+  faceva scattare un drop finto: la cassa ora deve **dominare** sui medi, filtro di 4° ordine.
+- **Nella pausa la fase scivola sul levare** (restano solo i charleston): la fase si corregge
+  solo se ci sono casse **negli ultimi 2 s**; altrimenti l'orologio tira dritto come un volano
+  (23 s di pausa: 9 ms di deriva).
+- **Il microfono finto di Chrome headless** (`--use-file-for-fake-audio-capture`) su questo
+  Mac restituisce **zeri**, anche su una pagina vuota: per i test dell'ingresso si sostituisce
+  `getUserMedia` con lo stream di un `<audio>` (`captureStream`). Il banco Node resta il test
+  principale: stesso codice, tempo simulato, pochi secondi.
+
+**Da provare a mano** (non si può da headless): bus IAC con Ableton (Sync attivo) e
+BlackHole come ingresso vero; calibrare l'anticipo visivo con un click in sala.
