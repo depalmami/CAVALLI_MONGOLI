@@ -6,6 +6,8 @@
 <title>Cavalli Mongoli 3D — Prototipo (Opzione A/B)</title>
 <link rel="icon" href="data:,">
 <style>
+  /* font a pixel dell'HUD Cabinato: lo stesso del 2D, vendorato (licenza SIL OFL) */
+  @font-face { font-family:'Press Start 2P'; src:url('vendor/font/PressStart2P.woff2') format('woff2'); font-display:block; }
   :root {
     --sfondo:#11141b; --card:#1a1f2b; --bordo:#2b3444; --testo:#e8edf6;
     --tenue:#9aa7bd; --acc:#38a169; --acc2:#2b6cb0;
@@ -35,23 +37,6 @@
   #gioco { transition:max-width .2s ease; }              /* l'anteprima si stringe quando parte la proiezione */
   #eco-proiezione { color:var(--acc); font-weight:600; }
 
-  /* pannelli DELL'HUD DI GIOCO: stanno dentro l'anteprima, non sulla pagina */
-  .panel { position:absolute; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.85); z-index:6;
-           background:rgba(0,0,0,.42); border-radius:8px; padding:6px 9px; font-size:12px;
-           backdrop-filter:blur(3px); pointer-events:none; }
-  #hud-left   { top:8px; left:8px; line-height:1.45; }
-  #hud-left b { font-size:19px; }
-  #viaggio { width:170px; height:5px; background:rgba(255,255,255,.18); border-radius:3px;
-             margin:4px 0 2px; overflow:hidden; }
-  #viaggio-fill { height:100%; width:0; background:linear-gradient(90deg,#38a169,#ffd166); }
-  #viaggio-km { font-size:11px; opacity:.8; }
-  #hud-combat { top:8px; left:50%; transform:translateX(-50%); min-width:230px; text-align:center; }
-  #hud-help   { bottom:8px; left:50%; transform:translateX(-50%); font-size:10.5px; white-space:nowrap; }
-  .cbar { display:flex; align-items:center; gap:6px; margin:2px 0; }
-  .cbar-lbl { width:16px; text-align:center; }
-  .cbar-track { flex:1; height:10px; background:rgba(255,255,255,.16); border-radius:6px; overflow:hidden; }
-  .cbar-fill { height:100%; width:100%; border-radius:6px; transition:width .1s linear; }
-  #combat-stats { font-size:13px; margin-top:3px; }
 
   /* ── controlli della console: grandi e leggibili, non microscopici ── */
   .riga { display:flex; align-items:center; gap:8px; margin:7px 0; }
@@ -141,25 +126,6 @@
     <div id="gioco">
       <canvas id="scene"></canvas>
 
-      <div id="hud-left" class="panel">
-        <b><span id="speed">0</span></b> km/h<br>
-        <span id="tappa-nome">Tappa 1 · Fiume Kherlen</span>
-        <div id="viaggio"><div id="viaggio-fill"></div></div>
-        <span id="viaggio-km"></span>
-      </div>
-
-      <div id="hud-combat" class="panel">
-        <div class="cbar"><span class="cbar-lbl">❤️</span><div class="cbar-track"><div id="bar-health" class="cbar-fill" style="background:#e23b3b"></div></div></div>
-        <div class="cbar"><span class="cbar-lbl">⚡</span><div class="cbar-track"><div id="bar-nitro" class="cbar-fill" style="background:#3bb0e2"></div></div></div>
-        <div id="combat-stats">🗡 <b id="stat-kills">0</b> &nbsp; 🏆 <b id="stat-score">0</b> &nbsp; 💰 <b id="stat-money">0</b> &nbsp; <span id="stat-weapon" style="opacity:.85">👊 Pugni</span></div>
-        <div id="combat-obj" style="font-size:11px; opacity:.8; margin-top:2px;"></div>
-      </div>
-
-      <div id="hud-help" class="panel">
-        ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost ·
-        <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno · <b>R</b> riparti
-      </div>
-
       <div id="screen"><div class="box" id="screen-box"></div></div>
       <div id="loading">🐎 Caricamento…<small>(tutto in locale: non serve internet)</small></div>
       <script>
@@ -244,6 +210,9 @@
         alla musica invece che al gioco.</div>
       <div class="nota">🎮 Pad: stick/croce sterza · RT gas · LT freno · X/B attacca ·
         Y calcio · LB parata · RB boost · START pilota.</div>
+      <div class="nota">⌨️ Tastiera: ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata ·
+        <b>Shift</b> boost · <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno ·
+        <b>0–4</b> smarmella · <b>V</b> HUD · <b>R</b> riparti</div>
     </div>
 
     <!-- ══ PROIEZIONE ══ -->
@@ -259,12 +228,18 @@
         <option value="auto">Render: come l'anteprima</option>
         <option value="1152x768">Render: 1152×768 (banda centrale 3:2)</option>
         <option value="1920x1080">Render: 1920×1080 (Full HD)</option>
+        <option value="768x512">Render: 768×512 (ledwall, pixel 1:1)</option>
       </select>
       <div class="bottoni">
         <button id="proj-open">▶︎ Apri proiezione</button>
         <button id="proj-full" disabled>⛶ Pieno</button>
       </div>
-      <label class="spunta"><input type="checkbox" id="proj-hud"> Includi l'HUD di gioco</label>
+      <div class="riga"><label for="hud-modo">HUD <span class="tasto">V</span></label>
+        <select id="hud-modo" style="width:auto; flex:1.6">
+          <option value="gioco">Gioco: vita, nitro, rivali, combo</option>
+          <option value="show">Show: tempo, sezione, smarmella</option>
+          <option value="pulito">Pulito: niente</option>
+        </select></div>
       <div id="proj-stato" class="nota">spenta</div>
       <div class="nota">In proiezione va <b>solo il gioco</b>: mai i pannelli, mai questa console.</div>
     </div>
@@ -335,6 +310,7 @@ import { creaMusica } from './3d/musica.js';
 import { collegaPannelloMusica } from './3d/pannello-musica.js';
 import { PassoSmarmella } from './3d/smarmella.js';
 import { creaCentralina } from './3d/centralina.js';
+import { creaHud } from './3d/hud.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1743,6 +1719,7 @@ function addPopup(who, off, text, color) { popups.push({ who, off, text, color, 
 function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   if (pAtkCd > 0) return;
   pAtkCd = curWeapon.ranged ? 0.42 : 0.26;
+  hud.colpo(musica);          // a tempo? PERFETTO / BUONO sopra il metronomo (il bonus arriva in Fase 6)
   // il colpo parte SEMPRE all'input, anche a vuoto: senza, un attacco senza
   // bersaglio in range non darebbe nessun feedback
   player.attacca(side, curWeapon.key === 'mace' ? 1.25 : 1);
@@ -1780,6 +1757,7 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
 }
 function playerKick() {
   if (pAtkCd > 0) return; pAtkCd = 0.34;
+  hud.colpo(musica);
   player.attacca(0);        // sgroppata: il calcio si vede anche a vuoto
   let best = null, bestAbs = 1e9;
   for (const o of opponents) {
@@ -1804,6 +1782,7 @@ function playerKick() {
   if (Math.abs(best.lat + best.spintaLat) > 1.05 || best.health <= 0) wipe(best, 'kick');
 }
 function hitOpponent(o, dmg, label) {
+  { const t = performance.now()/1000; combo = t - comboT < 2.5 ? combo + 1 : 1; comboT = t; }   // colpi di fila
   o.health -= dmg; o.flash = 1; o.actor.flashHit();
   o.actor.colpito(Math.sign(o.lat - playerX) || 1, curWeapon.key === 'mace' ? 1.4 : 1);
   shake = Math.max(shake, 0.35);
@@ -1824,6 +1803,7 @@ function wipe(o, cause) {
   kills++; const cash = 40 + ((Math.random()*40)|0);
   money += cash; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
   addPopup(o, 1200, '+$' + cash, '#7fffa0'); shake = Math.max(shake, 0.7);
+  hud.banner('TAKEDOWN', o.name + ' A TERRA +' + cash + '$');
   onKill(o);
 }
 
@@ -1868,6 +1848,8 @@ function updateAI(dt) {
         if (blocking) { critical = true; o.actor.colpito(-atkDir, 0.8); fendenti.parata(player, -atkDir);
                         addPopup(o, 900, 'PARATA!', '#8ff'); }
         else { pHealth -= 9 + Math.random()*6; dmgFlash = 1; player.flashHit(); player.colpito(atkDir, 1);
+               if (combo >= 3) hud.comboRotta();      // preso un colpo: la combo si rompe
+               combo = 0;
                shake = Math.max(shake, 0.5); addPopup(o, 900, '⚔', '#ff6b6b');
                const pp = player.group.position;
                hitSpark.burst(pp.x, pp.y + HORSE_HEIGHT*1.0, pp.z, 0xff4444, 10);
@@ -2245,7 +2227,7 @@ $('proj-open').onclick   = () => proiezione.apri();
 $('proj-full').onclick   = () => proiezione.pieno();
 $('proj-screen').onchange = e => proiezione.setSchermo(+e.target.value);
 $('proj-mode').onchange  = e => proiezione.setModo(e.target.value);
-$('proj-hud').onchange   = e => proiezione.setHud(e.target.checked);
+$('hud-modo').onchange   = e => { hud.setModo(e.target.value); proiezione.setHud(e.target.value === 'gioco'); };
 $('proj-res').onchange   = e => {
   const v = e.target.value;
   vista.nativa = v === 'auto' ? null : { w:+v.split('x')[0], h:+v.split('x')[1] };
@@ -2273,7 +2255,7 @@ $('party-gain').oninput = e => {           // slider intensità: 100% = base, 60
 const preferenze = (() => {
   const CHIAVE = 'cm3d.console.v1';
   const CAMPI = ['live-flash','live-bonus','live-text','live-palette','live-cycle','live-3d','live-int',
-                 'ap-on','proj-mode','proj-res','proj-hud',
+                 'ap-on','proj-mode','proj-res','hud-modo',
                  'side-on','side-text','side-speed','side-size','party-gain',
                  'sm-macro','sm-auto','sm-limita'];
   let rinvio = null;
@@ -2352,6 +2334,10 @@ addEventListener('keydown', e => {
   if (staScrivendo(e)) return;
   const k = e.key.toLowerCase();
   if (k === 'u') musica.uno();       // "questo è l'uno": rimette in fase battito e battuta
+  if (k === 'v') {                   // HUD: gioco → show → pulito
+    const el = $('hud-modo'), modi = ['gioco', 'show', 'pulito'];
+    el.value = modi[(modi.indexOf(el.value) + 1) % modi.length]; el.dispatchEvent(new Event('change')); preferenze.salva();
+  }
   if (k.length === 1 && k >= '0' && k <= '4') sceltaLivello(+k);   // SMARMELLA: 0 Diretta … 4 APRI TUTTO
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 'c') cycleCamera();
@@ -2795,7 +2781,7 @@ const live = (() => {
 
   const cv = document.createElement('canvas');
   cv.id = 'live-overlay';   // la proiezione lo ricompone sopra la scena 3D
-  cv.style.cssText = 'position:absolute; pointer-events:none; z-index:6;';
+  cv.style.cssText = 'position:absolute; pointer-events:none; z-index:7;';   // sopra l'HUD
   document.getElementById('gioco').appendChild(cv);
   teleVista.push(cv);
   const ctx = cv.getContext('2d');
@@ -2907,20 +2893,8 @@ const combatHud = (() => {
   const $ = id => document.getElementById(id);
   function draw(dt) {
     resize(); ctx.clearRect(0,0,W,H);
-    if (freeRoam) return;                 // niente barre vita/popup/vignetta senza rivali
-    for (const o of opponents) {
-      if (Math.abs(gapTo(o.pos)) > 26000) continue;              // solo rivali vicini
-      const p = project(o.actor.group.position, HORSE_HEIGHT*1.7);
-      if (!p.vis) continue;
-      const bw = 92, bh = 9, x = p.x - bw/2, y = p.y;
-      ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(x-2, y-2, bw+4, bh+4, 4); ctx.fill();
-      const hp = Math.max(0, o.health) / o.hp0;
-      ctx.fillStyle = o.state === 'wipe' ? '#888' : (hp > 0.5 ? '#3fd66b' : hp > 0.25 ? '#e2c53b' : '#e23b3b');
-      ctx.fillRect(x, y, bw*hp, bh);
-      if (o.flash > 0) { ctx.fillStyle = 'rgba(255,255,255,'+Math.min(0.7,o.flash)+')'; ctx.fillRect(x, y, bw, bh); }
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText(o.state === 'wipe' ? o.name + ' 💀' : o.name, p.x, y - 4);
-    }
+    if (freeRoam) return;                 // niente popup/vignetta senza rivali
+    // nomi e vita dei rivali: ora li disegna l'HUD Cabinato (3d/hud.js), che va anche in proiezione
     for (let i = popups.length-1; i >= 0; i--) {
       const pu = popups[i]; pu.age += dt;
       if (pu.age >= pu.life) { popups.splice(i, 1); continue; }
@@ -2928,8 +2902,10 @@ const combatHud = (() => {
       const p = project(wp, HORSE_HEIGHT*1.4 + pu.off + pu.age*450);
       if (!p.vis) continue;
       ctx.globalAlpha = 1 - pu.age/pu.life;
-      ctx.font = '900 26px Impact, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.lineWidth = 4; ctx.strokeText(pu.text, p.x, p.y);
+      // stesso font a pixel dell'HUD Cabinato, a multipli di 8 come lui
+      const fs = Math.max(8, Math.round(24 * H / 1080 / 8) * 8);
+      ctx.font = fs + 'px "Press Start 2P", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(3, fs / 4); ctx.lineJoin = 'miter'; ctx.strokeText(pu.text, p.x, p.y);
       ctx.fillStyle = pu.color; ctx.fillText(pu.text, p.x, p.y);
       ctx.globalAlpha = 1;
     }
@@ -2943,16 +2919,48 @@ const combatHud = (() => {
       gb.addColorStop(0, 'rgba(70,160,255,0)'); gb.addColorStop(1, 'rgba(70,160,255,0.26)');
       ctx.fillStyle = gb; ctx.fillRect(0, 0, W, H);
     }
-    $('bar-health').style.width = Math.max(0, pHealth)/MAX_HEALTH*100 + '%';
-    $('bar-nitro').style.width  = nitro/MAX_NITRO*100 + '%';
-    $('stat-kills').textContent = kills;
-    $('stat-score').textContent = score;
-    $('stat-money').textContent = money;
-    $('stat-weapon').textContent = (curWeapon.icon || '👊') + ' ' + curWeapon.name +
-      (isFinite(curWeapon.uses) ? ' ×' + curWeapon.uses : '');
   }
   return { draw };
 })();
+
+//=========================================================================
+// HUD CABINATO — una tela sola, anche in proiezione (vedi 3d/hud.js).
+// Il modulo non conosce il gioco: statoHud() gli prepara tutto, già calcolato.
+//=========================================================================
+const hud = (() => {
+  const cv = document.createElement('canvas');
+  cv.id = 'hud-overlay';
+  cv.style.cssText = 'position:absolute; pointer-events:none; z-index:6;';
+  document.getElementById('gioco').appendChild(cv);
+  teleVista.push(cv);
+  return creaHud(cv);
+})();
+let combo = 0, comboT = -1e9;            // colpi a segno di fila (2,5 s al massimo fra uno e l'altro)
+const vHud = new THREE.Vector3();
+function statoHud() {
+  const k = tappaDi(position), rivali = [], dietro = [];
+  if (!freeRoam) for (const o of opponents) {
+    const g = gapTo(o.pos);
+    if (Math.abs(g) > 26000) continue;                                   // solo rivali vicini
+    vHud.copy(o.actor.group.position); vHud.y += HORSE_HEIGHT * 1.7; vHud.project(camera);
+    if (vHud.z < 1 && Math.abs(vHud.x) < 1.05 && Math.abs(vHud.y) < 1.05 && g > -1500)
+      rivali.push({ x: vHud.x*0.5 + 0.5, y: -vHud.y*0.5 + 0.5, nome: hud.ascii(o.name),
+                    hp: Math.max(0, o.health) / o.hp0, ko: o.state === 'wipe' });
+    else if (g < 0 && g > -20000 && o.state === 'race')                  // chi arriva da dietro, entro ~90 m
+      dietro.push({ nome: hud.ascii(o.name), lato: o.lat < playerX ? -1 : 1, metri: Math.round(-g * UNITA_KM * 1000) });
+  }
+  dietro.sort((a, b) => a.metri - b.metri);
+  return {
+    inGara: game.state === 'racing',
+    kmh: Math.round(speed/60), tappa: k, tappe: TAPPE.length, nomeTappa: TAPPE[k].nome,
+    km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
+    obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
+    vita: Math.max(0, pHealth) / MAX_HEALTH, nitro: nitro / MAX_NITRO, boost: boosting,
+    arma: { nome: curWeapon.name, usi: curWeapon.uses }, soldi: money, takedown: kills, punti: score,
+    combo, comboT, rivali, dietro, musica, smarmella: centralina.liscia,
+  };
+}
+musica.on('drop', () => hud.banner('DROP!', ''));
 
 //=========================================================================
 // PROIEZIONE — seconda finestra col SOLO GIOCO, per il secondo schermo.
@@ -2977,9 +2985,10 @@ const proiezione = (() => {
   let modo = 'mirror';
   const lato = { on:false, testo:'CAVALLI MONGOLI', vel:60, corpo:64, off:0, righe:null, ultimo:0 };
 
-  let conHud = false;   // barre vita/popup dei rivali: di norma FUORI dalla proiezione
+  let conHud = true;    // popup dei colpi e vignetta del danno: seguono il modo dell'HUD (solo in «gioco»)
   const tele = () => [ renderer.domElement,
                        conHud ? document.getElementById('combat-overlay') : null,
+                       document.getElementById('hud-overlay'),
                        document.getElementById('live-overlay') ];
   const stato = t => { const e = document.getElementById('proj-stato'); if (e) e.textContent = t; };
 
@@ -3200,21 +3209,21 @@ function startEvent() {
                         dist: 0, killsThisEvent: 0, state: 'racing' });
   position = prevPosition = ev.inizio; playerX = prevPlayerX = 0; speed = 0; started = true;
   respawnRivals(game.eventIndex); hideScreen();
+  hud.banner('TAPPA ' + (ev.indice + 1), ev.tappa.nome + ' - ' + { race:'GARA', takedown:'RAZZIA', survival:'SOPRAVVIVENZA', time:'CONTRO IL TEMPO' }[ev.type]);
 }
+// obiettivo dell'evento per l'HUD: solo ASCII, il font a pixel non ha emoji né accenti
 function objectiveText() {
   const pct = Math.min(100, Math.round(game.dist / game.target * 100));
-  if (game.type === 'takedown') return `⚔️ abbatti ${game.killsThisEvent}/${game.need} · traguardo ${pct}%`;
-  if (game.type === 'time')     return `⏱️ ${Math.max(0, game.timeLeft).toFixed(1)}s · traguardo ${pct}%`;
-  if (game.type === 'survival') return `🛡️ sopravvivi · traguardo ${pct}%`;
-  return `🏁 traguardo ${pct}%`;
+  if (game.type === 'takedown') return `ABBATTI ${game.killsThisEvent}/${game.need} - TRAGUARDO ${pct}%`;
+  if (game.type === 'time')     return `TEMPO ${Math.max(0, game.timeLeft).toFixed(1)}S - TRAGUARDO ${pct}%`;
+  if (game.type === 'survival') return `SOPRAVVIVI - TRAGUARDO ${pct}%`;
+  return `TRAGUARDO ${pct}%`;
 }
 function checkGame() {
   if (game.state !== 'racing') return;
   if (freeRoam) {                      // nessun obiettivo, nessuna sconfitta: si gira e basta
-    D('combat-obj').textContent = '🔧 MODALITÀ LIBERA — rivali e combattimento disattivati (N)';
-    return;
+    return;                            // l'HUD scrive «MODALITA LIBERA» da solo
   }
-  D('combat-obj').textContent = objectiveText();
   if (game.type === 'takedown') {
     if (game.killsThisEvent >= game.need) return winEvent();
     if (game.dist >= game.target) return loseEvent('Non hai abbattuto abbastanza rivali!');
@@ -3225,6 +3234,7 @@ function checkGame() {
 }
 function winEvent() {
   game.state = 'won';
+  hud.banner(eventFor(game.eventIndex).ultima ? 'KARAKORUM!' : 'TAPPA VINTA', '+$' + (30 + game.eventIndex*10));
   money += 30 + game.eventIndex*10; game.xp += 3 + game.eventIndex;
   if (eventFor(game.eventIndex).ultima) return renderArrivo();
   renderShop();
@@ -3271,6 +3281,7 @@ function renderShop() {
 }
 function loseEvent(reason) {
   game.state = 'dead';
+  hud.banner('KO', 'VIAGGIO INTERROTTO', 3);
   showScreen(`
     <h1>💀 VIAGGIO INTERROTTO</h1>
     <h2>${reason}</h2>
@@ -3317,7 +3328,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { musica, party, centralina, smarmella, sceltaLivello, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3462,17 +3473,11 @@ function frame(now) {
   sky.position.copy(camera.position);
   composer.render();
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
-  combatHud.draw(frameDt);               // barre vita nemici, popup, vignetta danno
+  combatHud.draw(frameDt);               // popup dei colpi, vignetta danno, alone del boost
+  hud.disegna(statoHud(), vista.W, vista.H);   // HUD Cabinato (va anche in proiezione)
   proiezione.disegna();                  // ricompone le tre tele sul secondo schermo
   pannelloMusica.disegna(frameDt);       // meter della console (non va in proiezione)
 
-  $('speed').textContent   = Math.round(speed/60);
-  {
-    const k = tappaDi(position), frac = Math.min(1, position/FINE_VIAGGIO);
-    $('tappa-nome').textContent = `Tappa ${k+1}/${TAPPE.length} · ${TAPPE[k].nome}`;
-    $('viaggio-fill').style.width = (frac*100).toFixed(1) + '%';
-    $('viaggio-km').textContent = `${Math.max(0, (FINE_VIAGGIO - position)*UNITA_KM).toFixed(1)} km a Karakorum`;
-  }
   perf.ms  += (performance.now() - t0 - perf.ms) * 0.1;
   perf.fps += (1/Math.max(frameDt, 1e-3) - perf.fps) * 0.1;
   if (now - perf.t > 500 && perf.el) { perf.t = now; perf.el.textContent = `${perf.fps.toFixed(0)} fps · ${perf.ms.toFixed(1)} ms/frame`; }

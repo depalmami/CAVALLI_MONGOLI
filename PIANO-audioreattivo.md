@@ -438,3 +438,27 @@ Lezioni:
 - **Un caleidoscopio a metà è solo sporco**: va pieno (dopo il drop, inizio frase) o niente.
 - **Il lampo del drop agganciato all'impulso `drop` (0,6 s) era mezzo secondo di bianco**:
   serve un impulso secco (`drop⁴`).
+
+### 3 ottobre 2026 — Fase 3 fatta: HUD Cabinato
+Bozze delle tre direzioni pubblicate come pagina (https://claude.ai/artifact/PbsMzmPtQB9CFjmGuW1Hzu);
+scelta dell'utente: **A · Cabinato**. Implementato in `3d/hud.js`.
+- **Una tela sola, anche in proiezione**: via i tre pannelli DOM (velocità/tappa, vita/nitro/
+  statistiche, aiuto tasti), che al secondo schermo non arrivavano mai. L'aiuto tasti è in Regia.
+- Selettore **HUD: Gioco / Show / Pulito** (tasto **V**) al posto della spunta «Includi l'HUD»:
+  vale per anteprima e proiezione insieme; i popup dei colpi seguono il modo Gioco.
+- Pezzi: viaggio (12 tappe, km, obiettivo dell'evento), velocità + BPM, vita/nitro a blocchi,
+  arma e bottino, **combo** (colpi entro 2,5 s; si rompe se ti colpiscono), rivali con vita a
+  blocchi e frecce per chi arriva da dietro, **metronomo** (l'uno rosso) col **giudizio sui
+  colpi** (PERFETTO ≤ 70 ms, BUONO ≤ 140 ms, il bonus arriva in Fase 6), spettro a blocchi,
+  banner su tappa · takedown · drop · vittoria · KO. In Show: sezione + smarmellometro.
+- Nuova risoluzione di render **768×512 (ledwall, pixel 1:1)**, come nel 2D.
+- Costo: **0,03–0,05 ms per frame** a 1080p (ogni scritta con contorno e ombra si disegna una
+  volta e poi si copia). Font a pixel solo a multipli di 8: a 768×512 cade a 8 px, la sua misura nativa.
+
+Lezioni:
+- **Il font vendorato è solo latino di base** (4,7 KB): niente accenti, «·», «×», emoji. Ogni
+  testo passa da `ascii()`, compresi l'obiettivo dell'evento e i nomi delle tappe.
+- **La cache delle scritte va svuotata quando arriva il font**: una scritta pre-disegnata prima
+  resterebbe in monospace per sempre, senza errori.
+- **Catturare la tela WebGL fuori dal frame dà bianco** (niente `preserveDrawingBuffer`): per
+  i test la composizione si fa dentro il render, come fa la proiezione vera.
