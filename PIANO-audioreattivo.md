@@ -462,3 +462,32 @@ Lezioni:
   resterebbe in monospace per sempre, senza errori.
 - **Catturare la tela WebGL fuori dal frame dà bianco** (niente `preserveDrawingBuffer`): per
   i test la composizione si fa dentro il render, come fa la proiezione vera.
+
+### 3 ottobre 2026 — Fase 4 fatta: il mondo balla
+`3d/mondo.js`: codice agganciato agli shader dei materiali che c'erano già (onBeforeCompile),
+uniform condivise, nessuna geometria nuova tranne i laser. Bersagli nuovi nella centralina
+(`mondo.*`, `cavalli.tempo`, `camera.regista/scossa/rollio`), tutti a 0 a SMARMELLA 0.
+- **Galoppo a tempo** (da Groove in su): sprite → il fotogramma lo decide il battito (scarto
+  misurato: 0 fotogrammi su 25 campioni); modello 3D → aggancio di fase sulla falcata (5–15 ms;
+  i fermo-immagine dei takedown lo sganciano per ~0,3 s). Falcate per battito = potenza di 2
+  più vicina al passo naturale.
+- **Linee del battito** sull'asfalto a distanza velocità × tempo al battito: arrivano al cavallo
+  sul battito. **Equalizzatore** sui cigli: una barra ogni 500 unità, una banda per barra.
+- **Foresta equalizzatore su GPU**: ogni albero ascolta una banda; il rimbalzo del party è un
+  uniform. Le ~36 mila matrici a frame sulla CPU non ci sono più (e l'ombra cresce con l'albero).
+- **Paletti a LED**: uno su otto acceso, la fila corre verso il cavallo a sedicesimi; lampo sulla cassa.
+- **Terreno che respira**: un anello per battito che parte dal cavallo, solo oltre 8000 unità
+  dal corridoio stradale (l'albero più lontano sta a ~7150; la scarpata non ha l'attributo e resta ferma).
+- **Laser** (Rave, APRI TUTTO): fusione normale con colore > 1, non additiva.
+- **Notte** (0…1): il sole scende fino a −4°, nebbia blu, luce ambiente giù; nelle pause più
+  buio, sul drop di APRI TUTTO un lampo di giorno.
+- **Polvere** sulla cassa, **scossa** sul rullante, **rollio** sul drop (alterno), **fermo-immagine**
+  di 0,2 s sul drop dal 70 % in su.
+- **Regista**: da Rave in su taglia la camera a fine frase (8 battute; 4 ad APRI TUTTO); spento
+  torna alla camera scelta con C.
+
+Misure: 1080p senza vsync 303 fps a 0, 273 ad APRI TUTTO (prima 317/269: invariato); riposo a 0
+verificato su tutti i bersagli nuovi.
+
+Rimandato: bandiere dei portali sul battere, normali del terreno che si muove (oggi l'onda si
+vede dalla sagoma, non dall'ombreggiatura), verifica a occhio della notte piena.

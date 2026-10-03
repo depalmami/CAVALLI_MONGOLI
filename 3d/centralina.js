@@ -18,6 +18,20 @@ export const BERSAGLI = {
   'luce.esposizione': [0.4, 2.2],
   'luce.sole':        [0.1, 3],
   'camera.fov':       [-4, 16],
+  // il mondo (Fase 4)
+  'mondo.linee':      [0, 1],      // linee del battito sull'asfalto
+  'mondo.eqBordi':    [0, 1],      // equalizzatore sui cigli
+  'mondo.foresta':    [0, 2],      // gli alberi crescono con la loro banda
+  'mondo.led':        [0, 4],      // luci che corrono sui paletti
+  'mondo.ledFlash':   [0, 4],      // lampo dei paletti
+  'mondo.terreno':    [0, 3500],   // onde del terreno lontano (unità mondo)
+  'mondo.laser':      [0, 1],
+  'mondo.notte':      [0, 1],      // 0 tardo pomeriggio · 1 notte
+  'mondo.polvere':    [0, 1],      // sbuffi sotto gli zoccoli sulla cassa
+  'cavalli.tempo':    [0, 1],      // galoppo agganciato al battito
+  'camera.regista':   [0, 1],      // > 0,5: tagli di camera a fine frase
+  'camera.scossa':    [0, 1],
+  'camera.rollio':    [-0.6, 0.6],
 };
 // a riposo = il gioco di prima, esattamente
 const RIPOSO = { 'post.saturazione': 1, 'post.spicchi': 6, 'luce.bloom': 1, 'luce.esposizione': 1, 'luce.sole': 1 };
@@ -26,31 +40,43 @@ const RIPOSO = { 'post.saturazione': 1, 'post.spicchi': 6, 'luce.bloom': 1, 'luc
 export const LIVELLI = [
   { nome: 'Diretta', base: {}, voci: [] },
   { nome: 'Groove',
-    base: { 'post.vignetta': 0.15, 'post.saturazione': 1.08 },
+    base: { 'post.vignetta': 0.15, 'post.saturazione': 1.08, 'cavalli.tempo': 1, 'mondo.linee': 0.5, 'mondo.led': 0.3 },
     voci: [['cassa', 'post.barile', 0.06], ['cassa', 'post.aberrazione', 0.004], ['cassa', 'camera.fov', 2.5],
-           ['energia', 'luce.bloom', 0.5]] },
+           ['energia', 'luce.bloom', 0.5], ['cassa', 'mondo.ledFlash', 0.4]] },
   { nome: 'Festa',
-    base: { 'post.vignetta': 0.25, 'post.saturazione': 1.2, 'post.colata': 0.12, 'post.zoomFb': 0.004, 'post.grana': 0.04 },
+    base: { 'post.vignetta': 0.25, 'post.saturazione': 1.2, 'post.colata': 0.12, 'post.zoomFb': 0.004, 'post.grana': 0.04,
+            'cavalli.tempo': 1, 'mondo.linee': 0.8, 'mondo.eqBordi': 0.6, 'mondo.foresta': 0.6, 'mondo.led': 0.6,
+            'mondo.polvere': 0.5, 'mondo.notte': 0.1 },
     voci: [['cassa', 'post.barile', 0.12], ['cassa', 'post.aberrazione', 0.01], ['rullante', 'post.glitch', 0.15],
            ['bassi', 'post.zoomRadiale', 0.05], ['charleston', 'post.grana', 0.12], ['cassa', 'camera.fov', 4],
-           ['energia', 'luce.bloom', 1.0], ['drop', 'post.bruciato', 0.7], ['giro', 'post.hue', 0.08]] },
+           ['energia', 'luce.bloom', 1.0], ['drop', 'post.bruciato', 0.7], ['giro', 'post.hue', 0.08],
+           ['cassa', 'mondo.ledFlash', 1.0], ['bassi', 'mondo.terreno', 700], ['rullante', 'camera.scossa', 0.3],
+           ['pausaLiscia', 'mondo.notte', 0.35]] },
   { nome: 'Rave',
     base: { 'post.vignetta': 0.3, 'post.saturazione': 1.45, 'post.colata': 0.3, 'post.scie': 0.55, 'post.zoomFb': 0.012,
-            'post.ruotaFb': 0.004, 'post.ondaFb': 0.003, 'post.hueFb': 0.012, 'post.scanline': 0.12, 'post.tinta': 0.15 },
+            'post.ruotaFb': 0.004, 'post.ondaFb': 0.003, 'post.hueFb': 0.012, 'post.scanline': 0.12, 'post.tinta': 0.15,
+            'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1, 'mondo.led': 1,
+            'mondo.polvere': 1, 'mondo.terreno': 300, 'mondo.laser': 0.6, 'mondo.notte': 0.35, 'camera.regista': 1 },
     voci: [['cassa', 'post.barile', 0.2], ['cassa', 'post.aberrazione', 0.018], ['rullante', 'post.glitch', 0.4],
            ['bassi', 'post.zoomRadiale', 0.12], ['energia', 'post.colata', 0.25], ['alti', 'post.hueFb', 0.03],
            ['rullante', 'post.bruciato', 0.3], ['dopoDrop', 'post.caleido', 1.0], ['charleston', 'post.grana', 0.2],
-           ['cassa', 'camera.fov', 6], ['energia', 'luce.bloom', 1.5], ['giro', 'post.hue', 0.25], ['basso', 'post.ruotaFb', 0.01]] },
+           ['cassa', 'camera.fov', 6], ['energia', 'luce.bloom', 1.5], ['giro', 'post.hue', 0.25], ['basso', 'post.ruotaFb', 0.01],
+           ['cassa', 'mondo.ledFlash', 1.5], ['bassi', 'mondo.terreno', 1500], ['rullante', 'camera.scossa', 0.6],
+           ['pausaLiscia', 'mondo.notte', 0.4], ['drop', 'camera.rollio', 0.25]] },
   { nome: 'APRI TUTTO',
     base: { 'post.vignetta': 0.35, 'post.saturazione': 1.6, 'post.colata': 0.45, 'post.scie': 0.75, 'post.zoomFb': 0.022,
             'post.ruotaFb': 0.01, 'post.ondaFb': 0.007, 'post.hueFb': 0.03, 'post.spicchi': 6,
-            'post.scanline': 0.22, 'post.posterizza': 0.12, 'post.tinta': 0.4 },
+            'post.scanline': 0.22, 'post.posterizza': 0.12, 'post.tinta': 0.4,
+            'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1.6, 'mondo.led': 1.5,
+            'mondo.polvere': 1, 'mondo.terreno': 600, 'mondo.laser': 1, 'mondo.notte': 0.6, 'camera.regista': 1 },
     voci: [['cassa', 'post.barile', 0.32], ['cassa', 'post.aberrazione', 0.03], ['rullante', 'post.glitch', 0.7],
            ['bassi', 'post.zoomRadiale', 0.22], ['rullante', 'post.bruciato', 0.5], ['dopoDrop', 'post.caleido', 1.0],
            ['frase1', 'post.caleido', 1.0], ['scoppio', 'post.flash', 0.85], ['drop', 'post.tinta', 0.5],
            ['energia', 'post.colata', 0.3], ['sub', 'post.ondaFb', 0.008],
            ['alti', 'post.hueFb', 0.05], ['cassa', 'camera.fov', 9], ['energia', 'luce.bloom', 1.5], ['giro', 'post.hue', 1.0],
-           ['charleston', 'post.grana', 0.3], ['basso', 'post.ruotaFb', 0.025], ['onda', 'post.spicchi', 4]] },
+           ['charleston', 'post.grana', 0.3], ['basso', 'post.ruotaFb', 0.025], ['onda', 'post.spicchi', 4],
+           ['cassa', 'mondo.ledFlash', 2.5], ['bassi', 'mondo.terreno', 2500], ['rullante', 'camera.scossa', 1],
+           ['pausaLiscia', 'mondo.notte', 0.3], ['scoppio', 'mondo.notte', -0.6], ['drop', 'camera.rollio', 0.4]] },
 ];
 
 // bersagli che fanno un LAMPO a tutto schermo: passano dal limitatore
@@ -72,6 +98,7 @@ export function creaCentralina(musica) {
         const b = musica.battito + musica.fase - dropB;
         return b < 0 || b > 16 ? 0 : b < 8 ? 1 : 1 - (b - 8) / 8;
       }
+      case 'pausaLiscia': return pausaLiscia;              // pausa o salita, sfumata in ~2 s: il cielo non scatta
       case 'scoppio': return musica.drop ** 4;              // il lampo del drop: secco (~0,15 s), non mezzo secondo di bianco
       case 'frase1': return (((musica.battuta % 8) + 8) % 8) === 0 ? 1 - musica.faseBattuta : 0;   // la prima battuta di ogni frase
       default: { const x = musica[nome]; return typeof x === 'number' ? x : 0; }
@@ -86,7 +113,7 @@ export function creaCentralina(musica) {
 
   // ── MANOPOLA, auto-regia ──
   let macro = 0, liscia = 0, auto = false, limita = true;
-  let sezB0 = 0, dropB = -1e9;
+  let sezB0 = 0, dropB = -1e9, pausaLiscia = 0;
   musica.on('drop', () => { dropB = musica.battito; });
   musica.on('sezione', e => {
     sezB0 = musica.battito;
@@ -121,6 +148,8 @@ export function creaCentralina(musica) {
   }
 
   function aggiorna(dt, ora) {
+    const inPausa = musica.sezione === 'pausa' || musica.sezione === 'salita' ? 1 : 0;
+    pausaLiscia += (inPausa - pausaLiscia) * (1 - Math.exp(-dt / 0.8));
     if (auto) macro = bersaglioAuto();
     liscia += (macro - liscia) * (1 - Math.exp(-dt / 0.25));
     if (Math.abs(macro - liscia) < 1e-4) liscia = macro;

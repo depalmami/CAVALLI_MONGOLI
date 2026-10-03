@@ -311,6 +311,7 @@ import { collegaPannelloMusica } from './3d/pannello-musica.js';
 import { PassoSmarmella } from './3d/smarmella.js';
 import { creaCentralina } from './3d/centralina.js';
 import { creaHud } from './3d/hud.js';
+import { creaMondo } from './3d/mondo.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -611,6 +612,8 @@ composer.addPass(smarmella);
 // la luce "di serie": party e centralina la MOLTIPLICANO, non la sovrascrivono,
 // così due effetti insieme non si pestano e a riposo si torna esattamente qui
 const LUCE0 = { sole: sun.intensity, cielo: hemi.intensity, espo: renderer.toneMappingExposure, bloom: bloom.strength };
+// IL MONDO CHE BALLA (Fase 4): shader agganciati ai materiali esistenti, vedi 3d/mondo.js
+const mondo = creaMondo();
 
 //=========================================================================
 // VISTA — risoluzione LOGICA del gioco, condivisa da scena 3D e overlay 2D.
@@ -992,6 +995,8 @@ const terrain = (() => {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('uv',       new THREE.BufferAttribute(uv, 2));
   g.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  // distanza dal corridoio stradale (di qualunque ramo): lo shader muove il terreno solo lontano
+  g.setAttribute('aDist',    new THREE.BufferAttribute(dist, 1));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeVertexNormals();
 
@@ -1010,6 +1015,7 @@ const terrain = (() => {
   return { groundAt, roadDist, tint, material: mat, minY: lo, maxY: hi, nx, nz };
 })();
 const groundAt = terrain.groundAt, roadDist = terrain.roadDist;
+mondo.patchTerreno(terrain.material);     // la scarpata ha lo stesso materiale ma non aDist (= 0): resta ferma
 
 const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
 // con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
@@ -1018,12 +1024,15 @@ const roadBase  = new THREE.Color(0.92,0.92,0.92);
 const roadStart = new THREE.Color(2.6,2.6,2.6);     // riga di partenza chiara
 const roadFin   = new THREE.Color(0.05,0.05,0.05);  // traguardo scuro
 
-buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, colorOf: i => {
+const strada = buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, colorOf: i => {
   if (i < 0)              return roadPre;
   if (i === 2 || i === 3) return roadStart;
   if (i >= N - RUMBLE_LENGTH) return roadFin;
   return roadBase;
 }});
+// linee del battito ed equalizzatore sui cigli: le UV della strada sono già in unità
+// di pista (v = indice × SEGMENT_LENGTH / uvTile, coi PRE segmenti di coda davanti)
+mondo.patchStrada(strada.material, { uvTile: 1300, preD: PRE * SEGMENT_LENGTH, semiLarg: ROAD_WIDTH });
 for (const side of [-1, 1])
   buildRibbon({ half: RUMBLE_W/2, centerOff: side*(ROAD_WIDTH + RUMBLE_W/2), colorOf: rumbleCol });
 
@@ -1125,6 +1134,18 @@ const trees = (() => {
   const low   = new THREE.InstancedMesh(lowG,   leafMat,  spots.length);
   const top   = new THREE.InstancedMesh(topG,   leafMat,  spots.length);
   for (const m of [trunk, low, top]) { m.castShadow = true; m.receiveShadow = true; }
+  // EQUALIZZATORE: ogni albero ascolta una banda; scala e rimbalzo del party nello shader
+  {
+    const banda = new THREE.InstancedBufferAttribute(new Float32Array(spots.length).map(() => Math.random()), 1);
+    const offs = { trunk: 310, low: 1245, top: 1770 };
+    for (const [g, k] of [[trunkG, 'trunk'], [lowG, 'low'], [topG, 'top']]) {
+      g.setAttribute('aBanda', banda);
+      g.setAttribute('aOff', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(offs[k]), 1));
+    }
+    mondo.patchAlbero(trunkMat, 'tronco'); mondo.patchAlbero(leafMat, 'chioma');
+    const ombra = mondo.profonditaAlbero();
+    for (const m of [trunk, low, top]) m.customDepthMaterial = ombra;   // l'ombra cresce con l'albero
+  }
   const M = new THREE.Matrix4(), P = new THREE.Vector3(), S = new THREE.Vector3(),
         up = new THREE.Vector3(0,1,0), tint = new THREE.Color();
   const data = [];                                   // base per-istanza, per il pulse
@@ -1139,18 +1160,17 @@ const trees = (() => {
   });
   scene.add(trunk, low, top);
   const OFF = { trunk: 310, low: 1245, top: 1770 };  // centri verticali (×scala) delle 3 parti
-  // sxzMul/syMul: moltiplicatori di scala (1 = normale). I conetti crescono dalla base.
-  function pulse(sxzMul, syMul) {
-    for (let k = 0; k < data.length; k++) {
-      const d = data[k];
-      S.set(d.s*sxzMul, d.s*syMul, d.s*sxzMul);
-      P.set(d.x, d.y + OFF.trunk*d.s*syMul, d.z); M.compose(P, d.q, S); trunk.setMatrixAt(k, M);
-      P.set(d.x, d.y + OFF.low  *d.s*syMul, d.z); M.compose(P, d.q, S); low.setMatrixAt(k, M);
-      P.set(d.x, d.y + OFF.top  *d.s*syMul, d.z); M.compose(P, d.q, S); top.setMatrixAt(k, M);
-    }
-    trunk.instanceMatrix.needsUpdate = low.instanceMatrix.needsUpdate = top.instanceMatrix.needsUpdate = true;
+  // le matrici si scrivono UNA volta; il rimbalzo del party e l'equalizzatore
+  // sono nello shader (prima: ~36 mila matrici ricalcolate a ogni frame di festa)
+  for (let k = 0; k < data.length; k++) {
+    const d = data[k];
+    S.set(d.s, d.s, d.s);
+    P.set(d.x, d.y + OFF.trunk*d.s, d.z); M.compose(P, d.q, S); trunk.setMatrixAt(k, M);
+    P.set(d.x, d.y + OFF.low  *d.s, d.z); M.compose(P, d.q, S); low.setMatrixAt(k, M);
+    P.set(d.x, d.y + OFF.top  *d.s, d.z); M.compose(P, d.q, S); top.setMatrixAt(k, M);
   }
-  pulse(1, 1);                                       // posa iniziale a riposo
+  // sxzMul/syMul: moltiplicatori di scala (1 = normale). I conetti crescono dalla base.
+  function pulse(sxzMul, syMul) { mondo.U.uPulseXZ.value = sxzMul; mondo.U.uPulseY.value = syMul; }
   return { pulse, data };                            // data: posizioni, ispezionabili dai test
 })();
 
@@ -1174,7 +1194,11 @@ const trees = (() => {
     posts.setMatrixAt(k, M);
     posts.setColorAt(k, (Math.floor(p.i/4) % 2 === 0) ? red : white);
   });
+  // indice lungo la pista: le luci corrono di paletto in paletto a sedicesimi
+  posts.geometry.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(slots.map(p => p.i / 4)), 1));
+  mondo.patchPaletti(posts.material);
   scene.add(posts);
+  scene.add(mondo.laser);
 }
 
 //=========================================================================
@@ -1287,6 +1311,12 @@ const blobTex = (() => {
 })();
 
 let modelTemplate = null, modelClip = null, modelClips = [], MODEL_YAW = 0;
+// GALOPPO A TEMPO: il loop lo riempie ogni frame. g = quanto agganciare (0 = passo libero),
+// battiti = battito + fase, bps = battiti al secondo. Vedi HorseActor.update.
+const ritmoCavalli = { g: 0, battiti: 0, bps: 2 };
+// quante falcate per battito: la potenza di 2 più vicina al passo naturale, così il
+// pattinamento resta minimo (a piena velocità il passo è 2,3 falcate/s ≈ 138 BPM)
+const falcatePerBattito = (naturale, bps) => 2 ** Math.round(Math.log2(Math.max(0.05, naturale) / bps));
 // ┌─ MODELLO CAVALLO ───────────────────────────────────────────────────────┐
 // │ Per usare il TUO modello: salva il file come                             │
 // │   assets/models/horse-custom.glb   (formato .glb o .gltf, meglio se      │
@@ -1573,7 +1603,13 @@ class HorseActor {
     if (this.mode === 'sprite') {
       const fps = 10 + speedPct * 20;
       this.frameClock += dt * fps;
-      if (this.frameClock >= 1 && frames.length === 8) {
+      if (ritmoCavalli.g > 0.5 && speedPct > 0.25 && frames.length === 8) {
+        // a tempo: il fotogramma lo decide il battito, non l'orologio dello sprite
+        const m = falcatePerBattito(fps / 8, ritmoCavalli.bps);
+        const f = Math.floor(((ritmoCavalli.battiti * m) % 1) * 8) % 8;
+        if (f !== this.frame) { this.frame = f; this.spriteMat.map = frames[f]; }
+        this.frameClock = 0;
+      } else if (this.frameClock >= 1 && frames.length === 8) {
         this.frame = (this.frame + Math.floor(this.frameClock)) % 8;
         this.frameClock %= 1;
         this.spriteMat.map = frames[this.frame];
@@ -1608,7 +1644,16 @@ class HorseActor {
         if (this.actIdle) this.actIdle.setEffectiveWeight(this.w.idle);
         // passi sincronizzati alla velocità al suolo → i piedi non "pattinano"
         const sp = speedPct * MAX_SPEED;
-        this.actGallop.timeScale = (sp / GALLOP_STRIDE) * this.durG;
+        const naturale = sp / GALLOP_STRIDE;                          // falcate al secondo
+        this.actGallop.timeScale = naturale * this.durG;
+        if (ritmoCavalli.g > 0.001 && this.w.gallop > 0.3 && aTerra < 0.1) {
+          // aggancio di fase (PLL): la falcata cade sul battito; corregge in ~0,4 s
+          const m = falcatePerBattito(naturale, ritmoCavalli.bps);
+          const cur = (this.actGallop.time / this.durG) % 1;
+          let e = (ritmoCavalli.battiti * m) % 1 - cur; e -= Math.round(e);
+          const agganciato = (m * ritmoCavalli.bps + 2.5 * e) * this.durG;
+          this.actGallop.timeScale += (agganciato - this.actGallop.timeScale) * ritmoCavalli.g;
+        }
         if (this.actWalk) this.actWalk.timeScale = (sp / WALK_STRIDE) * this.durW;
         this.mixer.update(dt * (1 - 0.95*aTerra));   // un cavallo disteso non galoppa
         this.shapeTurn();     // DOPO il mixer: la piega si somma alla posa animata
@@ -2325,10 +2370,12 @@ $('live-palette').onchange = e => live.setPalette(e.target.value);
 $('live-cycle').onchange   = e => live.setCycle(e.target.checked);
 $('live-3d').onchange       = e => live.setMode3d(e.target.checked);
 $('live-int').oninput      = e => { live.setIntensity(+e.target.value/100); $('live-int-val').textContent = e.target.value + '%'; };
+function aggiornaBtnCamera() { $('btn-camera').textContent = 'Camera: ' + CAM_MODES[camMode] + (camUtente !== null ? ' (regista)' : ''); }
 function cycleCamera() {
   camMode = (camMode + 1) % CAM_MODES.length;
   tvAnchor = -1;
-  $('btn-camera').textContent = 'Camera: ' + CAM_MODES[camMode];
+  if (camUtente !== null) camUtente = camMode;       // col regista acceso, C sceglie la camera a cui tornare
+  aggiornaBtnCamera();
 }
 addEventListener('keydown', e => {
   if (staScrivendo(e)) return;
@@ -2388,6 +2435,8 @@ const dust = (() => {
     p.vx = (Math.random()-0.5)*500; p.vy = 240 + Math.random()*320; p.vz = (Math.random()-0.5)*500;
     p.size0 = 520 + Math.random()*420; p.s.visible = true;
   }
+  // sbuffo: un gruppo tutto insieme (la cassa), oltre all'emissione continua
+  function burst(x, y, z, n) { for (let i = 0; i < n; i++) emit(x, y, z); }
   function update(dt, fx, fy, fz, speedPct, moving) {
     if (moving && speedPct > 0.12) {
       emitClock += dt;
@@ -2406,7 +2455,7 @@ const dust = (() => {
       p.s.material.opacity = 0.5 * (1-t) * (1-t);
     }
   }
-  return { update };
+  return { update, burst };
 })();
 
 // SCINTILLE D'IMPATTO — burst di particelle nel punto del colpo (a differenza di `dust`,
@@ -2711,11 +2760,24 @@ const party = (() => {
 })();
 
 // luce finale = di serie × party (molla sul battito) × centralina (SMARMELLA)
+// NOTTE (0…1): il sole scende sotto l'orizzonte, la nebbia si fa blu, luce ambiente giù.
+// Il sole del cielo, della luce e delle ombre è lo stesso sunDir: si muove tutto insieme.
+const NEBBIA0 = scene.fog.color.clone(), NEBBIA_NOTTE = new THREE.Color(0x141a33);
+let notteAttuale = 0;
+function applicaNotte(n) {
+  if (Math.abs(n - notteAttuale) < 1e-3) return;
+  notteAttuale = n;
+  const elev = 17 - 21 * n, azim = 165;                  // 17° di pomeriggio → −4° (dopo il tramonto)
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
+  skyU.sunPosition.value.copy(sunDir);
+  scene.fog.color.copy(NEBBIA0).lerp(NEBBIA_NOTTE, n);
+}
 function applicaLuce() {
-  const L = party.luce, v = centralina.v;
-  sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'];
-  hemi.intensity = LUCE0.cielo * L.cielo;
-  renderer.toneMappingExposure = LUCE0.espo * L.espo * v['luce.esposizione'];
+  const L = party.luce, v = centralina.v, n = Math.min(1, Math.max(0, v['mondo.notte']));
+  applicaNotte(n);
+  sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'] * (1 - 0.85 * n);
+  hemi.intensity = LUCE0.cielo * L.cielo * (1 - 0.7 * n);
+  renderer.toneMappingExposure = LUCE0.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
 }
 
@@ -2961,6 +3023,39 @@ function statoHud() {
   };
 }
 musica.on('drop', () => hud.banner('DROP!', ''));
+
+// ── IL MONDO SUL BATTITO (Fase 4): polvere, regista, drop ──
+musica.on('cassa', () => {
+  const v = centralina.v['mondo.polvere'];
+  if (v > 0.05 && speed > MAX_SPEED * 0.2 && game.state === 'racing') {
+    const pp = player.group.position, ph = player.heading;
+    dust.burst(pp.x - Math.sin(ph)*200, pp.y, pp.z - Math.cos(ph)*200, Math.round(2 + 6 * v));
+  }
+});
+let versoRollio = 1;
+musica.on('drop', () => {
+  versoRollio = -versoRollio;                        // un drop a destra, il prossimo a sinistra
+  if (centralina.liscia >= 0.7) fermaImmagine(0.2);  // il tempo si ferma un attimo sul drop
+});
+// REGISTA AUTOMATICO: taglia la camera a fine frase (8 battute; 4 ad APRI TUTTO), mai a metà
+// battuta. Quando si spegne torna la camera che aveva scelto l'operatore.
+let camUtente = null, tagliDaFare = false;
+musica.on('battuta', e => {
+  if (centralina.v['camera.regista'] <= 0.5) return;
+  const ogni = centralina.liscia >= 0.95 ? 4 : 8;
+  if (e.battuta % ogni === 0) tagliDaFare = true;
+});
+function regista() {
+  const on = centralina.v['camera.regista'] > 0.5;
+  if (on && camUtente === null) camUtente = camMode;
+  if (!on && camUtente !== null) { camMode = camUtente; camUtente = null; tvAnchor = -1; aggiornaBtnCamera(); }
+  if (on && tagliDaFare) {
+    tagliDaFare = false;
+    const scelte = ['chase', 'tv', 'orbit', 'chase', 'onboard', 'tv'].filter(c => c !== CAM_MODES[camMode]);
+    camMode = CAM_MODES.indexOf(scelte[(Math.random() * scelte.length) | 0]);
+    tvAnchor = -1; aggiornaBtnCamera();
+  }
+}
 
 //=========================================================================
 // PROIEZIONE — seconda finestra col SOLO GIOCO, per il secondo schermo.
@@ -3328,7 +3423,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3365,7 +3460,8 @@ function fermaImmagine(sec) { hitStop = Math.max(hitStop, sec); }
 
 // contatore in console: fps e ms di lavoro del frame (CPU, render compreso)
 const perf = { fps: 60, ms: 0, t: 0, el: document.getElementById('perf') };
-let fovLiscio = camera.fov;            // FOV di velocità, smussato; il pugno si somma sopra senza accumularsi
+let fovLiscio = camera.fov;
+let posRender = 0;                     // posizione lungo pista DISEGNATA (interpolata): la usano le linee del battito            // FOV di velocità, smussato; il pugno si somma sopra senza accumularsi
 function frame(now) {
   requestAnimationFrame(frame);
   const t0 = performance.now();
@@ -3396,6 +3492,10 @@ function frame(now) {
   const sp = speed / MAX_SPEED;
 
   // rendering interpolato: cavalli posizionati tra i due ultimi stati fisici
+  posRender = interpWrap(prevPosition, position, alpha);
+  ritmoCavalli.g = centralina.v['cavalli.tempo'];          // galoppo a tempo (Fase 4)
+  ritmoCavalli.battiti = musica.battito + musica.fase;
+  ritmoCavalli.bps = 1 / musica.periodo;
   player.place(interpWrap(prevPosition, position, alpha),
                prevPlayerX + (playerX - prevPlayerX) * alpha);
   // assetto del giocatore: punta dove va, si inclina verso l'interno, arcua il corpo
@@ -3453,6 +3553,10 @@ function frame(now) {
   smarmella.accendi(centralina.attiva);
   smarmella.imposta(centralina.post, now/1000);
   smarmella.tinte(live.palette());       // la tinta del post segue la palette dello show
+  mondo.aggiorna({ v: centralina.v, musica, pal: live.palette(),
+                   stradaD: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH + PRE * SEGMENT_LENGTH,
+                   velocita: speed, giocatore: player.group.position, heading: player.heading });
+  regista();
   applicaLuce();
   pannelloSmarmella(now);
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
@@ -3464,7 +3568,10 @@ function frame(now) {
   camera.fov = fovLiscio + centralina.v['camera.fov'];   // + il pugno della cassa (0 a SMARMELLA 0)
   camera.updateProjectionMatrix();
   // scuotimento camera sui colpi/takedown
+  if (centralina.v['camera.scossa'] > 0.01) shake = Math.max(shake, musica.rullante * centralina.v['camera.scossa'] * 0.5);
   if (shake > 0) { const s = shake*300; camera.position.x += (Math.random()-0.5)*s; camera.position.y += (Math.random()-0.5)*s; }
+  // rollio sul drop: la camera rifà lookAt a ogni frame, quindi non si accumula
+  if (Math.abs(centralina.v['camera.rollio']) > 1e-3) camera.rotateZ(centralina.v['camera.rollio'] * versoRollio);
   // sole + frustum d'ombra seguono il giocatore: ombre sempre nitide attorno a lui
   sun.target.position.copy(player.group.position);
   sun.position.copy(player.group.position).addScaledVector(sunDir, 20000);
