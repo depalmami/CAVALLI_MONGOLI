@@ -38,6 +38,7 @@ export function creaMondo() {
     uTerrAmp:   { value: 0 }, uGiocatore: { value: new THREE.Vector3() },
     // alberi
     uPulseXZ:   { value: 1 }, uPulseY: { value: 1 }, uForesta: { value: 0 },
+    uTempo:     { value: 0 }, uVento: { value: 1 }, uRim: { value: 0.22 },
     // paletti
     uLed:       { value: 0 }, uLedFlash: { value: 0 }, uCorsa: { value: 0 },
     uColLed:    { value: new THREE.Color(1, 0.84, 0.25) },
@@ -114,17 +115,41 @@ export function creaMondo() {
       float sy = uPulseY * (1.0 + uForesta * v * 1.6);
       float sx = uPulseXZ * (1.0 + uForesta * v * 0.45);
       transformed = vec3(transformed.x * sx, (transformed.y + aOff) * sy - aOff, transformed.z * sx);
+      // vento: più in alto più si piega, ognuno col suo passo
+      float hh = max(0.0, transformed.y) / 4000.0, w = uVento * hh * hh;
+      transformed.x += sin(uTempo * 1.6 + aBanda * 37.0) * w * 90.0;
+      transformed.z += cos(uTempo * 1.1 + aBanda * 23.0) * w * 60.0;
+      #ifdef USE_INSTANCING
+      // gli alberi lontani cavalcano le onde del terreno: stessa formula di patchTerreno
+      if (uTerrAmp > 0.5) {
+        float m = smoothstep(8000.0, 23000.0, aDistT);
+        if (m > 0.0) {
+          vec3 ip = instanceMatrix[3].xyz;
+          float d = distance(ip.xz, uGiocatore.xz);
+          float onda = 0.5 + 0.5 * cos(6.2831853 * (d / 24000.0 - uBattiti));
+          transformed.y += uTerrAmp * m * (onda - 0.3) * exp(-d / 110000.0) / max(length(instanceMatrix[1].xyz), 0.01);
+        }
+      }
+      #endif
     }`;
   const DICH_ALBERO = `#include <common>
-    attribute float aBanda;      // per istanza: quale banda dello spettro ascolta
-    attribute float aOff;        // per geometria: centro del pezzo rispetto alla base (cresce dal piede)
+    attribute float aBanda;      // per istanza: quale banda dello spettro ascolta (e il passo del vento)
+    attribute float aOff;        // per geometria: centro del pezzo rispetto alla base (0 se l'origine è già al piede)
+    attribute float aDistT;      // per istanza: distanza dal corridoio stradale (0 = non segue il terreno)
     uniform sampler2D uSpettro;
-    uniform float uPulseXZ, uPulseY, uForesta;`;
+    uniform float uPulseXZ, uPulseY, uForesta, uTempo, uVento, uTerrAmp, uBattiti;
+    uniform vec3 uGiocatore;`;
   function patchAlbero(mat, chiave) {
     mat.customProgramCacheKey = () => 'mondo-albero-' + chiave;
     mat.onBeforeCompile = sh => {
       conUniform(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', DICH_ALBERO).replace('#include <begin_vertex>', PATCH_ALBERO);
+      // luce di bordo morbida sulle chiome (solo nel materiale vero, non nell'ombra)
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uRim;')
+        .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+          { float rim = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 3.0);
+            totalEmissiveRadiance += diffuseColor.rgb * rim * uRim; }`);
     };
     mat.needsUpdate = true;
     return mat;
@@ -189,6 +214,8 @@ export function creaMondo() {
     U.uTerrAmp.value = v['mondo.terreno'];
     U.uGiocatore.value.copy(giocatore);
     U.uForesta.value = v['mondo.foresta'];
+    U.uTempo.value = performance.now() / 1000;
+    U.uVento.value = 1 + 2.5 * musica.bassi * v['mondo.foresta'];   // il vento rinforza coi bassi quando la foresta balla
     U.uLed.value = v['mondo.led'];
     U.uLedFlash.value = v['mondo.ledFlash'];
     U.uCorsa.value = Math.floor(b * 4);                           // a sedicesimi, a scatti

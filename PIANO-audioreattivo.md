@@ -491,3 +491,26 @@ verificato su tutti i bersagli nuovi.
 
 Rimandato: bandiere dei portali sul battere, normali del terreno che si muove (oggi l'onda si
 vede dalla sagoma, non dall'ombreggiatura), verifica a occhio della notte piena.
+
+### 3 ottobre 2026 — Grafica: alberi nuovi
+L'utente rimanda **controller MIDI e integrazione con Ableton Live alla fine del progetto** e
+chiede di concentrarsi sugli elementi grafici. Primo pezzo: gli alberi (`3d/alberi.js`).
+- **Specie della Mongolia generate via codice**, 3 varianti ciascuna: larice siberiano a palchi
+  (anche **dorato** d'autunno, coi colori nei vertici), betulla bianca segnata di nero, pino
+  silvestre col fusto arancio in cima, cespuglio. Chiome con normali dal centro del ciuffo
+  (luce morbida), colori nei vertici (scuro dentro e in basso), luce di bordo, **vento**.
+- **Un bioma per tappa**: steppa rada a boschetti (Kherlen, Tuul, Khustai, Khar Balgas,
+  Karakorum), foresta fitta e profonda fino a 14 larghezze di strada (Burkhan Khaldun, Khangai
+  con i larici d'oro), misto lungo i fiumi (Onon, Orkhon), cespugli radi nelle dune.
+- **41.812 alberi a blocchi** (1000 segmenti × specie × variante, 389 InstancedMesh con la
+  propria sfera d'ingombro): si disegnano solo quelli in vista. Gli alberi oltre 8000 dal
+  corridoio cavalcano le onde del terreno (stessa formula nello shader).
+- Equalizzatore e rimbalzo del party restano agganciati; l'ombra segue vento e musica.
+
+Misure: 1080p senza vsync 285 fps a 0, 251 ad APRI TUTTO (prima 303/273 con 12 mila alberi a 3
+primitive); CPU per frame 2,1 ms.
+
+Lezione: **tingere per istanza un verde col giallo dà oliva, non oro** — le varianti di colore
+vere stanno nei vertici della geometria; il colore per istanza serve solo a variare la luce.
+
+Visto e da fare: **le dune di Elsen Tasarkhai sono colline verdi** — serve il terreno per bioma.

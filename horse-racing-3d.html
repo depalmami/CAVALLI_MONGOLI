@@ -312,6 +312,7 @@ import { PassoSmarmella } from './3d/smarmella.js';
 import { creaCentralina } from './3d/centralina.js';
 import { creaHud } from './3d/hud.js';
 import { creaMondo } from './3d/mondo.js';
+import { creaForesta } from './3d/alberi.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1099,80 +1100,12 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
                 colorOf: i => (i >= 0 && !isDark(i)) ? COL.LANE : null });
 
 //=========================================================================
-// ALBERI — vero 3D di contorno (instanced, ~500 alberi). Esposto pulse() per
-// il "party mode" a tempo: rimbalzano ingrandendosi in modo elastico/comico.
+// ALBERI — larici, betulle, pini e cespugli generati via codice, un bioma per
+// tappa, a blocchi lungo la pista (vedi 3d/alberi.js). pulse() per il party mode.
 //=========================================================================
 const TREE_CLEARANCE = 3000;   // distanza minima dal corridoio stradale (vedi sotto)
-const trees = (() => {
-  const spots = [];
-  const P0 = new THREE.Vector3();
-  let scartati = 0;
-  for (let i = 8; i < N; i += 6) {
-    for (const side of [-1, 1]) {
-      if (Math.random() < 0.32) continue;
-      // oltre il piede della scarpata (lat 4) ed entro 5.6: più in là il frame
-      // della pista si ripiega sull'interno delle curve (raggio minimo 25000 = lat 12.5)
-      const lat = side * (4.25 + Math.random()*1.35);
-      // …ma "a lato del PROPRIO segmento" non basta: se un altro ramo della pista
-      // passa lì vicino, l'albero finisce in mezzo a QUELLA carreggiata. Il controllo
-      // va fatto sulla distanza dal corridoio stradale nel suo complesso.
-      posToWorld(i * SEGMENT_LENGTH, lat, P0);
-      if (roadDist(P0.x, P0.z) < TREE_CLEARANCE) { scartati++; continue; }
-      spots.push({ i, lat, s: 0.65 + Math.random()*1.05,
-                   yaw: Math.random()*Math.PI*2, hue: 0.30 + Math.random()*0.08,
-                   light: 0.24 + Math.random()*0.16 });
-    }
-  }
-  if (scartati) console.info(`alberi scartati perché troppo vicini alla strada: ${scartati}`);
-  // abete a due chiome: tronco + cono basso largo + cono alto stretto
-  const trunkG = new THREE.CylinderGeometry(55, 95, 620, 6);
-  const lowG   = new THREE.ConeGeometry(640, 1250, 9);
-  const topG   = new THREE.ConeGeometry(440, 1450, 9);
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.95 });
-  const leafMat  = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }); // tinta per-istanza
-  const trunk = new THREE.InstancedMesh(trunkG, trunkMat, spots.length);
-  const low   = new THREE.InstancedMesh(lowG,   leafMat,  spots.length);
-  const top   = new THREE.InstancedMesh(topG,   leafMat,  spots.length);
-  for (const m of [trunk, low, top]) { m.castShadow = true; m.receiveShadow = true; }
-  // EQUALIZZATORE: ogni albero ascolta una banda; scala e rimbalzo del party nello shader
-  {
-    const banda = new THREE.InstancedBufferAttribute(new Float32Array(spots.length).map(() => Math.random()), 1);
-    const offs = { trunk: 310, low: 1245, top: 1770 };
-    for (const [g, k] of [[trunkG, 'trunk'], [lowG, 'low'], [topG, 'top']]) {
-      g.setAttribute('aBanda', banda);
-      g.setAttribute('aOff', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(offs[k]), 1));
-    }
-    mondo.patchAlbero(trunkMat, 'tronco'); mondo.patchAlbero(leafMat, 'chioma');
-    const ombra = mondo.profonditaAlbero();
-    for (const m of [trunk, low, top]) m.customDepthMaterial = ombra;   // l'ombra cresce con l'albero
-  }
-  const M = new THREE.Matrix4(), P = new THREE.Vector3(), S = new THREE.Vector3(),
-        up = new THREE.Vector3(0,1,0), tint = new THREE.Color();
-  const data = [];                                   // base per-istanza, per il pulse
-  spots.forEach((sp, k) => {
-    posToWorld(sp.i * SEGMENT_LENGTH, sp.lat, P);
-    const q = new THREE.Quaternion().setFromAxisAngle(up, sp.yaw + (Math.random()-0.5)*0.3);
-    // gli alberi crescono dal TERRENO, non dalla quota della strada: fuori dal
-    // rilevato le due quote sono diverse e prima restavano sospesi o interrati
-    data.push({ x: P.x, y: groundAt(P.x, P.z), z: P.z, s: sp.s, q, phase: Math.random() });
-    tint.setHSL(sp.hue, 0.55, sp.light);
-    low.setColorAt(k, tint); top.setColorAt(k, tint);
-  });
-  scene.add(trunk, low, top);
-  const OFF = { trunk: 310, low: 1245, top: 1770 };  // centri verticali (×scala) delle 3 parti
-  // le matrici si scrivono UNA volta; il rimbalzo del party e l'equalizzatore
-  // sono nello shader (prima: ~36 mila matrici ricalcolate a ogni frame di festa)
-  for (let k = 0; k < data.length; k++) {
-    const d = data[k];
-    S.set(d.s, d.s, d.s);
-    P.set(d.x, d.y + OFF.trunk*d.s, d.z); M.compose(P, d.q, S); trunk.setMatrixAt(k, M);
-    P.set(d.x, d.y + OFF.low  *d.s, d.z); M.compose(P, d.q, S); low.setMatrixAt(k, M);
-    P.set(d.x, d.y + OFF.top  *d.s, d.z); M.compose(P, d.q, S); top.setMatrixAt(k, M);
-  }
-  // sxzMul/syMul: moltiplicatori di scala (1 = normale). I conetti crescono dalla base.
-  function pulse(sxzMul, syMul) { mondo.U.uPulseXZ.value = sxzMul; mondo.U.uPulseY.value = syMul; }
-  return { pulse, data };                            // data: posizioni, ispezionabili dai test
-})();
+const trees = creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi,
+                            distanzaMinima: TREE_CLEARANCE, mondo });   // specie, biomi e blocchi: vedi 3d/alberi.js
 
 //=========================================================================
 // PALETTI A BORDO PISTA — feel da circuito + forte parallasse di velocità
