@@ -3139,30 +3139,99 @@ const proiezione = (() => {
     win = window.open('', 'CM3D_Proiezione',
       `popup=yes,width=${w},height=${h},left=${x},top=${y}`);
     if (!win) { stato('⚠︎ finestra bloccata dal browser: consenti i popup.'); return; }
+    // Come nel 2D: un velo "clicca per lo schermo intero". Lo schermo intero va
+    // chiesto con un clic DENTRO la finestra di proiezione: dal bottone della
+    // console il gesto appartiene all'altra finestra e il browser può rifiutarlo.
+    // Niente script qui dentro: quelli scritti con document.write non partono
+    // (trappola già pagata nel 2D). Tutto si collega da qui, vedi controlliFinestra().
     win.document.write(
       '<!doctype html><meta charset="utf-8"><title>Cavalli Mongoli — proiezione</title>' +
       '<style>html,body{margin:0;background:#000;overflow:hidden;cursor:none}' +
-      'canvas{display:block;width:100vw;height:100vh}</style><canvas id="out"></canvas>');
+      'canvas{display:block;width:100vw;height:100vh}' +
+      '#size-readout{position:fixed;top:8px;left:8px;z-index:20;font:700 13px/1.4 ui-monospace,Menlo,Consolas,monospace;' +
+        'color:#fff;background:rgba(0,0,0,.72);padding:5px 9px;border-radius:6px;pointer-events:none;opacity:0;' +
+        'transition:opacity .25s;white-space:pre}' +
+      '#size-readout.on{opacity:1}' +
+      '#fullscreen-overlay{position:fixed;inset:0;background:rgba(0,0,0,.95);display:flex;flex-direction:column;' +
+        'justify-content:center;align-items:center;z-index:10000;cursor:pointer;color:#fff;font-family:Arial,sans-serif;text-align:center}' +
+      '#fullscreen-overlay h1{font-size:48px;margin:0 0 20px}' +
+      '#fullscreen-overlay p{font-size:24px;opacity:.8;margin:6px 0}' +
+      '#fullscreen-overlay .click-icon{font-size:80px;margin-bottom:30px;animation:pulse 1.5s infinite}' +
+      '@keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.7}}' +
+      '</style><canvas id="out"></canvas>' +
+      '<div id="fullscreen-overlay"><div class="click-icon">🖱️</div>' +
+        '<h1>Clicca per lo schermo intero</h1><p>Il gioco apparirà a schermo intero</p>' +
+        '<p style="margin-top:26px"><a href="#" id="stay-windowed" style="color:#8fd3ff;font-size:18px">' +
+        '…oppure resta in finestra e ridimensionala a mano</a></p></div>' +
+      '<div id="size-readout"></div>');
     win.document.close();
     out = win.document.getElementById('out');
     ctx = out.getContext('2d');
-    const misura = () => {
-      out.width  = win.innerWidth  || w;
-      out.height = win.innerHeight || h;
-    };
-    misura();
-    win.addEventListener('resize', misura);
+    controlliFinestra(w, h, s);
     win.addEventListener('unload', () => { win = null; ctx = null; aggiornaUI(); });
     if (s) { try { win.moveTo(s.left, s.top); win.resizeTo(s.width, s.height); } catch {} }
     aggiornaUI();
-    stato('proiezione attiva — ' + out.width + '×' + out.height);
+    stato('proiezione aperta — clicca sulla finestra per lo schermo intero (F per entrare/uscire)');
   }
 
+  // comandi della finestra di proiezione, collegati dal banco di regia (come setupPopupControls del 2D)
+  function controlliFinestra(fallbackW, fallbackH, schermo) {
+    const d = win.document, velo = d.getElementById('fullscreen-overlay');
+    const resta = d.getElementById('stay-windowed'), lettura = d.getElementById('size-readout');
+    let tMis = null;
+    // misura viva in alto a sinistra mentre si ridimensiona: finestra e tela
+    function misura() {
+      if (!lettura) return;
+      lettura.textContent = 'finestra ' + win.innerWidth + '×' + win.innerHeight + '\ntela     ' + out.width + '×' + out.height;
+      lettura.className = 'on';
+      clearTimeout(tMis);
+      tMis = setTimeout(() => { lettura.className = ''; }, 2500);
+    }
+    function fit() {
+      out.width  = win.innerWidth  || fallbackW || 1280;
+      out.height = win.innerHeight || fallbackH || 720;
+      misura();
+      stato(velo.style.display !== 'none'
+        ? 'proiezione aperta — clicca sulla finestra per lo schermo intero (F per entrare/uscire)'
+        : 'proiezione attiva — ' + out.width + '×' + out.height + (d.fullscreenElement ? ' (schermo intero)' : ''));
+    }
+    function schermoIntero() {
+      const nascondi = () => { velo.style.display = 'none'; };
+      try {
+        const el = d.documentElement;
+        // sul monitor scelto in console, se il browser conosce gli schermi
+        const pr = schermo ? el.requestFullscreen({ screen: schermo }) : el.requestFullscreen();
+        if (pr && pr.then) pr.then(() => { nascondi(); d.body.style.cursor = 'none'; fit(); }).catch(nascondi);
+        else nascondi();
+      } catch { nascondi(); }
+    }
+    velo.addEventListener('click', schermoIntero);
+    resta.addEventListener('click', ev => {
+      // resta in finestra: serve per portarla a mano sulla misura del pannello
+      ev.preventDefault(); ev.stopPropagation();
+      velo.style.display = 'none';
+      d.body.style.cursor = 'default';
+      fit();
+    });
+    d.addEventListener('keydown', ev => {
+      if (ev.key === 'f' || ev.key === 'F') { if (d.fullscreenElement) d.exitFullscreen(); else schermoIntero(); }
+    });
+    win.addEventListener('resize', fit);
+    d.addEventListener('fullscreenchange', fit);
+    fit();
+  }
+
+  // il bottone «Pieno» della console: ci prova da qui; se il browser lo rifiuta
+  // (il clic era nell'altra finestra) rimette il velo, e basta un clic sulla proiezione
   function pieno() {
     if (!win || win.closed) return;
     const s = dettagli && indice != null ? dettagli.screens[indice] : null;
-    const el = win.document.documentElement;
-    try { el.requestFullscreen(s ? { screen: s } : undefined); } catch { try { el.requestFullscreen(); } catch {} }
+    const el = win.document.documentElement, velo = win.document.getElementById('fullscreen-overlay');
+    const rimettiVelo = () => { if (velo) velo.style.display = 'flex'; stato('clicca sulla finestra di proiezione per lo schermo intero'); };
+    try {
+      const pr = el.requestFullscreen(s ? { screen: s } : undefined);
+      if (pr && pr.then) pr.then(() => { if (velo) velo.style.display = 'none'; }).catch(rimettiVelo);
+    } catch { rimettiVelo(); }
   }
 
   function chiudi() { if (win && !win.closed) win.close(); win = null; ctx = null; aggiornaUI(); stato('spenta'); }
