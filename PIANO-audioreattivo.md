@@ -523,3 +523,19 @@ Visto e da fare: **le dune di Elsen Tasarkhai sono colline verdi** — serve il 
   orbita, il tasto C, il bottone in Resa e il **regista automatico** della Fase 4 (bersaglio
   `camera.regista` tolto dalla centralina). Restano pugno di FOV, scossa e rollio sul drop.
   Le camere tolte si recuperano da git (`9d00bfe`).
+
+### 5 ottobre 2026 — Grafica: terreno per bioma, luce del cielo
+L'utente chiede di «riprendere la migrazione verso WebGL per grafica mozzafiato». Il gioco è già
+WebGL; WebGPU sarebbe un rifacimento del motore di resa, sconsigliato a un mese dalla data.
+Si prosegue il piano grafico in WebGL.
+- **Suolo per bioma**: ogni cella del terreno sa qual è il segmento di strada più vicino (il
+  timbro porta l'indice, la distanza chamfer lo propaga) → tappa → pesi di erba verde, steppa
+  secca, sabbia, roccia (`SUOLO_TAPPE`, raccordati per 600 segmenti sui confini). Roccia anche
+  dove la pendenza supera ~35 %. Lo shader disegna paglia, sabbia con le increspature del vento
+  e roccia venata senza texture nuove. Anche la scarpata ha l'attributo (senza, vale (0,0,0,1):
+  tutta roccia).
+- **Dune vere** a Elsen Tasarkhai: creste affilate (1 − |sen|) al posto delle colline, solo
+  lontano dalla strada; il taglio finale tiene l'invariante «mai sopra la sede stradale».
+- **Luce del cielo (IBL)**: il cielo atmosferico fotografato in una mappa d'ambiente (PMREM),
+  rifatta quando il sole si muove (al più 2 volte/s). Dosata per materiale: a 1 slavava tutto,
+  l'asfalto sembrava bagnato e il prato sotto il cielo azzurro si desaturava.

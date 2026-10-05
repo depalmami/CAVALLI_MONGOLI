@@ -577,10 +577,45 @@ const sunDir = new THREE.Vector3();
 // nebbia tinta come l'orizzonte caldo, così la pista lontana si fonde nel cielo
 scene.fog = new THREE.Fog(0xe7d8bf, 26000, 150000);
 
+// LUCE DEL CIELO su tutti i materiali (IBL): il cielo atmosferico viene "fotografato"
+// in una mappa d'ambiente filtrata (PMREM). Così prato, tronchi e cavalli prendono la
+// luce del cielo vero — azzurra dall'alto, calda dall'orizzonte del sole — invece di
+// una luce emisferica a due colori. Si rifà quando il sole si muove (la notte).
+const ambiente = (() => {
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const cieloScena = new THREE.Scene();
+  const copia = new Sky(); copia.scale.setScalar(10);          // il cielo scrive z = w: la scala non conta
+  copia.material.uniforms = sky.material.uniforms;              // stesse uniform del cielo vero
+  cieloScena.add(copia);
+  let rt = null, ultimo = -1e9;
+  function aggiorna(forza = false) {
+    const t = performance.now();
+    if (!forza && t - ultimo < 500) return false;               // al più due volte al secondo
+    ultimo = t;
+    const nuovo = pmrem.fromScene(cieloScena, 0.02);
+    if (rt) rt.dispose();
+    rt = nuovo; scene.environment = rt.texture;
+    return true;
+  }
+  // quanto ogni materiale prende dal cielo: a 1 (il valore di serie) la luce si sommava
+  // a sole ed emisferica e slavava tutto; l'asfalto poi sembrava bagnato
+  function dosa() {
+    scene.traverse(o => {
+      const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+      for (const m of mats) if ('envMapIntensity' in m && !m.userData.iblDosato) {
+        // il prato sotto un cielo azzurro si desatura: poco cielo al terreno, di più a chi ha volume
+        m.envMapIntensity = o === strada ? 0.15 : m === terrain.material ? 0.12 : 0.35;
+        m.userData.iblDosato = true;
+      }
+    });
+  }
+  return { aggiorna, dosa };
+})();
+
 // luce ambientale dal cielo/terra + sole direzionale caldo che proietta ombre morbide.
 // Il colore "da terra" deve essere il rimbalzo di ciò che c'è davvero sotto — qui
 // prato, non terra battuta: con il bruno di prima le ombre viravano al fango.
-const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6e7a45, 0.85);
+const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x6e7a45, 0.65);   // insieme alla luce del cielo (IBL, dosata in dosaIBL)
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffdca6, 3.0);
 sun.position.copy(sunDir).multiplyScalar(20000);
@@ -788,6 +823,36 @@ const VERGE_OUT   = ROAD_WIDTH * 2.4;   // bordo esterno della banchina calpesta
 const BANK_OUT    = ROAD_WIDTH * 4;     // piede della scarpata
 const STAMP_HALF  = ROAD_WIDTH * 2.5;   // corridoio timbrato: copre tutta la parte in piano
 
+// SUOLO PER BIOMA: quanto erba verde, steppa secca, sabbia e roccia c'è attorno a
+// ogni tratto di strada. Un bioma per tappa (come gli alberi, vedi 3d/alberi.js),
+// raccordato sui confini di tappa per ~600 segmenti: niente cambio netto di colore.
+const SUOLO_TAPPE = [   // [erba, secca, sabbia, roccia]
+  [0.55, 0.45, 0, 0],    // Fiume Kherlen: steppa fluviale
+  [0.85, 0.15, 0, 0],    // Guado dell'Onon
+  [0.85, 0.05, 0, 0.10], // Burkhan Khaldun: montagna sacra (la roccia vera la danno i pendii)
+  [0.20, 0.80, 0, 0],    // Piana del Tuul: steppa aperta
+  [0.40, 0.60, 0, 0],    // Colline di Khustai
+  [0, 0.12, 0.88, 0],    // Dune di Elsen Tasarkhai
+  [0.80, 0.20, 0, 0],    // Valle dell'Orkhon
+  [0.45, 0.10, 0, 0.45], // Cascate di Ulaan Tsutgalan: roccia vulcanica
+  [0.70, 0.25, 0, 0.05], // Monti Khangai
+  [0, 0.80, 0.20, 0],    // Rovine di Khar Balgas
+  [0.40, 0.60, 0, 0],    // Erdene Zuu
+  [0.40, 0.60, 0, 0],    // Karakorum
+];
+function pesiSuolo(seg, out, at = 0) {
+  const pos = Math.max(0, seg) * SEGMENT_LENGTH, k = tappaDi(pos);
+  const a = SUOLO_TAPPE[Math.min(k, SUOLO_TAPPE.length - 1)];
+  // raccordo col bioma vicino entro RACCORDO segmenti dal confine
+  const RACCORDO = 600 * SEGMENT_LENGTH;
+  let b = a, t = 0;
+  const dopo = tappaInizio[k + 1] - pos, prima = pos - tappaInizio[k];
+  if (dopo < RACCORDO && k + 1 < SUOLO_TAPPE.length) { b = SUOLO_TAPPE[k + 1]; t = 0.5 * (1 - dopo / RACCORDO); }
+  else if (prima < RACCORDO && k > 0) { b = SUOLO_TAPPE[k - 1]; t = 0.5 * (1 - prima / RACCORDO); }
+  for (let q = 0; q < 4; q++) out[at + q] = a[q] + (b[q] - a[q]) * t;
+  return out;
+}
+
 const terrain = (() => {
   // --- bounding box della pista (coda pre-partenza inclusa) ---
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -811,20 +876,22 @@ const terrain = (() => {
   // ogni punto della linea d'asse timbra 7 campioni trasversali del corridoio:
   // il passo (1667) resta sotto CELL, così nessuna cella del corridoio sfugge
   const forEachStamp = cb => {
-    for (const p of stampPts) {
+    stampPts.forEach((p, k) => {
       const rx = -Math.cos(p.heading), rz = Math.sin(p.heading);
       for (let s = -3; s <= 3; s++) {
         const off = s * STAMP_HALF/3;
-        cb(p.x + rx*off, p.z + rz*off, p.y - VERGE_DROP);
+        cb(p.x + rx*off, p.z + rz*off, p.y - VERGE_DROP, k - PRE);   // k − PRE = indice del segmento
       }
-    }
+    });
   };
 
   // --- 1. TIMBRO del corridoio (sulle sovrapposizioni vince la quota più bassa) ---
-  forEachStamp((wx, wz, v) => {
+  const seg = new Int32Array(nx*nz).fill(-1);       // segmento di strada più vicino (per il bioma)
+  forEachStamp((wx, wz, v, k) => {
     const i = Math.round((wx-x0)/CELL), j = Math.round((wz-z0)/CELL);
     if (i < 0 || i >= nx || j < 0 || j >= nz) return;
     const c = j*nx + i;
+    if (!pin[c] || v < h[c]) seg[c] = k;               // il segmento segue chi vince sulla quota
     h[c] = pin[c] ? Math.min(h[c], v) : v;
     pin[c] = 1;
   });
@@ -880,7 +947,7 @@ const terrain = (() => {
   const D1 = CELL, D2 = CELL*Math.SQRT2;
   // propaga distanza E sorgente insieme, così ogni cella sa a che quota sta la
   // strada più vicina (solo la PIÙ VICINA: nessuna interferenza fra rami lontani)
-  const prop = (c, cn, w) => { const d = dist[cn] + w; if (d < dist[c]) { dist[c] = d; srcY[c] = srcY[cn]; } };
+  const prop = (c, cn, w) => { const d = dist[cn] + w; if (d < dist[c]) { dist[c] = d; srcY[c] = srcY[cn]; seg[c] = seg[cn]; } };
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {          // passata avanti
     const c = j*nx+i;
     if (i > 0)             prop(c, c-1,    D1);
@@ -903,12 +970,21 @@ const terrain = (() => {
     }
     return v;
   };
+  // --- pesi del suolo per cella (dal segmento più vicino) ---
+  const suolo = new Float32Array(nx*nz*4);
+  for (let c = 0; c < nx*nz; c++) pesiSuolo(seg[c], suolo, c*4);
+  // DUNA: creste affilate e avvallamenti tondi (1 − |sen|), perpendicolari a un vento
+  // che gira piano, con l'altezza che varia: le dune barcane di Elsen Tasarkhai
+  const duna = (x, z) => {
+    const u = (x*0.82 + z*0.57)/5200 + 1.6*Math.sin(z/27000) + 0.8*Math.sin(x/19000);
+    return (1 - Math.abs(Math.sin(u))) * (0.65 + 0.35*Math.sin(x/31000 + z/17000)) - 0.35;
+  };
   // --- 4. ONDULAZIONE, che entra solo allontanandosi dalla strada ---
-  const UND_AMP = 3400, UND_FADE = 16000;  // ampiezza collinare e raccordo verso la strada
+  const UND_AMP = 3400, UND_FADE = 16000, DUNE_AMP = 3200;  // colline, raccordo verso la strada, dune
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const c = j*nx+i;
-    const f = Math.min(1, dist[c]/UND_FADE);
-    if (f > 0) h[c] += UND_AMP * f*f * fbm(x0 + i*CELL, z0 + j*CELL);
+    const f = Math.min(1, dist[c]/UND_FADE), sab = suolo[c*4+2];
+    if (f > 0) h[c] += f*f * (UND_AMP * (1 - 0.8*sab) * fbm(x0 + i*CELL, z0 + j*CELL) + DUNE_AMP * sab * duna(x0 + i*CELL, z0 + j*CELL));
   }
 
   // --- 5. TETTO LATERALE: vicino alla strada il terreno non può salire più
@@ -996,6 +1072,17 @@ const terrain = (() => {
   g.setAttribute('color',    new THREE.BufferAttribute(col, 3));
   // distanza dal corridoio stradale (di qualunque ramo): lo shader muove il terreno solo lontano
   g.setAttribute('aDist',    new THREE.BufferAttribute(dist, 1));
+  // ROCCIA sui pendii: dove la pendenza supera ~35% l'erba non tiene più
+  for (let j = 1; j < nz-1; j++) for (let i = 1; i < nx-1; i++) {
+    const c = j*nx + i;
+    const pend = Math.hypot(h[c+1] - h[c-1], h[c+nx] - h[c-nx]) / (2*CELL);
+    const r = Math.min(1, Math.max(0, (pend - 0.32) / 0.28)) * (1 - suolo[c*4+2]);   // le dune restano sabbia
+    if (r > 0) {
+      const k = 1 - r;
+      suolo[c*4] *= k; suolo[c*4+1] *= k; suolo[c*4+2] *= k; suolo[c*4+3] = suolo[c*4+3]*k + r;
+    }
+  }
+  g.setAttribute('aSuolo',   new THREE.BufferAttribute(suolo, 4));   // erba, secca, sabbia, roccia
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeVertexNormals();
 
@@ -1067,9 +1154,10 @@ for (const side of [-1, 1])
       const p = ext[i], rx = -Math.cos(p.heading), rz = Math.sin(p.heading), off = side*lat(k);
       return out.set(p.x + rx*off, p.y + (yOut[i] - p.y) * fall(k), p.z + rz*off);
     };
-    const positions = [], uvs = [], colors = [], rgb = [0,0,0];
+    const positions = [], uvs = [], colors = [], suoli = [], rgb = [0,0,0], ps = [0,0,0,0];
     const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), D = new THREE.Vector3();
     for (let i = 0; i + PASSO < ext.length; i += PASSO) {
+      pesiSuolo(i - PRE, ps);            // stesso bioma del terreno accanto (la scarpata ne condivide il materiale)
       for (let k = 0; k < SPANS; k++) {
         station(i, k, A); station(i, k+1, B); station(i+PASSO, k+1, C); station(i+PASSO, k, D);
         // il verso "verso l'esterno" si ribalta col lato: senza questo scambio
@@ -1079,6 +1167,7 @@ for (const side of [-1, 1])
           positions.push(v.x, v.y, v.z);
           uvs.push(v.x/GROUND_TILE, v.z/GROUND_TILE);
           terrain.tint(v.y, rgb); colors.push(rgb[0], rgb[1], rgb[2]);
+          suoli.push(ps[0], ps[1], ps[2], ps[3]);
         }
       }
     }
@@ -1086,6 +1175,7 @@ for (const side of [-1, 1])
     g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     g.setAttribute('uv',       new THREE.Float32BufferAttribute(uvs, 2));
     g.setAttribute('color',    new THREE.Float32BufferAttribute(colors, 3));
+    g.setAttribute('aSuolo',   new THREE.Float32BufferAttribute(suoli, 4));   // senza, varrebbe (0,0,0,1): tutta roccia
     g.computeVertexNormals();
     const m = new THREE.Mesh(g, terrain.material);   // stesso materiale del terreno: giunzione invisibile
     m.receiveShadow = m.castShadow = true;
@@ -2649,7 +2739,9 @@ const party = (() => {
 // Il sole del cielo, della luce e delle ombre è lo stesso sunDir: si muove tutto insieme.
 const NEBBIA0 = scene.fog.color.clone(), NEBBIA_NOTTE = new THREE.Color(0x141a33);
 let notteAttuale = 0;
+let notteAmbiente = -1;
 function applicaNotte(n) {
+  if (Math.abs(n - notteAmbiente) > 0.03 && ambiente.aggiorna()) notteAmbiente = n;   // il cielo cambia → cambia la sua luce
   if (Math.abs(n - notteAttuale) < 1e-3) return;
   notteAttuale = n;
   const elev = 17 - 21 * n, azim = 165;                  // 17° di pomeriggio → −4° (dopo il tramonto)
@@ -3562,6 +3654,7 @@ Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
   setMode(sOK ? 'sprite' : 'model');
   $('loading').remove();
   ridimensiona();          // fissa la vista ora che le tele overlay esistono tutte
+  ambiente.dosa();         // luce del cielo per materiale (anche quelli nati col modello)
   preferenze.carica();     // ripristina la console com'era all'ultima volta
   player.place(0, 0);
   begin();

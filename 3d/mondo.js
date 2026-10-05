@@ -84,17 +84,53 @@ export function creaMondo() {
     mat.needsUpdate = true;
   }
 
-  // ── TERRENO: onde dal cavallo, solo lontano dalla strada ──
+  // ── TERRENO: onde dal cavallo (solo lontano dalla strada) + SUOLO PER BIOMA ──
+  // aSuolo = pesi di erba verde, steppa secca, sabbia, roccia (dal bioma della tappa
+  // e dalla pendenza). L'erba è la texture che c'era; secca, sabbia e roccia sono
+  // disegnate qui, senza texture nuove: paglia dall'erba, increspature del vento
+  // sulla sabbia, roccia venata.
+  const RUMORE_GLSL = `
+    float hashT(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float rumoreT(vec2 p) {
+      vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hashT(i), hashT(i + vec2(1,0)), f.x), mix(hashT(i + vec2(0,1)), hashT(i + vec2(1,1)), f.x), f.y);
+    }
+    float fbmT(vec2 p) { float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * rumoreT(p); p *= 2.07; a *= 0.5; } return v; }`;
   function patchTerreno(mat) {
     mat.customProgramCacheKey = () => 'mondo-terreno';
     mat.onBeforeCompile = sh => {
       conUniform(sh);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+          varying vec4 vSuolo;
+          varying vec3 vPosT;
+          ${RUMORE_GLSL}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            vec4 w = vSuolo / max(1e-3, vSuolo.x + vSuolo.y + vSuolo.z + vSuolo.w);
+            vec3 erba = diffuseColor.rgb;                                   // texture d'erba × tinta per quota
+            float l = dot(erba, vec3(0.299, 0.587, 0.114));
+            vec3 secca = l * vec3(1.30, 1.06, 0.55) * (0.85 + 0.3 * rumoreT(vPosT.xz * 0.0011));   // paglia
+            // sabbia: increspature del vento (onde storte dal rumore) + grana fine
+            float rip = sin(dot(vPosT.xz, vec2(0.0042, 0.0027)) * 6.2831 + fbmT(vPosT.xz * 0.0006) * 7.0);
+            vec3 sabbia = mix(vec3(0.50, 0.31, 0.15), vec3(0.74, 0.52, 0.30), 0.5 + 0.5 * rip)
+                          * (0.9 + 0.2 * rumoreT(vPosT.xz * 0.05)) * (0.85 + 0.3 * fbmT(vPosT.xz * 0.00008));
+            // roccia: macchie larghe + venature
+            float n = fbmT(vPosT.xz * 0.0012 + vPosT.y * 0.0004);
+            float vena = smoothstep(0.45, 0.5, abs(fbmT(vPosT.xz * 0.004) - 0.5) + 0.42);
+            vec3 roccia = mix(vec3(0.20, 0.18, 0.17), vec3(0.42, 0.38, 0.34), n) * (1.0 - 0.35 * vena);
+            diffuseColor.rgb = erba * w.x + secca * w.y + sabbia * w.z + roccia * w.w;
+          }`);
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', `#include <common>
           attribute float aDist;                 // 0 sulla scarpata (che l'attributo non ce l'ha): mai mossa
+          attribute vec4 aSuolo;
+          varying vec4 vSuolo;
+          varying vec3 vPosT;
           uniform float uTerrAmp, uBattiti;
           uniform vec3 uGiocatore;`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
+          vSuolo = aSuolo; vPosT = position;
           if (uTerrAmp > 0.5) {
             // oltre la banchina E oltre gli alberi (piantati fino a ~6000 dal corridoio)
             float m = smoothstep(8000.0, 23000.0, aDist);   // l'albero più lontano dal corridoio sta a 7135
