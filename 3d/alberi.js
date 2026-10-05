@@ -177,7 +177,7 @@ function boschi(i) {
   return 0.5 + 0.3 * Math.sin(x * 1.3 + Math.sin(x * 0.37) * 2.1) + 0.2 * Math.sin(x * 3.7 + 1.7);
 }
 
-export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi, distanzaMinima, mondo, blocco = 1000 }) {
+export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi, distanzaMinima, mondo, blocco = 1000, libero = () => true }) {
   const rand = rng(12345);                    // seme fisso: la foresta è sempre la stessa
   const geo = {};
   for (const s in SPECIE) geo[s] = Array.from({ length: VARIANTI }, (_, v) => SPECIE[s](101 + v * 977 + s.length * 31));
@@ -196,6 +196,7 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
         if (rand() > dens) continue;
         const lat = lato * (4.3 + f * ((bi.prof - 4.3) / Math.max(1, file)) + rand() * 1.1);
         if (Math.abs(lat) > bi.prof) continue;
+        if (!libero(i, lat)) continue;                 // niente alberi nei fiumi e negli accampamenti
         posToWorld((i + (rand() - 0.5) * 2.5) * SEGMENT_LENGTH, lat, P);
         const dist = roadDist(P.x, P.z);
         if (dist < distanzaMinima) { scartati++; continue; }

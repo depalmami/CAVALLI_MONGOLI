@@ -544,3 +544,11 @@ Si prosegue il piano grafico in WebGL.
   Sole (elevazione, azimut, colore), foschia, Rayleigh, nebbia ed esposizione per tappa, raccordati
   per 600 segmenti; la notte della musica si somma. Sotto l'orizzonte il sole si spegne, resta una
   luna azzurra nell'emisferica e compaiono 2800 **stelle** che seguono la camera.
+- **Paesaggio** (`3d/paesaggio.js`): **fiumi** nelle tappe di Kherlen, Onon, Tuul e Orkhon (letto
+  scavato nel terreno al passo 5b, acqua che riflette il cielo e si increspa coi bassi); **nuvole**
+  a ciuffi, quante dipende dalla tappa (quasi nessuna sulle dune); **montagne** all'orizzonte in due
+  anelli nel colore della foschia; **pali di legno con la sciarpa blu** al posto dei paletti da
+  circuito (le luci a tempo accendono la sciarpa); **gher** con porta rossa e lanterna negli
+  accampamenti di steppa e nelle città, accese di notte; **erba** a blocchi attorno al cavallo, mossa
+  da raffiche. Alberi ed erba stanno fuori da fiumi e accampamenti (`paesaggio.libero`).
+  Notti più leggibili: luna azzurra nell'emisferica, esposizione più alta.

@@ -311,6 +311,7 @@ import { creaCentralina } from './3d/centralina.js';
 import { creaHud } from './3d/hud.js';
 import { creaMondo } from './3d/mondo.js';
 import { creaForesta } from './3d/alberi.js';
+import { creaPaesaggio } from './3d/paesaggio.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -876,6 +877,21 @@ function pesiSuolo(seg, out, at = 0) {
   return out;
 }
 
+// FIUMI: Kherlen, Onon, Tuul e Orkhon scorrono accanto alla strada nella loro tappa,
+// su un lato, serpeggiando; nascono e finiscono stringendosi ai confini di tappa.
+// Il letto lo scava il terreno (passo 5b), l'acqua la mette 3d/paesaggio.js.
+// Il pelo dell'acqua segue la quota della strada (820 sotto): i fiumi in salita sono rapide.
+const FIUMI = { 0: -1, 1: 1, 3: -1, 6: 1 };    // tappa → lato
+function fiumeAl(seg) {
+  if (seg < 0 || seg >= N - 1) return null;
+  const k = tappaDi(seg * SEGMENT_LENGTH), lato = FIUMI[k];
+  if (!lato) return null;
+  const bordo = Math.min(seg - tappaInizio[k] / SEGMENT_LENGTH, tappaInizio[k + 1] / SEGMENT_LENGTH - seg);
+  const mezza = 2300 * Math.min(1, Math.max(0, (bordo - 100) / 500));
+  if (mezza <= 0) return null;
+  return { lato, mezza, lat: 5.8 + 0.6 * Math.sin(seg / 230) + 0.25 * Math.sin(seg / 71), y: pts[seg].y - VERGE_DROP - 520 };
+}
+
 const terrain = (() => {
   // --- bounding box della pista (coda pre-partenza inclusa) ---
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -1020,6 +1036,22 @@ const terrain = (() => {
     if (pin[c] || dist[c] >= R_CEIL) continue;
     const tetto = srcY[c] + SIDE_GRADE * dist[c];
     if (h[c] > tetto) h[c] = tetto;
+  }
+
+  // --- 5b. LETTO DEI FIUMI: si scava sotto il pelo dell'acqua, con le rive in salita ---
+  for (let sg = 0; sg < N - 1; sg += 2) {
+    const f = fiumeAl(sg); if (!f) continue;
+    const a = pts[sg], rx = -Math.cos(a.heading), rz = Math.sin(a.heading);
+    const cx = a.x + rx * f.lato * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lato * f.lat * ROAD_WIDTH, R = f.mezza + 3500;
+    const ia = Math.max(0, Math.floor((cx - R - x0) / CELL)), ib = Math.min(nx - 1, Math.ceil((cx + R - x0) / CELL));
+    const ja = Math.max(0, Math.floor((cz - R - z0) / CELL)), jb = Math.min(nz - 1, Math.ceil((cz + R - z0) / CELL));
+    for (let j = ja; j <= jb; j++) for (let i = ia; i <= ib; i++) {
+      const d = Math.hypot(x0 + i * CELL - cx, z0 + j * CELL - cz);
+      if (d > R) continue;
+      const letto = f.y - 450 + Math.max(0, d - f.mezza * 0.75) * 0.5;
+      const c = j * nx + i;
+      if (h[c] > letto) h[c] = letto;
+    }
   }
 
   // --- 6. CLAMP: invariante "il terreno non supera mai la sede stradale" ---
@@ -1215,35 +1247,15 @@ for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
 // tappa, a blocchi lungo la pista (vedi 3d/alberi.js). pulse() per il party mode.
 //=========================================================================
 const TREE_CLEARANCE = 3000;   // distanza minima dal corridoio stradale (vedi sotto)
+// fiumi, nuvole, montagne, pali con le sciarpe, accampamenti, erba (vedi 3d/paesaggio.js)
+const paesaggio = creaPaesaggio({ scene, U: mondo.U, posToWorld, groundAt, roadDist, tappaDi, tappaInizio, N, SEGMENT_LENGTH,
+                                  ROAD_WIDTH, pesiSuolo, fiumeAl, punti: pts });
 const trees = creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi,
-                            distanzaMinima: TREE_CLEARANCE, mondo });   // specie, biomi e blocchi: vedi 3d/alberi.js
+                            distanzaMinima: TREE_CLEARANCE, mondo, libero: paesaggio.libero });   // specie, biomi e blocchi: vedi 3d/alberi.js
 
-//=========================================================================
-// PALETTI A BORDO PISTA — feel da circuito + forte parallasse di velocità
-//=========================================================================
-{
-  const slots = [];
-  for (let i = 6; i < N - RUMBLE_LENGTH; i += 4)
-    for (const side of [-1, 1]) slots.push({ i, side });
-  const posts = new THREE.InstancedMesh(
-    new THREE.BoxGeometry(70, 760, 70),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
-    slots.length);
-  posts.castShadow = posts.receiveShadow = true;
-  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(),
-        S = new THREE.Vector3(1,1,1), red = new THREE.Color(0xd23b2e), white = new THREE.Color(0xf2f2f2);
-  slots.forEach((p, k) => {
-    posToWorld(p.i * SEGMENT_LENGTH, p.side * 1.18, P);   // appena oltre il bordo strada
-    M.compose(new THREE.Vector3(P.x, P.y + 380, P.z), Q, S);
-    posts.setMatrixAt(k, M);
-    posts.setColorAt(k, (Math.floor(p.i/4) % 2 === 0) ? red : white);
-  });
-  // indice lungo la pista: le luci corrono di paletto in paletto a sedicesimi
-  posts.geometry.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(slots.map(p => p.i / 4)), 1));
-  mondo.patchPaletti(posts.material);
-  scene.add(posts);
-  scene.add(mondo.laser);
-}
+// i paletti da circuito rossi e bianchi sono diventati pali di legno con la sciarpa blu
+// (3d/paesaggio.js): le luci a tempo ora corrono sulle sciarpe
+scene.add(mondo.laser);
 
 //=========================================================================
 // PORTALI DI TAPPA — l'inizio di ogni tappa si vede SULLA STRADA, non solo
@@ -2775,8 +2787,8 @@ const LUCE_TAPPE = [
   [  19, 240,  8, 2.4, '#ffd6a0', '#e6d4bb', 0.85 ],   // Cascate di Ulaan Tsutgalan — tardo pomeriggio
   [  10, 250,  9, 2.8, '#ffc27a', '#e8c9a2', 0.90 ],   // Monti Khangai — ora d'oro
   [   3, 258, 10, 3.5, '#ff9a5a', '#e0a98c', 1.00 ],   // Rovine di Khar Balgas — tramonto
-  [  -2, 265,  6, 3.0, '#ff8a6a', '#7f84a8', 1.10 ],   // Erdene Zuu — ora blu
-  [  -5, 270,  4, 2.0, '#9aa8ff', '#2e3858', 1.25 ],   // Karakorum — notte
+  [  -2, 265,  6, 3.0, '#ff8a6a', '#7f84a8', 1.35 ],   // Erdene Zuu — ora blu
+  [  -5, 270,  4, 2.0, '#9aa8ff', '#2e3858', 1.6 ],   // Karakorum — notte
 ];
 const _cA = new THREE.Color(), _cB = new THREE.Color();
 const luceT = { elev: 0, azim: 0, turb: 0, rayl: 0, sole: new THREE.Color(), nebbia: new THREE.Color(), espo: 1 };
@@ -2793,9 +2805,9 @@ function luceDellaTappa(pos) {
   luceT.nebbia.copy(_cA.set(A[5])).lerp(_cB.set(B[5]), t);
   return luceT;
 }
-const NEBBIA_NOTTE = new THREE.Color(0x141a33), CIELO_GIORNO = new THREE.Color(0xcfe0ff), CIELO_NOTTE = new THREE.Color(0x30406e);
+const NEBBIA_NOTTE = new THREE.Color(0x141a33), CIELO_GIORNO = new THREE.Color(0xcfe0ff), CIELO_NOTTE = new THREE.Color(0x5a70b0);   // luna
 let cieloAmbiente = { elev: 1e9, n: -1 };
-let elevSole = 17;                                       // per le stelle e la luce
+let elevSole = 17, giornoAttuale = 1;                    // per stelle, luci della notte e luce
 function applicaCielo(n) {
   const L = luceDellaTappa(((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH);
   const elev = n > 0 ? L.elev + (Math.min(L.elev, -4) - L.elev) * n : L.elev;
@@ -2815,8 +2827,9 @@ function applicaLuce() {
   const T = applicaCielo(n);
   // sotto l'orizzonte il sole si spegne; resta una luna azzurra nell'emisferica
   const giorno = THREE.MathUtils.smoothstep(elevSole, -3, 8);
+  giornoAttuale = giorno;
   sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'] * giorno * (1 - 0.85 * n);
-  hemi.intensity = LUCE0.cielo * L.cielo * (0.55 + 0.45 * giorno) * (1 - 0.5 * n);
+  hemi.intensity = LUCE0.cielo * L.cielo * (0.8 + 0.2 * giorno) * (1 - 0.5 * n);
   hemi.color.copy(CIELO_GIORNO).lerp(CIELO_NOTTE, 1 - giorno);
   renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
@@ -3514,7 +3527,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3647,6 +3660,8 @@ function frame(now) {
   mondo.aggiorna({ v: centralina.v, musica, pal: live.palette(),
                    stradaD: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH + PRE * SEGMENT_LENGTH,
                    velocita: speed, giocatore: player.group.position, heading: player.heading });
+  paesaggio.aggiorna({ camera, posRender: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
+                       giorno: giornoAttuale, nebbia: scene.fog.color });
   applicaLuce();
   pannelloSmarmella(now);
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
