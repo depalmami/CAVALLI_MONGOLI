@@ -57,7 +57,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       const f = fiumeAl(s);
       if (!f || f.mezza < 60) { prima = null; continue; }
       const a = punti[s], rx = -Math.cos(a.heading), rz = Math.sin(a.heading);
-      const cx = a.x + rx * f.lato * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lato * f.lat * ROAD_WIDTH;
+      const cx = a.x + rx * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lat * ROAD_WIDTH;
       const L = [cx - rx * f.mezza, f.y, cz - rz * f.mezza], R = [cx + rx * f.mezza, f.y, cz + rz * f.mezza];
       if (prima) pos.push(...prima.L, ...prima.R, ...R, ...prima.L, ...R, ...L);
       prima = { L, R };
@@ -88,6 +88,30 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     m.receiveShadow = true;
     scene.add(m);
     return m;
+  })();
+
+  // ════════ PONTI: dove il fiume passa sotto la strada ════════
+  const ponti = (() => {
+    const segs = [];
+    for (let sg = 0; sg < N - 2; sg++) { const f = fiumeAl(sg); if (f && f.ponte) segs.push(sg); }
+    const impalcato = new THREE.InstancedMesh(new THREE.BoxGeometry(5300, 320, SEGMENT_LENGTH + 4),
+      new THREE.MeshStandardMaterial({ color: '#8a8173', roughness: 0.9 }), Math.max(1, segs.length));
+    const trave = new THREE.InstancedMesh(new THREE.BoxGeometry(70, 70, SEGMENT_LENGTH + 4),
+      new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.8 }), Math.max(1, segs.length * 4));
+    const look = {};
+    let nT = 0;
+    segs.forEach((sg, k) => {
+      posToWorld((sg + 0.5) * SEGMENT_LENGTH, 0, P, look);
+      Q.setFromAxisAngle(su, look.heading);
+      impalcato.setMatrixAt(k, M.compose(V.set(P.x, P.y - 175, P.z), Q, S.set(1, 1, 1)));
+      for (const lato of [-1, 1]) for (const yy of [380, 760]) {      // parapetto: due correnti di legno
+        posToWorld((sg + 0.5) * SEGMENT_LENGTH, lato * 1.3, P);
+        trave.setMatrixAt(nT++, M.compose(V.set(P.x, P.y + yy, P.z), Q, S.set(1, 1, 1)));
+      }
+    });
+    impalcato.count = segs.length; trave.count = nT;
+    for (const m of [impalcato, trave]) { m.computeBoundingSphere(); m.castShadow = m.receiveShadow = true; scene.add(m); }
+    return { n: segs.length };
   })();
 
   // ════════ NUVOLE: ciuffi in alto, attorno alla camera ════════
@@ -232,7 +256,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       for (let i = i0; i < i1; i += passo * (0.6 + r() * 0.8)) {
         const seg = Math.floor(i), lato = r() < 0.5 ? -1 : 1, lat = lato * (5.6 + r() * 2.5);
         const f = fiumeAl(seg);
-        if (f && f.lato === lato) continue;                        // non sul lato del fiume
+        if (f && (f.lato === lato || Math.abs(f.lat) < 7)) continue;   // non sul lato del fiume, né dove attraversa
         const n = k >= 10 ? 4 + (r() * 5 | 0) : 2 + (r() * 3 | 0);
         let messe = 0;
         for (let q = 0; q < n * 3 && messe < n; q++) {
@@ -271,7 +295,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
   // libero(seg, lat): niente alberi né erba nel fiume o dentro un accampamento
   function libero(seg, lat) {
     const f = fiumeAl(Math.round(seg));
-    if (f && Math.sign(lat) === f.lato && Math.abs(Math.abs(lat) - f.lat) * ROAD_WIDTH < f.mezza + 1400) return false;
+    if (f && Math.abs(lat - f.lat) * ROAD_WIDTH < f.mezza + 1400) return false;
     for (const c of vicini) if (Math.abs(c.seg - seg) < 60 && Math.abs(c.lat - lat) < c.raggio) return false;
     return true;
   }

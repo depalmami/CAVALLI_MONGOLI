@@ -552,3 +552,10 @@ Si prosegue il piano grafico in WebGL.
   accampamenti di steppa e nelle città, accese di notte; **erba** a blocchi attorno al cavallo, mossa
   da raffiche. Alberi ed erba stanno fuori da fiumi e accampamenti (`paesaggio.libero`).
   Notti più leggibili: luna azzurra nell'emisferica, esposizione più alta.
+- **Rilievo per tappa** (`RILIEVO_TAPPE`: ampiezza, creste, pendenza massima vicino alla strada):
+  steppa dolce, colline a Khustai e sull'Orkhon, montagne a creste su Burkhan Khaldun, Ulaan
+  Tsutgalan e Khangai; i rilievi partono più vicino alla strada (raccordo 11000 invece di 16000).
+- **Fiumi che attraversano**: il fiume cambia lato passando sotto la strada (8 attraversamenti
+  sul viaggio, anche torrenti di montagna). Lì il terreno è scavato sotto la sede (il taglio finale
+  è un minimo, quindi lo scavo vale), la scarpata si interrompe e c'è un ponte: impalcato di pietra
+  e parapetto di legno su due correnti.
