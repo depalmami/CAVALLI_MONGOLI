@@ -313,7 +313,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     };
     const verde = new THREE.Color('#6f9a36'), paglia = new THREE.Color('#b59a52'), c = new THREE.Color(), ps = [0, 0, 0, 0];
     const pool = Array.from({ length: POOL }, () => {
-      const m = new THREE.InstancedMesh(g, mat, MAX); m.count = 0; m.blocco = -1; m.receiveShadow = true; m.frustumCulled = false;
+      const m = new THREE.InstancedMesh(g, mat, MAX); m.count = 0; m.blocco = -1; m.receiveShadow = true;
       scene.add(m); return m;
     });
     function genera(m, b) {
@@ -339,6 +339,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
         }
       }
       m.count = n; m.blocco = b;
+      m.computeBoundingSphere();               // fuori vista il blocco non si disegna
       m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
     return { aggiorna(pos) {
