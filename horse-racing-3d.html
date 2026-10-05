@@ -211,7 +211,7 @@
       <div class="nota">🎮 Pad: stick/croce sterza · RT gas · LT freno · X/B attacca ·
         Y calcio · LB parata · RB boost · START pilota.</div>
       <div class="nota">⌨️ Tastiera: ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata ·
-        <b>Shift</b> boost · <b>C</b> camera · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno ·
+        <b>Shift</b> boost · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno ·
         <b>0–4</b> smarmella · <b>V</b> HUD · <b>R</b> riparti</div>
     </div>
 
@@ -288,8 +288,6 @@
         <button id="btn-sprite" class="active">Opzione A — Sprite</button>
         <button id="btn-model">Opzione B — Modello 3D</button>
       </div>
-      <div class="bottoni"><button id="btn-camera">Camera: chase</button></div>
-      <div class="nota">La camera si cambia anche con <b>C</b>: chase, onboard, tv, orbit.</div>
     </div>
 
   </div>
@@ -2125,11 +2123,10 @@ function updatePhysics(dt) {
 }
 
 //=========================================================================
-// CAMERE — il motivo per cui si fa il 3D vero
+// CAMERA — una sola, quella che segue il cavallo da dietro. Il 5 ottobre 2026
+// l'utente ha tolto le altre (onboard, tv, orbita), il tasto C e il regista
+// automatico che tagliava fra loro a fine frase: si recuperano da git (9d00bfe).
 //=========================================================================
-const CAM_MODES = ['chase', 'onboard', 'tv', 'orbit'];
-let camMode = 0, orbitAngle = 0;
-const tvPos = new THREE.Vector3(); let tvAnchor = -1;
 const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
 
 function updateCamera(dt) {
@@ -2138,46 +2135,10 @@ function updateCamera(dt) {
   const p = player.basePos;
   const h = player.heading;
   const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
-
-  // in prima persona il cavallo del giocatore non si deve vedere da dentro
-  player.group.visible = CAM_MODES[camMode] !== 'onboard';
-
-  switch (CAM_MODES[camMode]) {
-    case 'chase': {
-      tmpB.copy(p).addScaledVector(fwd, -2300); tmpB.y += 1150;
-      camera.position.lerp(tmpB, 1 - Math.pow(0.0001, dt));
-      tmpB.copy(p).addScaledVector(fwd, 1500); tmpB.y += 600;
-      camera.lookAt(tmpB);
-      break;
-    }
-    case 'onboard': {
-      tmpB.copy(p).addScaledVector(fwd, 500); tmpB.y += 1000;
-      camera.position.copy(tmpB);
-      tmpB.copy(p).addScaledVector(fwd, 4500); tmpB.y += 550;
-      camera.lookAt(tmpB);
-      break;
-    }
-    case 'tv': {
-      // postazione fissa a bordo pista; salta avanti quando il giocatore la supera
-      if (tvAnchor < 0 || camera.position.distanceTo(p) > 10000 &&
-          ((position - tvAnchor + TRACK_LENGTH) % TRACK_LENGTH) < TRACK_LENGTH/2) {
-        tvAnchor = (position + 5500) % TRACK_LENGTH;
-        posToWorld(tvAnchor, (Math.random() < 0.5 ? -1 : 1) * 1.9, tvPos);
-        tvPos.y += 1600;
-      }
-      camera.position.copy(tvPos);
-      tmpB.copy(p); tmpB.y += 700;
-      camera.lookAt(tmpB);
-      break;
-    }
-    case 'orbit': {
-      orbitAngle += dt * 0.45;
-      camera.position.set(p.x + Math.sin(orbitAngle)*3800, p.y + 1900, p.z + Math.cos(orbitAngle)*3800);
-      tmpB.copy(p); tmpB.y += 650;
-      camera.lookAt(tmpB);
-      break;
-    }
-  }
+  tmpB.copy(p).addScaledVector(fwd, -2300); tmpB.y += 1150;
+  camera.position.lerp(tmpB, 1 - Math.pow(0.0001, dt));
+  tmpB.copy(p).addScaledVector(fwd, 1500); tmpB.y += 600;
+  camera.lookAt(tmpB);
 }
 
 //=========================================================================
@@ -2196,7 +2157,6 @@ function setMode(mode) {
 }
 $('btn-sprite').onclick = () => setMode('sprite');
 $('btn-model').onclick  = () => setMode('model');
-$('btn-camera').onclick = cycleCamera;
 $('free-on').onchange   = e => setFreeRoam(e.target.checked);
 // — PROIEZIONE —
 $('ap-on').onchange      = e => setPilota(e.target.checked);
@@ -2303,13 +2263,6 @@ $('live-palette').onchange = e => live.setPalette(e.target.value);
 $('live-cycle').onchange   = e => live.setCycle(e.target.checked);
 $('live-3d').onchange       = e => live.setMode3d(e.target.checked);
 $('live-int').oninput      = e => { live.setIntensity(+e.target.value/100); $('live-int-val').textContent = e.target.value + '%'; };
-function aggiornaBtnCamera() { $('btn-camera').textContent = 'Camera: ' + CAM_MODES[camMode] + (camUtente !== null ? ' (regista)' : ''); }
-function cycleCamera() {
-  camMode = (camMode + 1) % CAM_MODES.length;
-  tvAnchor = -1;
-  if (camUtente !== null) camUtente = camMode;       // col regista acceso, C sceglie la camera a cui tornare
-  aggiornaBtnCamera();
-}
 addEventListener('keydown', e => {
   if (staScrivendo(e)) return;
   const k = e.key.toLowerCase();
@@ -2320,7 +2273,6 @@ addEventListener('keydown', e => {
   }
   if (k.length === 1 && k >= '0' && k <= '4') sceltaLivello(+k);   // SMARMELLA: 0 Diretta … 4 APRI TUTTO
   if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
-  if (k === 'c') cycleCamera();
   if (k === 't') party.tap();        // tap tempo
   if (k === 'p') party.toggle();     // distorsione alberi+luce
   if (k === 'f') { const el = $('live-flash'); el.checked = !el.checked; live.setFlash(el.checked); }  // flash strobo
@@ -2957,7 +2909,7 @@ function statoHud() {
 }
 musica.on('drop', () => hud.banner('DROP!', ''));
 
-// ── IL MONDO SUL BATTITO (Fase 4): polvere, regista, drop ──
+// ── IL MONDO SUL BATTITO (Fase 4): polvere, drop ──
 musica.on('cassa', () => {
   const v = centralina.v['mondo.polvere'];
   if (v > 0.05 && speed > MAX_SPEED * 0.2 && game.state === 'racing') {
@@ -2970,25 +2922,6 @@ musica.on('drop', () => {
   versoRollio = -versoRollio;                        // un drop a destra, il prossimo a sinistra
   if (centralina.liscia >= 0.7) fermaImmagine(0.2);  // il tempo si ferma un attimo sul drop
 });
-// REGISTA AUTOMATICO: taglia la camera a fine frase (8 battute; 4 ad APRI TUTTO), mai a metà
-// battuta. Quando si spegne torna la camera che aveva scelto l'operatore.
-let camUtente = null, tagliDaFare = false;
-musica.on('battuta', e => {
-  if (centralina.v['camera.regista'] <= 0.5) return;
-  const ogni = centralina.liscia >= 0.95 ? 4 : 8;
-  if (e.battuta % ogni === 0) tagliDaFare = true;
-});
-function regista() {
-  const on = centralina.v['camera.regista'] > 0.5;
-  if (on && camUtente === null) camUtente = camMode;
-  if (!on && camUtente !== null) { camMode = camUtente; camUtente = null; tvAnchor = -1; aggiornaBtnCamera(); }
-  if (on && tagliDaFare) {
-    tagliDaFare = false;
-    const scelte = ['chase', 'tv', 'orbit', 'chase', 'onboard', 'tv'].filter(c => c !== CAM_MODES[camMode]);
-    camMode = CAM_MODES.indexOf(scelte[(Math.random() * scelte.length) | 0]);
-    tvAnchor = -1; aggiornaBtnCamera();
-  }
-}
 
 //=========================================================================
 // PROIEZIONE — seconda finestra col SOLO GIOCO, per il secondo schermo.
@@ -3558,7 +3491,6 @@ function frame(now) {
   mondo.aggiorna({ v: centralina.v, musica, pal: live.palette(),
                    stradaD: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH + PRE * SEGMENT_LENGTH,
                    velocita: speed, giocatore: player.group.position, heading: player.heading });
-  regista();
   applicaLuce();
   pannelloSmarmella(now);
   gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota

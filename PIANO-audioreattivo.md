@@ -514,3 +514,12 @@ Lezione: **tingere per istanza un verde col giallo dà oliva, non oro** — le v
 vere stanno nei vertici della geometria; il colore per istanza serve solo a variare la luce.
 
 Visto e da fare: **le dune di Elsen Tasarkhai sono colline verdi** — serve il terreno per bioma.
+
+### 5 ottobre 2026 — Proiezione a schermo intero, una camera sola
+- **Clic per lo schermo intero** nella finestra di proiezione, portato dal 2D (velo «clicca»,
+  «resta in finestra», misura viva, F). Il bottone «Pieno» dalla console poteva essere rifiutato
+  perché il gesto è dell'altra finestra.
+- **Una camera sola**, quella che segue il cavallo (richiesta dell'utente): via onboard, tv,
+  orbita, il tasto C, il bottone in Resa e il **regista automatico** della Fase 4 (bersaglio
+  `camera.regista` tolto dalla centralina). Restano pugno di FOV, scossa e rollio sul drop.
+  Le camere tolte si recuperano da git (`9d00bfe`).

@@ -29,7 +29,6 @@ export const BERSAGLI = {
   'mondo.notte':      [0, 1],      // 0 tardo pomeriggio · 1 notte
   'mondo.polvere':    [0, 1],      // sbuffi sotto gli zoccoli sulla cassa
   'cavalli.tempo':    [0, 1],      // galoppo agganciato al battito
-  'camera.regista':   [0, 1],      // > 0,5: tagli di camera a fine frase
   'camera.scossa':    [0, 1],
   'camera.rollio':    [-0.6, 0.6],
 };
@@ -56,7 +55,7 @@ export const LIVELLI = [
     base: { 'post.vignetta': 0.3, 'post.saturazione': 1.45, 'post.colata': 0.3, 'post.scie': 0.55, 'post.zoomFb': 0.012,
             'post.ruotaFb': 0.004, 'post.ondaFb': 0.003, 'post.hueFb': 0.012, 'post.scanline': 0.12, 'post.tinta': 0.15,
             'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1, 'mondo.led': 1,
-            'mondo.polvere': 1, 'mondo.terreno': 300, 'mondo.laser': 0.6, 'mondo.notte': 0.35, 'camera.regista': 1 },
+            'mondo.polvere': 1, 'mondo.terreno': 300, 'mondo.laser': 0.6, 'mondo.notte': 0.35 },
     voci: [['cassa', 'post.barile', 0.2], ['cassa', 'post.aberrazione', 0.018], ['rullante', 'post.glitch', 0.4],
            ['bassi', 'post.zoomRadiale', 0.12], ['energia', 'post.colata', 0.25], ['alti', 'post.hueFb', 0.03],
            ['rullante', 'post.bruciato', 0.3], ['dopoDrop', 'post.caleido', 1.0], ['charleston', 'post.grana', 0.2],
@@ -68,7 +67,7 @@ export const LIVELLI = [
             'post.ruotaFb': 0.01, 'post.ondaFb': 0.007, 'post.hueFb': 0.03, 'post.spicchi': 6,
             'post.scanline': 0.22, 'post.posterizza': 0.12, 'post.tinta': 0.4,
             'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1.6, 'mondo.led': 1.5,
-            'mondo.polvere': 1, 'mondo.terreno': 600, 'mondo.laser': 1, 'mondo.notte': 0.6, 'camera.regista': 1 },
+            'mondo.polvere': 1, 'mondo.terreno': 600, 'mondo.laser': 1, 'mondo.notte': 0.6 },
     voci: [['cassa', 'post.barile', 0.32], ['cassa', 'post.aberrazione', 0.03], ['rullante', 'post.glitch', 0.7],
            ['bassi', 'post.zoomRadiale', 0.22], ['rullante', 'post.bruciato', 0.5], ['dopoDrop', 'post.caleido', 1.0],
            ['frase1', 'post.caleido', 1.0], ['scoppio', 'post.flash', 0.85], ['drop', 'post.tinta', 0.5],
