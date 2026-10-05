@@ -2886,6 +2886,9 @@ function applicaLuce() {
   sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'] * giorno * (1 - 0.85 * n);
   hemi.intensity = LUCE0.cielo * L.cielo * (0.8 + 0.2 * giorno) * (1 - 0.5 * n);
   hemi.color.copy(CIELO_GIORNO).lerp(CIELO_NOTTE, 1 - giorno);
+  // gli alberi fotografati hanno una luce neutra: li tinge la luce della tappa (sole + cielo)
+  const ks = sun.intensity * 0.18, kh = hemi.intensity * 0.55;
+  trees.tingi(sun.color.r * ks + hemi.color.r * kh, sun.color.g * ks + hemi.color.g * kh, sun.color.b * ks + hemi.color.b * kh);
   renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
 }

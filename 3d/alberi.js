@@ -151,6 +151,8 @@ function cespuglio(seme) {
 
 const lariceOro = seme => larice(seme, true);
 export const SPECIE = { larice, lariceOro, betulla, pino, cespuglio };
+// "abete" esiste solo come impostore (foto): la geometria procedurale è un pino, mai usata
+SPECIE.abete = pino;
 const VARIANTI = 3;
 
 // ── un bioma per tappa: quanti alberi, quali, fin dove ──
@@ -158,14 +160,14 @@ const VARIANTI = 3;
 // prof = fin dove arriva la foresta (in larghezze di strada dal centro) · autunno = larici dorati
 const BIOMI = [
   { nome: 'Fiume Kherlen',             dens: 0.22, gruppi: 0.8, prof: 8,  mix: { betulla: 0.6, cespuglio: 0.4 } },
-  { nome: "Guado dell'Onon",           dens: 0.45, gruppi: 0.6, prof: 10, mix: { betulla: 0.55, larice: 0.35, cespuglio: 0.1 } },
-  { nome: 'Burkhan Khaldun',           dens: 0.9,  gruppi: 0.2, prof: 14, mix: { larice: 0.75, pino: 0.15, betulla: 0.1 } },
+  { nome: "Guado dell'Onon",           dens: 0.45, gruppi: 0.6, prof: 10, mix: { betulla: 0.5, larice: 0.3, pino: 0.1, cespuglio: 0.1 } },
+  { nome: 'Burkhan Khaldun',           dens: 0.9,  gruppi: 0.2, prof: 14, mix: { abete: 0.45, pino: 0.25, larice: 0.22, betulla: 0.08 } },
   { nome: 'Piana del Tuul',            dens: 0.07, gruppi: 0.9, prof: 7,  mix: { cespuglio: 0.7, betulla: 0.3 } },
   { nome: 'Colline di Khustai',        dens: 0.2,  gruppi: 0.8, prof: 9,  mix: { betulla: 0.5, cespuglio: 0.5 } },
   { nome: 'Dune di Elsen Tasarkhai',   dens: 0.06, gruppi: 0.5, prof: 8,  mix: { cespuglio: 1 } },
   { nome: "Valle dell'Orkhon",         dens: 0.4,  gruppi: 0.6, prof: 11, mix: { larice: 0.4, betulla: 0.45, cespuglio: 0.15 } },
-  { nome: 'Cascate di Ulaan Tsutgalan', dens: 0.6, gruppi: 0.4, prof: 12, mix: { larice: 0.7, pino: 0.2, cespuglio: 0.1 } },
-  { nome: 'Monti Khangai',             dens: 0.85, gruppi: 0.25, prof: 14, mix: { larice: 0.85, pino: 0.15 }, autunno: 0.6 },
+  { nome: 'Cascate di Ulaan Tsutgalan', dens: 0.6, gruppi: 0.4, prof: 12, mix: { pino: 0.35, abete: 0.3, larice: 0.25, cespuglio: 0.1 } },
+  { nome: 'Monti Khangai',             dens: 0.85, gruppi: 0.25, prof: 14, mix: { larice: 0.45, abete: 0.3, pino: 0.25 }, autunno: 0.75 },
   { nome: 'Rovine di Khar Balgas',     dens: 0.1,  gruppi: 0.8, prof: 8,  mix: { cespuglio: 0.6, betulla: 0.4 } },
   { nome: 'Erdene Zuu',                dens: 0.25, gruppi: 0.5, prof: 9,  mix: { betulla: 0.7, pino: 0.3 } },
   { nome: 'Karakorum',                 dens: 0.15, gruppi: 0.7, prof: 8,  mix: { betulla: 0.5, cespuglio: 0.5 } },
@@ -177,10 +179,72 @@ function boschi(i) {
   return 0.5 + 0.3 * Math.sin(x * 1.3 + Math.sin(x * 0.37) * 2.1) + 0.2 * Math.sin(x * 3.7 + 1.7);
 }
 
+// ── IMPOSTORI: abeti e pini fotorealistici ──
+// Poly Haven li dà a milioni di poligoni (aghi veri): ridotti diventano scheletri. Allora
+// li ho FOTOGRAFATI in Blender da 8 lati (assets/alberi/CREDITI.md) e qui ogni albero è
+// un rettangolo che si gira verso la camera e mostra la foto del lato giusto.
+// ortho = altezza (m) inquadrata dalla foto, base = metri fra il fondo della foto e il piede.
+const M_UNITA = 800;                       // 1 m = 800 unità di gioco (il cavallo, 1300, è 1,6 m)
+export const IMPOSTORI = {
+  abete: [{ url: 'assets/alberi/abete_a.webp', ortho: 19.68, base: 0.379 }, { url: 'assets/alberi/abete_b.webp', ortho: 16.8, base: 1.371 },
+          { url: 'assets/alberi/abete_c.webp', ortho: 17.49, base: 1.484 }],
+  pino:  [{ url: 'assets/alberi/pino_a.webp', ortho: 23.06, base: 1.342 }, { url: 'assets/alberi/pino_b.webp', ortho: 21.07, base: 3.094 },
+          { url: 'assets/alberi/pino_c.webp', ortho: 21.79, base: 2.121 }],
+};
+const VISTE = 8, ASPETTO = 384 / 1024;
+function materialeImpostore(tex, mondo, luce, schiarisci) {
+  const m = new THREE.ShaderMaterial({
+    uniforms: { ...mondo.U, uTex: { value: tex }, uLuceAlberi: luce, uSchiarisci: { value: schiarisci },
+                ...THREE.UniformsLib.fog },
+    fog: true, alphaToCoverage: true, side: THREE.DoubleSide,
+    vertexShader: `
+      #include <common>
+      #include <fog_pars_vertex>
+      attribute float aYaw, aAlt, aBase, aBanda;
+      uniform sampler2D uSpettro;
+      uniform float uPulseXZ, uPulseY, uForesta, uTempo, uVento;
+      varying vec2 vUv;
+      void main() {
+        vec3 ip = instanceMatrix[3].xyz;
+        vec2 d = normalize(cameraPosition.xz - ip.xz);
+        // quale foto: l'angolo da cui la camera guarda l'albero, tolta la sua rotazione
+        float fi = atan(d.x, d.y) - aYaw;
+        float k = mod(floor(fi / 6.2831853 * ${VISTE}.0 + 0.5), ${VISTE}.0);
+        vUv = vec2((k + uv.x) / ${VISTE}.0, uv.y);
+        float v = texture2D(uSpettro, vec2((aBanda * 63.0 + 0.5) / 64.0, 0.5)).r;
+        float alt = aAlt * uPulseY * (1.0 + uForesta * v * 1.2), larg = aAlt * ${ASPETTO} * uPulseXZ;
+        vec3 destra = vec3(d.y, 0.0, -d.x);
+        vec3 p = ip + destra * position.x * larg;
+        p.y = ip.y - aBase * (alt / aAlt) + position.y * alt;      // il piede della foto va a terra
+        p += destra * sin(uTempo * 1.3 + aBanda * 40.0) * uv.y * uv.y * 140.0 * uVento;   // vento in cima
+        vec4 mvPosition = viewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
+      }`,
+    fragmentShader: `
+      #include <common>
+      #include <fog_pars_fragment>
+      uniform sampler2D uTex;
+      uniform vec3 uLuceAlberi;
+      uniform float uSchiarisci;
+      varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(uTex, vUv);
+        if (c.a < 0.35) discard;
+        gl_FragColor = vec4(c.rgb * uLuceAlberi * uSchiarisci, c.a);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        #include <fog_fragment>
+      }`,
+  });
+  return m;
+}
+
 export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi, distanzaMinima, mondo, blocco = 1000, libero = () => true }) {
   const rand = rng(12345);                    // seme fisso: la foresta è sempre la stessa
   const geo = {};
   for (const s in SPECIE) geo[s] = Array.from({ length: VARIANTI }, (_, v) => SPECIE[s](101 + v * 977 + s.length * 31));
+  const luceAlberi = { value: new THREE.Vector3(1, 1, 1) };   // la tinge la pagina con la luce della tappa
 
   // ── disposizione ──
   const P = new THREE.Vector3(), istanze = [];
@@ -217,8 +281,29 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
   const ombra = mondo.profonditaAlbero();
 
   // ── blocchi lungo la pista: una InstancedMesh per (blocco, specie, variante) ──
+  // impostori: un'InstancedMesh per foto (abete/pino × 3), rettangoli che guardano la camera
+  const caricatore = new THREE.TextureLoader(), quad = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0);
+  const iM = new THREE.Matrix4(), iQ = new THREE.Quaternion(), iS = new THREE.Vector3(1, 1, 1), iV = new THREE.Vector3();
+  const impostori = [];
+  for (const [specie, varianti] of Object.entries(IMPOSTORI)) varianti.forEach((v, vi) => {
+    const lista = istanze.filter(x => x.specie === specie && x.variante === vi);
+    if (!lista.length) return;
+    const tex = caricatore.load(v.url);
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+    const g = new THREE.InstancedBufferGeometry().copy(quad);
+    const alt = lista.map(x => v.ortho * M_UNITA * x.s * 0.62);           // un po' più piccoli del vero: il mondo è stilizzato
+    g.setAttribute('aYaw', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(x => x.yaw)), 1));
+    g.setAttribute('aAlt', new THREE.InstancedBufferAttribute(new Float32Array(alt), 1));
+    g.setAttribute('aBase', new THREE.InstancedBufferAttribute(new Float32Array(lista.map((x, n) => v.base / v.ortho * alt[n])), 1));
+    g.setAttribute('aBanda', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(x => x.banda)), 1));
+    const m = new THREE.InstancedMesh(g, materialeImpostore(tex, mondo, luceAlberi, specie === 'pino' ? 2.0 : 1.35), lista.length);
+    lista.forEach((it, n) => m.setMatrixAt(n, iM.compose(iV.set(it.x, it.y, it.z), iQ, iS)));
+    m.frustumCulled = false;
+    scene.add(m); impostori.push(m);
+  });
   const gruppi = new Map();
   for (const it of istanze) {
+    if (IMPOSTORI[it.specie]) continue;      // gli impostori sono già sistemati
     const k = `${Math.floor(it.i / blocco)}|${it.specie}|${it.variante}`;
     if (!gruppi.has(k)) gruppi.set(k, []);
     gruppi.get(k).push(it);
@@ -252,6 +337,8 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
   return {
     // il rimbalzo del party ora è un uniform (nello shader), come l'equalizzatore
     pulse(sxz, sy) { mondo.U.uPulseXZ.value = sxz; mondo.U.uPulseY.value = sy; },
-    data: istanze, meshes, conteggio, BIOMI,
+    data: istanze, meshes, impostori, conteggio, BIOMI,
+    // colore della luce sugli alberi fotografati (la foto ha una luce neutra; qui si tinge)
+    tingi(r, g, b) { luceAlberi.value.set(r, g, b); },
   };
 }

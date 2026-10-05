@@ -565,3 +565,9 @@ Si prosegue il piano grafico in WebGL.
 - **Ponti di pietra** solo dove l'acqua passa davvero sotto: lastre 45 sopra la pista, parapetti
   a blocchi con copertina, spalle fino all'acqua; pietra procedurale dalla posizione nel mondo.
   Niente pali con sciarpa sui ponti.
+- **Alberi fotorealistici (impostori)**: abete e pino di Poly Haven (CC0). Ridotti in Blender a
+  13–21 mila poligoni diventavano scheletri (gli aghi sono geometria vera); allora li ho fotografati
+  in Blender a piena qualità da 8 lati (`tools/fotografa-alberi.py`, `assets/alberi/`, 4,7 MB in
+  WebP) e nel gioco sono rettangoli che guardano la camera e mostrano la foto del lato giusto,
+  tinti dalla luce della tappa, col vento e l'equalizzatore. Abeti e pini nelle foreste di
+  montagna e lungo Onon/Orkhon; larici e betulle restano procedurali (nessun asset gratuito).
