@@ -559,3 +559,9 @@ Si prosegue il piano grafico in WebGL.
   sul viaggio, anche torrenti di montagna). Lì il terreno è scavato sotto la sede (il taglio finale
   è un minimo, quindi lo scavo vale), la scarpata si interrompe e c'è un ponte: impalcato di pietra
   e parapetto di legno su due correnti.
+- **Pista sterrata** al posto dell'asfalto: terra e ghiaia disegnate nello shader della strada
+  (solchi delle ruote, striscia d'erba a tratti in mezzo, sassi, chiazze), tinta per bioma dal
+  vertex color; dell'asfalto restano solo rilievo e ruvidezza. Via linee di corsia e cordoli rossi/bianchi.
+- **Ponti di pietra** solo dove l'acqua passa davvero sotto: lastre 45 sopra la pista, parapetti
+  a blocchi con copertina, spalle fino all'acqua; pietra procedurale dalla posizione nel mondo.
+  Niente pali con sciarpa sui ponti.

@@ -58,7 +58,29 @@ export function creaMondo() {
           varying vec2 vStrada;
           uniform sampler2D uSpettro;
           uniform float uLinee, uEqBordi, uStradaD, uPrimo, uPasso;
-          uniform vec3 uColLinee, uColEq;`)
+          uniform vec3 uColLinee, uColEq;
+          ${RUMORE_GLSL}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            // PISTA DI TERRA E GHIAIA: due solchi di ruote più scuri e lisci, in mezzo una
+            // striscia dove a tratti cresce l'erba, sassi chiari sparsi, chiazze di terra
+            vec2 sp = vStrada * ${uvTile.toFixed(1)};                  // x laterale, y lungo pista (unità mondo)
+            float L = sp.x / ${semiLarg.toFixed(1)};                   // −1…1 da ciglio a ciglio
+            float chiazze = fbmT(sp * 0.0009);
+            vec3 terra = mix(vec3(0.36, 0.28, 0.20), vec3(0.55, 0.45, 0.33), chiazze);
+            float solco = 0.0;
+            for (int k = -1; k <= 1; k += 2) {
+              float c = float(k) * (0.38 + 0.05 * sin(sp.y * 0.0007));  // i solchi serpeggiano appena
+              solco = max(solco, 1.0 - smoothstep(0.06, 0.16, abs(L - c)));
+            }
+            terra *= 1.0 - 0.28 * solco;
+            float mezzo = (1.0 - smoothstep(0.08, 0.2, abs(L))) * smoothstep(0.45, 0.7, fbmT(sp * 0.00025 + 3.0));
+            terra = mix(terra, vec3(0.30, 0.36, 0.17) * (0.8 + 0.4 * rumoreT(sp * 0.02)), mezzo * 0.85);
+            float sasso = smoothstep(0.82, 0.9, rumoreT(sp * 0.045)) * (1.0 - solco);
+            terra = mix(terra, vec3(0.68, 0.64, 0.58), sasso * 0.7);
+            terra *= mix(1.0, 0.75, smoothstep(0.85, 1.0, abs(L)));   // bordi più scuri, verso il cordolo
+            diffuseColor.rgb *= terra * 1.6;                              // × tinta del bioma (vertex color)
+          }`)
         .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
           {
             float D = vStrada.y * ${uvTile.toFixed(1)};             // lungo pista (unità mondo, coi PRE davanti)

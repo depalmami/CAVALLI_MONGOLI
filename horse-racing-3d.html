@@ -1199,18 +1199,32 @@ const terrain = (() => {
 const groundAt = terrain.groundAt, roadDist = terrain.roadDist;
 mondo.patchTerreno(terrain.material);     // la scarpata ha lo stesso materiale ma non aDist (= 0): resta ferma
 
-const rumbleCol = i => isDark(i) ? COL.RUMBLE_D : COL.RUMBLE_L;
+// PISTA STERRATA: niente asfalto nella steppa. Il colore della terra lo disegna lo shader
+// (3d/mondo.js, patchStrada); qui il vertex-color la tinge col bioma: sabbiosa sulle dune,
+// paglierina nella steppa secca, più scura dove c'è erba, grigia sulla roccia.
+const TINTE_PISTA = [[0.86, 0.84, 0.78], [1.06, 0.98, 0.84], [1.18, 1.02, 0.74], [0.92, 0.92, 0.92]];   // erba, secca, sabbia, roccia
+const _ps = [0, 0, 0, 0];
+function tintaPista(i, k = 1) {
+  pesiSuolo(Math.max(0, i), _ps);
+  const c = [0, 0, 0];
+  for (let q = 0; q < 4; q++) for (let r = 0; r < 3; r++) c[r] += _ps[q] * TINTE_PISTA[q][r];
+  return new THREE.Color(c[0] * k, c[1] * k, c[2] * k);
+}
+// i vecchi cordoli rossi e bianchi sono diventati il bordo della pista: terra più scura, a chiazze
+const rumbleCol = i => tintaPista(i, isDark(i) ? 0.40 : 0.44).multiply(new THREE.Color(0.62, 0.48, 0.32));   // terra bruna, non grigio
 // con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
 const roadPre   = new THREE.Color(0.78,0.78,0.78);
 const roadBase  = new THREE.Color(0.92,0.92,0.92);
 const roadStart = new THREE.Color(2.6,2.6,2.6);     // riga di partenza chiara
 const roadFin   = new THREE.Color(0.05,0.05,0.05);  // traguardo scuro
 
-const strada = buildRibbon({ half: ROAD_WIDTH, roughness: 1, tex: asphaltTex, uvTile: 1300, colorOf: i => {
+// dell'asfalto restano solo rilievo e ruvidezza (grana della ghiaia); il colore è della terra
+const strada = buildRibbon({ half: ROAD_WIDTH, roughness: 1, uvTile: 1300,
+                             tex: { normalMap: asphaltTex.normalMap, roughnessMap: asphaltTex.roughnessMap }, colorOf: i => {
   if (i < 0)              return roadPre;
   if (i === 2 || i === 3) return roadStart;
   if (i >= N - RUMBLE_LENGTH) return roadFin;
-  return roadBase;
+  return tintaPista(i);
 }});
 // linee del battito ed equalizzatore sui cigli: le UV della strada sono già in unità
 // di pista (v = indice × SEGMENT_LENGTH / uvTile, coi PRE segmenti di coda davanti)
@@ -1281,10 +1295,7 @@ for (const side of [-1, 1])
     scene.add(m);
   }
 }
-// linee di corsia tratteggiate (3 corsie come nell'originale) — decal sopra l'asfalto
-for (const off of [-ROAD_WIDTH/3, ROAD_WIDTH/3])
-  buildRibbon({ half: ROAD_WIDTH*0.015, yOff: 2, centerOff: off*2, decal: true,
-                colorOf: i => (i >= 0 && !isDark(i)) ? COL.LANE : null });
+// (le linee di corsia bianche non ci sono più: su una pista di terra non si dipingono)
 
 //=========================================================================
 // ALBERI — larici, betulle, pini e cespugli generati via codice, un bioma per

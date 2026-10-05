@@ -90,27 +90,68 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     return m;
   })();
 
-  // ════════ PONTI: dove il fiume passa sotto la strada ════════
+  // ════════ PONTI DI PIETRA: dove l'acqua passa davvero sotto la strada ════════
+  // Piano di lastre un filo più alto della pista, parapetti a blocchi con la copertina chiara,
+  // spalle che scendono fino all'acqua. La pietra è disegnata nello shader (blocchi sfalsati e
+  // malta, dalla posizione nel mondo: niente UV da preparare).
+  const sulPonte = new Set();
   const ponti = (() => {
-    const segs = [];
-    for (let sg = 0; sg < N - 2; sg++) { const f = fiumeAl(sg); if (f && f.ponte) segs.push(sg); }
-    const impalcato = new THREE.InstancedMesh(new THREE.BoxGeometry(5300, 320, SEGMENT_LENGTH + 4),
-      new THREE.MeshStandardMaterial({ color: '#8a8173', roughness: 0.9 }), Math.max(1, segs.length));
-    const trave = new THREE.InstancedMesh(new THREE.BoxGeometry(70, 70, SEGMENT_LENGTH + 4),
-      new THREE.MeshStandardMaterial({ color: '#6b4a2e', roughness: 0.8 }), Math.max(1, segs.length * 4));
+    for (let sg = 0; sg < N - 2; sg++) { const f = fiumeAl(sg); if (f && Math.abs(f.lat) < f.mezza / ROAD_WIDTH + 1.4) sulPonte.add(sg); }
+    const segs = [...sulPonte].sort((a, b) => a - b);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.92 });
+    mat.customProgramCacheKey = () => 'paesaggio-pietra';
+    mat.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPosP; varying vec3 vNorP;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+          vPosP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+          vNorP = normalize(mat3(modelMatrix * instanceMatrix) * objectNormal);
+          #endif`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+          varying vec3 vPosP; varying vec3 vNorP;
+          float hashP(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            // piani orizzontali: lastre dal piano xz; pareti: blocchi da (x+z, y)
+            vec2 q = abs(vNorP.y) > 0.5 ? vPosP.xz : vec2(vPosP.x + vPosP.z, vPosP.y);
+            float alt = abs(vNorP.y) > 0.5 ? 520.0 : 230.0, lun = 480.0;
+            float riga = floor(q.y / alt), x = q.x + mod(riga, 2.0) * lun * 0.5;
+            vec2 cella = vec2(floor(x / lun), riga), f = vec2(fract(x / lun), fract(q.y / alt));
+            float malta = max(1.0 - smoothstep(0.0, 0.05, min(f.x, 1.0 - f.x)), 1.0 - smoothstep(0.0, 0.09, min(f.y, 1.0 - f.y)));
+            float h = hashP(cella);
+            vec3 pietra = mix(vec3(0.50, 0.47, 0.42), vec3(0.74, 0.70, 0.62), h) * (0.88 + 0.24 * hashP(cella + 7.0));
+            diffuseColor.rgb = mix(pietra, vec3(0.28, 0.26, 0.23), malta * 0.85);
+          }`);
+    };
+    const pezzi = {
+      piano:    new THREE.BoxGeometry(5200, 90, SEGMENT_LENGTH + 4),    // lastre: 45 sopra la pista
+      soletta:  new THREE.BoxGeometry(5600, 520, SEGMENT_LENGTH + 4),   // lo spessore sotto
+      parapetto:new THREE.BoxGeometry(300, 560, SEGMENT_LENGTH + 4),
+      copertina:new THREE.BoxGeometry(400, 90, SEGMENT_LENGTH + 4),
+      spalla:   new THREE.BoxGeometry(6000, 2600, 900),
+    };
+    const mesh = {};
+    for (const k in pezzi) { mesh[k] = new THREE.InstancedMesh(pezzi[k], mat, Math.max(2, segs.length * 2 + 4)); mesh[k].count = 0; }
+    const metti = (k, x, y, z, q) => { const m = mesh[k]; m.setMatrixAt(m.count++, M.compose(V.set(x, y, z), q, S.set(1, 1, 1))); };
     const look = {};
-    let nT = 0;
-    segs.forEach((sg, k) => {
+    segs.forEach(sg => {
       posToWorld((sg + 0.5) * SEGMENT_LENGTH, 0, P, look);
-      Q.setFromAxisAngle(su, look.heading);
-      impalcato.setMatrixAt(k, M.compose(V.set(P.x, P.y - 175, P.z), Q, S.set(1, 1, 1)));
-      for (const lato of [-1, 1]) for (const yy of [380, 760]) {      // parapetto: due correnti di legno
-        posToWorld((sg + 0.5) * SEGMENT_LENGTH, lato * 1.3, P);
-        trave.setMatrixAt(nT++, M.compose(V.set(P.x, P.y + yy, P.z), Q, S.set(1, 1, 1)));
+      const q = new THREE.Quaternion().setFromAxisAngle(su, look.heading);
+      metti('piano', P.x, P.y + 1, P.z, q);
+      metti('soletta', P.x, P.y - 300, P.z, q);
+      for (const lato of [-1, 1]) {
+        posToWorld((sg + 0.5) * SEGMENT_LENGTH, lato * 1.4, P);
+        metti('parapetto', P.x, P.y + 280, P.z, q);
+        metti('copertina', P.x, P.y + 600, P.z, q);
+      }
+      // spalle alle due teste di ogni ponte, giù fino all'acqua
+      for (const testa of [sg - 1, sg + 1]) if (!sulPonte.has(testa)) {
+        posToWorld((sg + 0.5 + (testa - sg) * 0.5) * SEGMENT_LENGTH, 0, P);
+        metti('spalla', P.x, P.y - 1350, P.z, q);
       }
     });
-    impalcato.count = segs.length; trave.count = nT;
-    for (const m of [impalcato, trave]) { m.computeBoundingSphere(); m.castShadow = m.receiveShadow = true; scene.add(m); }
+    for (const k in mesh) { const m = mesh[k]; m.computeBoundingSphere(); m.castShadow = m.receiveShadow = true; scene.add(m); }
     return { n: segs.length };
   })();
 
@@ -197,7 +238,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     }
     const g = b.geometria('aSciarpa');
     const slots = [];
-    for (let i = 6; i < N - 4; i += 4) for (const lato of [-1, 1]) slots.push({ i, lato });
+    for (let i = 6; i < N - 4; i += 4) if (!sulPonte.has(i)) for (const lato of [-1, 1]) slots.push({ i, lato });   // sui ponti c'è il parapetto
     g.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(slots.map(p => p.i / 4)), 1));
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
     mat.customProgramCacheKey = () => 'paesaggio-pali';
