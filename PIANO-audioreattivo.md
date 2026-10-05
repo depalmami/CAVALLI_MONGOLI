@@ -539,3 +539,8 @@ Si prosegue il piano grafico in WebGL.
 - **Luce del cielo (IBL)**: il cielo atmosferico fotografato in una mappa d'ambiente (PMREM),
   rifatta quando il sole si muove (al più 2 volte/s). Dosata per materiale: a 1 slavava tutto,
   l'asfalto sembrava bagnato e il prato sotto il cielo azzurro si desaturava.
+- **Luce per tappa** (`LUCE_TAPPE`): alba sul Kherlen → mattina → mezzogiorno sul Tuul → afa sulle
+  dune → ora d'oro sul Khangai → tramonto a Khar Balgas → ora blu a Erdene Zuu → notte a Karakorum.
+  Sole (elevazione, azimut, colore), foschia, Rayleigh, nebbia ed esposizione per tappa, raccordati
+  per 600 segmenti; la notte della musica si somma. Sotto l'orizzonte il sole si spegne, resta una
+  luna azzurra nell'emisferica e compaiono 2800 **stelle** che seguono la camera.

@@ -574,6 +574,29 @@ const sunDir = new THREE.Vector3();
   skyU.sunPosition.value.copy(sunDir);
 }
 
+// STELLE: compaiono quando il sole scende sotto l'orizzonte (Erdene Zuu, Karakorum, la
+// notte della musica). Come il cielo stanno all'infinito: seguono la camera (vedi LOOP).
+const stelle = (() => {
+  const N = 2800, pos = new Float32Array(N * 3), colori = new Float32Array(N * 3);
+  let seme = 7;
+  const r = () => ((seme = (seme * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < N; i++) {
+    const y = 0.02 + 0.98 * Math.pow(r(), 0.7), a = r() * Math.PI * 2, q = Math.sqrt(1 - y * y);
+    pos.set([Math.cos(a) * q * 400000, y * 400000, Math.sin(a) * q * 400000], i * 3);
+    const l = 0.35 + 0.65 * Math.pow(r(), 3), cal = r();          // poche stelle brillanti, qualcuna calda
+    colori.set([l * (0.85 + 0.15 * cal), l * 0.92, l * (1.05 - 0.2 * cal)], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(colori, 3));
+  const m = new THREE.PointsMaterial({ size: 2.2, sizeAttenuation: false, vertexColors: true, transparent: true,
+                                       opacity: 0, fog: false, depthWrite: false });
+  const p = new THREE.Points(g, m);
+  p.frustumCulled = false; p.visible = false;
+  scene.add(p);
+  return p;
+})();
+
 // nebbia tinta come l'orizzonte caldo, così la pista lontana si fonde nel cielo
 scene.fog = new THREE.Fog(0xe7d8bf, 26000, 150000);
 
@@ -2735,26 +2758,67 @@ const party = (() => {
 })();
 
 // luce finale = di serie × party (molla sul battito) × centralina (SMARMELLA)
-// NOTTE (0…1): il sole scende sotto l'orizzonte, la nebbia si fa blu, luce ambiente giù.
-// Il sole del cielo, della luce e delle ombre è lo stesso sunDir: si muove tutto insieme.
-const NEBBIA0 = scene.fog.color.clone(), NEBBIA_NOTTE = new THREE.Color(0x141a33);
-let notteAttuale = 0;
-let notteAmbiente = -1;
-function applicaNotte(n) {
-  if (Math.abs(n - notteAmbiente) > 0.03 && ambiente.aggiorna()) notteAmbiente = n;   // il cielo cambia → cambia la sua luce
-  if (Math.abs(n - notteAttuale) < 1e-3) return;
-  notteAttuale = n;
-  const elev = 17 - 21 * n, azim = 165;                  // 17° di pomeriggio → −4° (dopo il tramonto)
-  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
+// LUCE PER TAPPA: il viaggio va dall'alba sul Kherlen alla notte a Karakorum. Ogni tappa
+// ha il suo sole (elevazione, azimut, colore), il suo cielo (foschia, Rayleigh), la sua
+// nebbia e la sua esposizione; sui confini si raccordano per 600 segmenti.
+// La NOTTE della musica (0…1) si somma sopra: il sole scende fino a −4°, nebbia blu.
+// Il sole del cielo, della luce, delle ombre e della luce d'ambiente è lo stesso sunDir.
+const LUCE_TAPPE = [
+  //  elev  azim turb rayl  sole       nebbia     espo
+  [   4,  95,  6, 3.2, '#ffb27a', '#e9c3a6', 0.95 ],   // Fiume Kherlen — alba
+  [  14, 120,  5, 2.4, '#ffd9ae', '#dfe0dc', 0.90 ],   // Guado dell'Onon — mattina
+  [  28, 135,  3, 1.6, '#fff1d6', '#cfdde6', 0.85 ],   // Burkhan Khaldun — mattina limpida in quota
+  [  58, 170,  4, 1.2, '#ffffff', '#d9e4ea', 0.80 ],   // Piana del Tuul — mezzogiorno
+  [  44, 200,  6, 1.8, '#fff3dd', '#dbe0dc', 0.82 ],   // Colline di Khustai — primo pomeriggio
+  [  38, 215, 14, 1.4, '#fff0cf', '#e8d6b4', 0.85 ],   // Dune di Elsen Tasarkhai — afa
+  [  28, 230,  7, 2.0, '#ffe2b8', '#e2dccb', 0.85 ],   // Valle dell'Orkhon — pomeriggio
+  [  19, 240,  8, 2.4, '#ffd6a0', '#e6d4bb', 0.85 ],   // Cascate di Ulaan Tsutgalan — tardo pomeriggio
+  [  10, 250,  9, 2.8, '#ffc27a', '#e8c9a2', 0.90 ],   // Monti Khangai — ora d'oro
+  [   3, 258, 10, 3.5, '#ff9a5a', '#e0a98c', 1.00 ],   // Rovine di Khar Balgas — tramonto
+  [  -2, 265,  6, 3.0, '#ff8a6a', '#7f84a8', 1.10 ],   // Erdene Zuu — ora blu
+  [  -5, 270,  4, 2.0, '#9aa8ff', '#2e3858', 1.25 ],   // Karakorum — notte
+];
+const _cA = new THREE.Color(), _cB = new THREE.Color();
+const luceT = { elev: 0, azim: 0, turb: 0, rayl: 0, sole: new THREE.Color(), nebbia: new THREE.Color(), espo: 1 };
+function luceDellaTappa(pos) {
+  const k = tappaDi(pos), A = LUCE_TAPPE[k];
+  const RACCORDO = 600 * SEGMENT_LENGTH;
+  let B = A, t = 0;
+  const dopo = tappaInizio[k + 1] - pos, prima = pos - tappaInizio[k];
+  if (dopo < RACCORDO && k + 1 < LUCE_TAPPE.length) { B = LUCE_TAPPE[k + 1]; t = 0.5 * (1 - dopo / RACCORDO); }
+  else if (prima < RACCORDO && k > 0) { B = LUCE_TAPPE[k - 1]; t = 0.5 * (1 - prima / RACCORDO); }
+  const m = (q) => A[q] + (B[q] - A[q]) * t;
+  luceT.elev = m(0); luceT.azim = m(1); luceT.turb = m(2); luceT.rayl = m(3); luceT.espo = m(6);
+  luceT.sole.copy(_cA.set(A[4])).lerp(_cB.set(B[4]), t);
+  luceT.nebbia.copy(_cA.set(A[5])).lerp(_cB.set(B[5]), t);
+  return luceT;
+}
+const NEBBIA_NOTTE = new THREE.Color(0x141a33), CIELO_GIORNO = new THREE.Color(0xcfe0ff), CIELO_NOTTE = new THREE.Color(0x30406e);
+let cieloAmbiente = { elev: 1e9, n: -1 };
+let elevSole = 17;                                       // per le stelle e la luce
+function applicaCielo(n) {
+  const L = luceDellaTappa(((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH);
+  const elev = n > 0 ? L.elev + (Math.min(L.elev, -4) - L.elev) * n : L.elev;
+  elevSole = elev;
+  sunDir.setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(L.azim));
   skyU.sunPosition.value.copy(sunDir);
-  scene.fog.color.copy(NEBBIA0).lerp(NEBBIA_NOTTE, n);
+  skyU.turbidity.value = L.turb; skyU.rayleigh.value = L.rayl;
+  scene.fog.color.copy(L.nebbia).lerp(NEBBIA_NOTTE, n);
+  sun.color.copy(L.sole);
+  // il cielo è cambiato abbastanza → cambia la sua luce d'ambiente (al più 2 volte/s)
+  if ((Math.abs(elev - cieloAmbiente.elev) > 0.6 || Math.abs(n - cieloAmbiente.n) > 0.03) && ambiente.aggiorna())
+    cieloAmbiente = { elev, n };
+  return L;
 }
 function applicaLuce() {
   const L = party.luce, v = centralina.v, n = Math.min(1, Math.max(0, v['mondo.notte']));
-  applicaNotte(n);
-  sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'] * (1 - 0.85 * n);
-  hemi.intensity = LUCE0.cielo * L.cielo * (1 - 0.7 * n);
-  renderer.toneMappingExposure = LUCE0.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
+  const T = applicaCielo(n);
+  // sotto l'orizzonte il sole si spegne; resta una luna azzurra nell'emisferica
+  const giorno = THREE.MathUtils.smoothstep(elevSole, -3, 8);
+  sun.intensity  = LUCE0.sole  * L.sole * v['luce.sole'] * giorno * (1 - 0.85 * n);
+  hemi.intensity = LUCE0.cielo * L.cielo * (0.55 + 0.45 * giorno) * (1 - 0.5 * n);
+  hemi.color.copy(CIELO_GIORNO).lerp(CIELO_NOTTE, 1 - giorno);
+  renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
 }
 
@@ -3604,6 +3668,9 @@ function frame(now) {
   // il cielo è all'infinito: segue la camera, altrimenti se ne esce fuori (la
   // pista è lunga 731k unità, la cupola copre ±225k dall'origine) e diventa nero
   sky.position.copy(camera.position);
+  stelle.position.copy(camera.position);
+  stelle.material.opacity = THREE.MathUtils.smoothstep(-elevSole, -1, 5);   // si accendono sotto l'orizzonte
+  stelle.visible = stelle.material.opacity > 0.01;
   composer.render();
   live.update(now);                      // overlay live (flash + scritte) sopra la scena 3D
   combatHud.draw(frameDt);               // popup dei colpi, vignetta danno, alone del boost
