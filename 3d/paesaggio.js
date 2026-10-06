@@ -3,7 +3,6 @@
 //   fiumi        · acqua che riflette il cielo e si increspa coi bassi, nelle tappe dei fiumi
 //                  (il letto lo scava il terreno: vedi fiumeAl() e il passo 5b nella pagina)
 //   nuvole       · nuvole volumetriche fotografate in Cycles, che seguono la camera; quante dipende dalla tappa
-//   montagne     · due anelli di creste all'orizzonte, nel colore della foschia
 //   pali         · pali di legno con la sciarpa blu (khadag) al posto dei paletti da circuito;
 //                  le luci a tempo ora accendono la sciarpa
 //   ovoo e massi · cumuli di pietre sacri con bandiere di preghiera; massi sparsi, fitti nelle tappe rocciose
@@ -280,35 +279,6 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     } };
   })();
 
-  // ════════ MONTAGNE: due anelli di creste nel colore della foschia ════════
-  const montagne = (() => {
-    const anelli = [];
-    for (const [R, alt, seme, mix] of [[300000, 34000, 5, 0.25], [230000, 22000, 11, 0.45]]) {
-      const r = rng(seme), n = 360, pos = [];
-      const quota = a => {                         // creste: somma di "denti" a scale diverse
-        let h = 0;
-        for (const [f, w] of [[3, 0.5], [7, 0.3], [17, 0.15], [41, 0.07]]) h += w * Math.abs(Math.sin(a * f + seme * 1.7 + Math.sin(a * f * 0.37) * 1.3));
-        return alt * (0.25 + h);
-      };
-      for (let i = 0; i < n; i++) {
-        const a0 = i / n * Math.PI * 2, a1 = (i + 1) / n * Math.PI * 2;
-        const p0 = [Math.sin(a0) * R, 0, Math.cos(a0) * R], p1 = [Math.sin(a1) * R, 0, Math.cos(a1) * R];
-        const t0 = [p0[0], quota(a0), p0[2]], t1 = [p1[0], quota(a1), p1[2]];
-        const b0 = [p0[0], -30000, p0[2]], b1 = [p1[0], -30000, p1[2]];
-        pos.push(...b0, ...t1, ...t0, ...b0, ...b1, ...t1);
-      }
-      r();
-      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0x556070, fog: false, side: THREE.DoubleSide }));
-      m.frustumCulled = false; m.renderOrder = -1; scene.add(m);
-      anelli.push({ m, mix });
-    }
-    const scuro = new THREE.Color('#3b4660');
-    return { aggiorna(cam, nebbia) {
-      for (const a of anelli) { a.m.position.set(cam.x, cam.y - 14000, cam.z); a.m.material.color.copy(nebbia).lerp(scuro, a.mix); }
-    } };
-  })();
-
   // ════════ PALI con la sciarpa blu (khadag) ════════
   // il palo è un tronco lavorato a mano: più grosso alla base, appena curvo, schiarito dal sole in
   // cima e scuro e umido a terra; la sciarpa è legata con una corda di canapa e ha le frange.
@@ -356,7 +326,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       uni(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
           attribute float aIdx, aSciarpa;
-          uniform float uLed, uLedFlash, uCorsa, uTempo, uVento;
+          uniform float uLed, uLedFlash, uCorsa, uTempo, uVento, uCassa;
           varying float vLed, vS, vIdx;
           varying vec3 vPL;`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
@@ -367,8 +337,8 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
             transformed.x += sin(aIdx * 1.3) * h * h * 26.0;
             // la sciarpa sventola: più verso la punta, più si muove, con un'onda che la percorre
             float s = max(aSciarpa, 0.0);
-            transformed.z += (sin(uTempo * 6.0 + aIdx * 1.7 - s * 9.0) * 0.6 + sin(uTempo * 3.1 + aIdx - s * 5.0) * 0.4) * s * 70.0 * (0.4 + uVento);
-            transformed.y += sin(uTempo * 4.3 + aIdx * 2.3 - s * 7.0) * s * 45.0;
+            transformed.z += (sin(uTempo * 6.0 + aIdx * 1.7 - s * 9.0) * 0.6 + sin(uTempo * 3.1 + aIdx - s * 5.0) * 0.4) * s * 70.0 * (0.4 + uVento) * (1.0 + 1.5 * uCassa);
+            transformed.y += sin(uTempo * 4.3 + aIdx * 2.3 - s * 7.0) * s * 45.0 * (1.0 + 1.5 * uCassa);
             float k = mod(aIdx + uCorsa, 8.0);   // uno su otto acceso, la fila corre verso il cavallo
             vLed = step(0.001, s) * step(-0.5, aSciarpa) * (uLed * (0.12 + (1.0 - smoothstep(0.0, 1.6, k))) + uLedFlash);
           }`);
@@ -478,7 +448,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     m.computeBoundingSphere();
     m.castShadow = m.receiveShadow = true;
     scene.add(m);
-    return { m, n: gher.length };
+    return { m, n: gher.length, lista: gher };
   })();
 
   // libero(seg, lat): niente alberi né erba nel fiume o dentro un accampamento
@@ -510,14 +480,15 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       uni(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
           varying vec3 vPosS;
-          ${vento ? 'attribute float aX;\nuniform float uTempo, uVento;' : ''}`)
+          ${vento ? 'attribute float aX;\nuniform float uTempo, uVento, uCassa;' : ''}`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           ${vento ? `{
             // bandiere e sciarpe: aX = quanto sono libere di muoversi (0 = ferme, pietre e bastoni)
             float f = aX;
-            transformed.x += sin(uTempo * 6.0 + position.y * 0.012 + position.x * 0.005) * f * 70.0 * (0.4 + uVento);
-            transformed.z += sin(uTempo * 5.2 + position.x * 0.007 + position.y * 0.01) * f * 110.0 * (0.4 + uVento);
-            transformed.y += sin(uTempo * 8.0 + position.x * 0.01) * f * 25.0;
+            float frusta = 1.0 + 1.8 * uCassa;                 // la cassa le frusta
+            transformed.x += sin(uTempo * (6.0 + 5.0 * uCassa) + position.y * 0.012 + position.x * 0.005) * f * 70.0 * (0.4 + uVento) * frusta;
+            transformed.z += sin(uTempo * (5.2 + 5.0 * uCassa) + position.x * 0.007 + position.y * 0.01) * f * 110.0 * (0.4 + uVento) * frusta;
+            transformed.y += sin(uTempo * 8.0 + position.x * 0.01) * f * 25.0 * frusta;
           }` : ''}
           #ifdef USE_INSTANCING
           vPosS = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
@@ -761,7 +732,6 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       const t = performance.now(), dt = Math.min(0.1, (t - tPrec) / 1000); tPrec = t;
       const k = Math.min(COPERTURA.length - 1, tappaDi(posRender));
       nuvole.aggiorna(camera.position, dt, COPERTURA[k]);
-      montagne.aggiorna(camera.position, nebbia);
       erba.aggiorna(posRender);
       U.uLuci.value = 1 - giorno;
     },

@@ -38,7 +38,7 @@ export function creaMondo() {
     uTerrAmp:   { value: 0 }, uGiocatore: { value: new THREE.Vector3() },
     // alberi
     uPulseXZ:   { value: 1 }, uPulseY: { value: 1 }, uForesta: { value: 0 },
-    uTempo:     { value: 0 }, uVento: { value: 1 }, uRim: { value: 0.22 },
+    uTempo:     { value: 0 }, uVento: { value: 1 }, uRim: { value: 0.22 }, uCassa: { value: 0 },
     // paletti
     uLed:       { value: 0 }, uLedFlash: { value: 0 }, uCorsa: { value: 0 },
     uColLed:    { value: new THREE.Color(1, 0.84, 0.25) },

@@ -643,3 +643,26 @@ Si prosegue il piano grafico in WebGL.
   Rave 0,9, Apri tutto 1. A livello 0 non ballano mai: pascolano (clip Idle).
 - Trappola: `action.setEffectiveWeight()` NON basta con `AnimationMixer`: il mixer ricalcola il peso da
   `action.weight` a ogni update. Usare `.weight`.
+
+### 6 ottobre 2026 — Atmosfera: montagne, luna, lucciole, fuochi, nebbia bassa (`3d/atmosfera.js`)
+- **Montagne** (sostituiscono i due anelli piatti): un anello di rilievo vero attorno alla camera, 540×22 punti
+  fra 130 e 300 mila unità, creste dal rumore (catene dove `fbm` è alto, dentellatura fine), neve in cima
+  e dove il pendio è dolce, roccia del colore della tappa, prospettiva aerea nello shader (più lontano e più in
+  basso = più foschia). Per tappa (`MONTI`): altezza, linea della neve, roccia — alte e innevate a Burkhan
+  Khaldun e sul Khangai, basse color sabbia nelle dune; i valori si raccordano piano fra tappe. Nei boschi
+  gli alberi le coprono: si vedono nei tratti aperti e di sera, quando illuminano di blu.
+- **Luna**: disco con i mari e un alone, davanti alla camera (un po' a destra) e segue le curve piano
+  (altrimenti sarebbe sempre alle spalle): compare con le stelle.
+- **Lucciole**: 320 punti additivi attorno al cavallo (scatola 9000×2100×9000) che lampeggiano, con un
+  rilancio sulla cassa. Un solo draw call, posizioni calcolate nel vertex shader.
+- **Fuochi**: uno davanti a ogni gher (85), due fiamme per fuoco, rumore che sale, alto e largo con la cassa;
+  si accendono all'alba, al tramonto e di notte; alone d'aria calda sul prato; i DUE più vicini fanno luce vera
+  (PointLight, due sempre presenti con intensità 0: il numero di luci non cambia mai, niente ricompilazioni).
+- **Nebbia bassa**: 70 banchi piatti che scorrono col vento, ancorati al terreno, tanti sui fiumi
+  (`NEBBIA_BASSA` per tappa), nessuno nelle dune.
+- **Bandiere a ritmo**: nuovo uniform `uCassa` (musica.cassa): le bandiere degli ovoo e le sciarpe dei pali
+  frustano di più sulla cassa.
+- Trappola: gli attributi per istanza devono avere ESATTAMENTE tante voci quante le istanze: con 85 fasi per
+  170 istanze `drawElementsInstanced` fallisce e la mesh sparisce senza un errore in console (solo un
+  warning WebGL). Controllare `m.count` contro la lunghezza di ogni InstancedBufferAttribute.
+- Misure: 229 fps a SMARMELLA 0, 192 a livello 4 (di notte accanto ai fuochi: 213 con i due lumi accesi).

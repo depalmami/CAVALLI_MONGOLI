@@ -313,6 +313,7 @@ import { creaMondo } from './3d/mondo.js';
 import { creaForesta } from './3d/alberi.js';
 import { creaPaesaggio } from './3d/paesaggio.js';
 import { piazzaBranchi, creaFauna } from './3d/animali.js';
+import { creaAtmosfera } from './3d/atmosfera.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1313,6 +1314,7 @@ const paesaggio = creaPaesaggio({ scene, U: mondo.U, posToWorld, groundAt, roadD
 const posAnimali = piazzaBranchi({ N, SEGMENT_LENGTH, ROAD_WIDTH, tappaInizio, posToWorld, groundAt, roadDist,
                                    libero: paesaggio.libero, occupa: paesaggio.occupa });
 const fauna = creaFauna({ scene, SEGMENT_LENGTH, posizione: posAnimali, groundAt });
+const atmosfera = creaAtmosfera({ scene, camera, U: mondo.U, groundAt, posToWorld, SEGMENT_LENGTH, gher: paesaggio.accampamenti.lista });
 const trees = creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi,
                             distanzaMinima: TREE_CLEARANCE, mondo, libero: paesaggio.libero });   // specie, biomi e blocchi: vedi 3d/alberi.js
 
@@ -3618,7 +3620,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3753,6 +3755,9 @@ function frame(now) {
                    velocita: speed, giocatore: player.group.position, heading: player.heading });
   fauna.aggiorna({ posSeg: (((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH) / SEGMENT_LENGTH,
                    giocatore: player.group.position, heading: player.heading, a: centralina.v['mondo.animali'], dt: frameDt, musica });
+  atmosfera.aggiorna({ cam: camera.position, tappa: tappaDi(((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH), nebbia: scene.fog.color,
+                       giorno: giornoAttuale, stelleOpacita: stelle.material.opacity, musica, v: centralina.v, dt: frameDt,
+                       giocatore: player.group.position, tempo: performance.now() / 1000 });
   paesaggio.aggiorna({ camera, posRender: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
                        giorno: giornoAttuale, nebbia: scene.fog.color });
   applicaLuce();
