@@ -2,7 +2,7 @@
 //
 //   fiumi        · acqua che riflette il cielo e si increspa coi bassi, nelle tappe dei fiumi
 //                  (il letto lo scava il terreno: vedi fiumeAl() e il passo 5b nella pagina)
-//   nuvole       · ciuffi in alto che seguono la camera, quante dipende dalla tappa
+//   nuvole       · nuvole volumetriche fotografate in Cycles, che seguono la camera; quante dipende dalla tappa
 //   montagne     · due anelli di creste all'orizzonte, nel colore della foschia
 //   pali         · pali di legno con la sciarpa blu (khadag) al posto dei paletti da circuito;
 //                  le luci a tempo ora accendono la sciarpa
@@ -157,36 +157,61 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
 
   // ════════ NUVOLE: ciuffi in alto, attorno alla camera ════════
   const COPERTURA = [0.45, 0.55, 0.85, 0.2, 0.4, 0.05, 0.5, 0.65, 0.55, 0.45, 0.3, 0.2];   // per tappa
+  // nuvole vere: 6 nuvole volumetriche renderizzate in Cycles (tools/nuvole-blender.py) in
+  // un atlante 3×2; ognuna è un rettangolo che guarda la camera, tinto dalla luce della tappa
+  // e sfumato nel colore della foschia verso l'orizzonte
+  const uNuvole = { uTex: { value: null }, uSole: { value: new THREE.Vector3(1, 1, 1) },
+                    uOmbra: { value: new THREE.Vector3(0.6, 0.65, 0.75) }, uFoschia: { value: new THREE.Color() } };
   const nuvole = (() => {
-    const VAR = 3, PER = 22, geos = [];
-    for (let v = 0; v < VAR; v++) {
-      const r = rng(31 + v * 7), b = costruttore();
-      const n = 6 + (r() * 5 | 0);
-      for (let i = 0; i < n; i++) {
-        const g = new THREE.IcosahedronGeometry(1, 1);
-        const rr = 4500 + r() * 5000;
-        g.scale(rr, rr * 0.5, rr); g.translate((r() - 0.5) * 18000, r() * 1800, (r() - 0.5) * 9000);
-        b.geo(g, null, 0, (x, y) => { const t = Math.min(1, Math.max(0, (y + 600) / 2400)); return [0.80 + 0.20 * t, 0.82 + 0.18 * t, 0.86 + 0.14 * t]; });
-      }
-      geos.push(b.geometria());
-    }
-    const mat = new THREE.MeshLambertMaterial({ vertexColors: true, fog: false, emissive: '#6a7080' });
-    const r = rng(99), istanze = [], meshes = geos.map(g => {
-      const m = new THREE.InstancedMesh(g, mat, PER); m.frustumCulled = false; scene.add(m); return m;
+    const TANTE = 66, tex = new THREE.TextureLoader().load('assets/alberi/nuvole.webp');
+    tex.colorSpace = THREE.SRGBColorSpace; uNuvole.uTex.value = tex;
+    const g = new THREE.InstancedBufferGeometry().copy(new THREE.PlaneGeometry(1, 1));
+    const r = rng(99), istanze = [];
+    for (let i = 0; i < TANTE; i++)
+      istanze.push({ x: r() * 600000, z: r() * 600000, y: 38000 + r() * 22000, s: 0.7 + r() * 1.1, soglia: r(),
+                     foto: (r() * 6) | 0, specchio: r() < 0.5 ? -1 : 1 });
+    g.setAttribute('aFoto', new THREE.InstancedBufferAttribute(new Float32Array(istanze.map(it => it.foto + (it.specchio < 0 ? 8 : 0))), 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: uNuvole, transparent: true, depthWrite: false, fog: false,
+      vertexShader: `
+        attribute float aFoto;
+        varying vec2 vUv; varying float vLontano;
+        void main() {
+          vec3 c = instanceMatrix[3].xyz;
+          float s = length(instanceMatrix[0].xyz);
+          float specchio = aFoto >= 8.0 ? -1.0 : 1.0, f = mod(aFoto, 8.0);
+          vec2 u = vec2(specchio > 0.0 ? uv.x : 1.0 - uv.x, uv.y);
+          vUv = vec2((mod(f, 3.0) + u.x) / 3.0, (1.0 - floor(f / 3.0)) * 0.5 + u.y * 0.5);
+          vec4 mv = viewMatrix * vec4(c, 1.0);
+          mv.xy += position.xy * vec2(1.6, 1.0) * s;               // il fotogramma è 640×400
+          vLontano = smoothstep(120000.0, 290000.0, length(c.xz - cameraPosition.xz));
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform sampler2D uTex; uniform vec3 uSole, uOmbra, uFoschia;
+        varying vec2 vUv; varying float vLontano;
+        void main() {
+          vec4 t = texture2D(uTex, vUv);
+          if (t.a < 0.01) discard;
+          // la foto è bianca dove batte il sole e grigia in ombra: la riaccendo coi colori del cielo
+          float l = dot(t.rgb, vec3(0.3, 0.55, 0.15));
+          vec3 c = mix(uOmbra, uSole, smoothstep(0.25, 0.95, l)) * (0.55 + 0.6 * l);
+          c = mix(c, uFoschia, vLontano * 0.85);
+          gl_FragColor = vec4(c, t.a * (1.0 - vLontano * 0.6));
+          #include <colorspace_fragment>
+        }`,
     });
-    for (let v = 0; v < VAR; v++) for (let i = 0; i < PER; i++)
-      istanze.push({ m: meshes[v], i, x: r() * 600000, z: r() * 600000, y: 38000 + r() * 22000, s: 0.7 + r() * 1.1, yaw: r() * 6.28, soglia: r() });
+    const m = new THREE.InstancedMesh(g, mat, TANTE); m.frustumCulled = false; m.renderOrder = -1; scene.add(m);
     let vento = 0;
-    return { aggiorna(cam, dt, copertura) {
+    return { mesh: m, aggiorna(cam, dt, copertura) {
       vento += dt * 900;
-      for (const it of istanze) {
-        const vis = it.soglia < copertura;
-        const wrap = (a, c) => ((a - c) % 600000 + 900000) % 600000 - 300000;
+      const wrap = (a, c) => ((a - c) % 600000 + 900000) % 600000 - 300000;
+      istanze.forEach((it, i) => {
         V.set(cam.x + wrap(it.x + vento, cam.x), cam.y + it.y, cam.z + wrap(it.z + vento * 0.35, cam.z));
-        Q.setFromAxisAngle(su, it.yaw); S.setScalar(vis ? it.s : 0);
-        it.m.setMatrixAt(it.i, M.compose(V, Q, S));
-      }
-      for (const m of meshes) m.instanceMatrix.needsUpdate = true;
+        S.setScalar(it.soglia < copertura ? it.s * 55000 : 0);
+        m.setMatrixAt(i, M.compose(V, Q.identity(), S));
+      });
+      m.instanceMatrix.needsUpdate = true;
     } };
   })();
 
@@ -420,7 +445,9 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
 
   let tPrec = performance.now();
   return {
-    libero, fiumi, accampamenti, pali,
+    libero, fiumi, accampamenti, pali, nuvole,
+    // la pagina passa la luce della tappa: sole (lato acceso) e cielo (lato in ombra)
+    tingi(sole, cielo, foschia) { uNuvole.uSole.value.copy(sole); uNuvole.uOmbra.value.copy(cielo); uNuvole.uFoschia.value.copy(foschia); },
     aggiorna({ camera, posRender, giorno, nebbia }) {
       const t = performance.now(), dt = Math.min(0.1, (t - tPrec) / 1000); tPrec = t;
       const k = Math.min(COPERTURA.length - 1, tappaDi(posRender));

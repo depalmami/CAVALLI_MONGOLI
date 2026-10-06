@@ -190,7 +190,13 @@ export const IMPOSTORI = {
           { url: 'assets/alberi/abete_c.webp', ortho: 17.49, base: 1.484 }],
   pino:  [{ url: 'assets/alberi/pino_a.webp', ortho: 23.06, base: 1.342 }, { url: 'assets/alberi/pino_b.webp', ortho: 21.07, base: 3.094 },
           { url: 'assets/alberi/pino_c.webp', ortho: 21.79, base: 2.121 }],
+  // larici: le foto degli abeti ricolorate (tools/larici-da-abete.py) — verde tenero e oro d'autunno
+  larice:    [{ url: 'assets/alberi/larice_a.webp', ortho: 19.68, base: 0.379 }, { url: 'assets/alberi/larice_b.webp', ortho: 16.8, base: 1.371 },
+              { url: 'assets/alberi/larice_c.webp', ortho: 17.49, base: 1.484 }],
+  lariceOro: [{ url: 'assets/alberi/larice_oro_a.webp', ortho: 19.68, base: 0.379 }, { url: 'assets/alberi/larice_oro_b.webp', ortho: 16.8, base: 1.371 },
+              { url: 'assets/alberi/larice_oro_c.webp', ortho: 17.49, base: 1.484 }],
 };
+const SCHIARISCI = { pino: 2.0, abete: 1.35, larice: 1.25, lariceOro: 1.2 };
 const VISTE = 8, ASPETTO = 384 / 1024;
 function materialeImpostore(tex, mondo, luce, schiarisci) {
   const m = new THREE.ShaderMaterial({
@@ -296,7 +302,7 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
     g.setAttribute('aAlt', new THREE.InstancedBufferAttribute(new Float32Array(alt), 1));
     g.setAttribute('aBase', new THREE.InstancedBufferAttribute(new Float32Array(lista.map((x, n) => v.base / v.ortho * alt[n])), 1));
     g.setAttribute('aBanda', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(x => x.banda)), 1));
-    const m = new THREE.InstancedMesh(g, materialeImpostore(tex, mondo, luceAlberi, specie === 'pino' ? 2.0 : 1.35), lista.length);
+    const m = new THREE.InstancedMesh(g, materialeImpostore(tex, mondo, luceAlberi, SCHIARISCI[specie]), lista.length);
     lista.forEach((it, n) => m.setMatrixAt(n, iM.compose(iV.set(it.x, it.y, it.z), iQ, iS)));
     m.frustumCulled = false;
     scene.add(m); impostori.push(m);

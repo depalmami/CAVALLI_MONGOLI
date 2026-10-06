@@ -2877,6 +2877,7 @@ function applicaCielo(n) {
     cieloAmbiente = { elev, n };
   return L;
 }
+const _vNs = new THREE.Vector3(), _vNc = new THREE.Vector3();
 function applicaLuce() {
   const L = party.luce, v = centralina.v, n = Math.min(1, Math.max(0, v['mondo.notte']));
   const T = applicaCielo(n);
@@ -2889,6 +2890,11 @@ function applicaLuce() {
   // gli alberi fotografati hanno una luce neutra: li tinge la luce della tappa (sole + cielo)
   const ks = sun.intensity * 0.18, kh = hemi.intensity * 0.55;
   trees.tingi(sun.color.r * ks + hemi.color.r * kh, sun.color.g * ks + hemi.color.g * kh, sun.color.b * ks + hemi.color.b * kh);
+  // le nuvole: lato al sole col colore del sole, lato in ombra col cielo; di notte quasi spente
+  const ns = 0.25 + 0.85 * giorno, nc = 0.18 + 0.55 * giorno;
+  _vNs.set(0.45 + 0.55 * sun.color.r, 0.45 + 0.55 * sun.color.g, 0.45 + 0.55 * sun.color.b).multiplyScalar(ns * (1 - 0.6 * n));
+  _vNc.set(hemi.color.r * 0.8 + 0.15, hemi.color.g * 0.8 + 0.15, hemi.color.b * 0.8 + 0.2).multiplyScalar(nc * (1 - 0.5 * n));
+  paesaggio.tingi(_vNs, _vNc, scene.fog.color);
   renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
 }
