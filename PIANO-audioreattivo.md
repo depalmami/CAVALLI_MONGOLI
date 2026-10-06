@@ -612,3 +612,16 @@ Si prosegue il piano grafico in WebGL.
 - **Pali**: con 26.000 istanze da 1500 vertici facevano scendere a 69 fps. Ora 420 vertici e a blocchi di
   300 segmenti con la propria sfera di visibilità: 241 fps (prima 211), il culling per blocchi li ha
   resi più veloci di prima. Lezione: ogni InstancedMesh lungo tutta la pista va a blocchi.
+
+### 6 ottobre 2026 — Ovoo e massi
+- **Ovoo** (`ovoo` in `3d/paesaggio.js`): 20 cumuli in 12 tappe (1–3 a tappa), a 3,4–5 larghezze di
+  strada da un lato, mai in fiumi, ponti o accampamenti (`vicini` con `ds` più stretto). Una sola geometria
+  unita (78 pietre sbozzate dal rumore, 7 bastoni a fascio, 4 sciarpe blu, 4 fili da 13 bandiere nei
+  cinque colori) istanziata con scala e rotazione a caso. Bandiere e sciarpe si muovono nello shader
+  (`aX` = libertà di movimento), le pietre hanno licheni e venature solo dove il colore del vertice è grigio.
+- **Massi** (`massi`): ~1300 pietre lungo la pista, a blocchi di 300 segmenti, più fitte nelle tappe
+  rocciose (DENS per tappa + peso roccia del suolo), con lo stesso shader di pietra.
+- Trappole di collaudo: `roadDist` misura dal BORDO del corridoio (soglia 5200 scartava tutto); i test
+  con camera libera finiscono dentro le colline, meglio la camera di gioco con `setPilota(false)` (cavallo
+  fermo) e il cavallo ~55 segmenti prima, dal lato dell'oggetto; il lettore di immagini mette in cache per
+  nome: copiare su un nome nuovo.

@@ -6,6 +6,7 @@
 //   montagne     · due anelli di creste all'orizzonte, nel colore della foschia
 //   pali         · pali di legno con la sciarpa blu (khadag) al posto dei paletti da circuito;
 //                  le luci a tempo ora accendono la sciarpa
+//   ovoo e massi · cumuli di pietre sacri con bandiere di preghiera; massi sparsi, fitti nelle tappe rocciose
 //   accampamenti · gher bianche con porta rossa e lanterna, che di notte si accendono
 //   erba         · ciuffi d'erba e fiori fotografati vicino al cavallo, a blocchi che lo seguono,
 //                  mossi dal vento a raffiche
@@ -484,9 +485,176 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
   function libero(seg, lat) {
     const f = fiumeAl(Math.round(seg));
     if (f && Math.abs(lat - f.lat) * ROAD_WIDTH < f.mezza + 1400) return false;
-    for (const c of vicini) if (Math.abs(c.seg - seg) < 60 && Math.abs(c.lat - lat) < c.raggio) return false;
+    for (const c of vicini) if (Math.abs(c.seg - seg) < (c.ds ?? 60) && Math.abs(c.lat - lat) < c.raggio) return false;
     return true;
   }
+
+  // ════════ PIETRE: ovoo (i cumuli sacri) e massi sparsi ════════
+  // Un ovoo è un cumulo di pietre con in cima un fascio di bastoni, sciarpe blu e fili di bandiere di
+  // preghiera nei cinque colori (blu, bianco, rosso, verde, giallo); si trova sui passi e sulle alture.
+  // Qui le pietre sono blocchi sbozzati dal rumore, con licheni e venature nello shader.
+  function roccia(seme, dettaglio = 1) {
+    const g = new THREE.IcosahedronGeometry(1, dettaglio), p = g.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).normalize();
+      const d = 1 + 0.22 * Math.sin(v.x * 3.1 + seme) * Math.sin(v.y * 2.7 + seme * 1.3) * Math.sin(v.z * 3.3 + seme * 0.7)
+                  + 0.12 * Math.sin(v.x * 7.3 + seme * 2.1 + v.z * 5.0) + 0.08 * Math.sin(v.y * 9.1 + seme);
+      p.setXYZ(i, v.x * d, v.y * d * 0.72, v.z * d);                    // un po' schiacciate: le pietre poggiano
+    }
+    g.computeVertexNormals();                                           // non indicizzata: facce piatte, da pietra sbozzata
+    return g;
+  }
+  function pietraShader(mat, chiave, vento) {
+    mat.customProgramCacheKey = () => chiave;
+    mat.onBeforeCompile = sh => {
+      uni(sh);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
+          varying vec3 vPosS;
+          ${vento ? 'attribute float aX;\nuniform float uTempo, uVento;' : ''}`)
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          ${vento ? `{
+            // bandiere e sciarpe: aX = quanto sono libere di muoversi (0 = ferme, pietre e bastoni)
+            float f = aX;
+            transformed.x += sin(uTempo * 6.0 + position.y * 0.012 + position.x * 0.005) * f * 70.0 * (0.4 + uVento);
+            transformed.z += sin(uTempo * 5.2 + position.x * 0.007 + position.y * 0.01) * f * 110.0 * (0.4 + uVento);
+            transformed.y += sin(uTempo * 8.0 + position.x * 0.01) * f * 25.0;
+          }` : ''}
+          #ifdef USE_INSTANCING
+          vPosS = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
+          #else
+          vPosS = (modelMatrix * vec4(position, 1.0)).xyz;
+          #endif`);
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>
+          varying vec3 vPosS;
+          float hS(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+          float nS(vec3 p) { vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(mix(hS(i), hS(i + vec3(1,0,0)), f.x), mix(hS(i + vec3(0,1,0)), hS(i + vec3(1,1,0)), f.x), f.y),
+                       mix(mix(hS(i + vec3(0,0,1)), hS(i + vec3(1,0,1)), f.x), mix(hS(i + vec3(0,1,1)), hS(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            // solo dove il colore del vertice è grigio (pietra): le bandiere e le sciarpe restano pulite
+            float grigio = 1.0 - clamp((max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b)) - min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b))) * 4.0, 0.0, 1.0);
+            float n = nS(vPosS * 0.0035) * 0.6 + nS(vPosS * 0.014) * 0.3 + nS(vPosS * 0.06) * 0.1;
+            float vena = smoothstep(0.43, 0.5, abs(nS(vPosS * vec3(0.002, 0.009, 0.002)) - 0.5) + 0.43);
+            float lichene = smoothstep(0.62, 0.78, nS(vPosS * 0.0022 + 5.0));
+            vec3 pietra = diffuseColor.rgb * (0.55 + 0.9 * n) * (1.0 - 0.3 * vena);
+            pietra = mix(pietra, vec3(0.62, 0.60, 0.28) * (0.6 + 0.5 * n), lichene * 0.55);
+            diffuseColor.rgb = mix(diffuseColor.rgb, pietra, grigio);
+          }`);
+    };
+    mat.needsUpdate = true;
+  }
+  const ovoo = (() => {
+    const rr = rng(808), b = costruttore();
+    const grigi = ['#8a8780', '#77746d', '#9b978d', '#6a6862', '#a39e90'].map(col);
+    const rocce = [roccia(1.7, 2), roccia(4.1, 2)];
+    // il cumulo: pietre sempre più piccole verso l'alto
+    const NP = 78, tutte = [];
+    for (let k = 0; k < NP; k++) {
+      const t = k / NP, a = rr() * 6.283, R = Math.pow(1 - t, 0.7) * 1550 * (0.45 + 0.55 * rr());
+      const sz = (440 - 230 * t) * (0.7 + 0.6 * rr());
+      tutte.push({ x: Math.cos(a) * R, z: Math.sin(a) * R, y: t * 1500 + sz * 0.3, sz, g: rocce[k % 2], c: grigi[(rr() * grigi.length) | 0], ry: rr() * 6.28 });
+    }
+    for (const r of tutte) {
+      const g = r.g.clone(); g.scale(r.sz * (0.9 + 0.4 * rr()), r.sz, r.sz * (0.9 + 0.4 * rr())); g.rotateY(r.ry); g.translate(r.x, r.y, r.z);
+      const v = 0.85 + 0.3 * rr();
+      b.geo(g, null, 0, () => [r.c[0] * v, r.c[1] * v, r.c[2] * v]);
+    }
+    // bastoni: un fascio che si apre alla base
+    const legno = col('#6b5133'), TOP = [0, 4700, 0];
+    const bastoni = 7;
+    for (let k = 0; k < bastoni; k++) {
+      const a = k / bastoni * 6.283 + rr() * 0.4, sx = Math.cos(a) * 520, sz = Math.sin(a) * 520, sy = 1250;
+      const dx = TOP[0] - sx + (rr() - 0.5) * 160, dy = TOP[1] - sy + rr() * 500, dz = TOP[2] - sz + (rr() - 0.5) * 160;
+      const len = Math.hypot(dx, dy, dz), g = new THREE.CylinderGeometry(28, 48, len, 5); g.translate(0, len / 2, 0);
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(dx, dy, dz).normalize());
+      g.applyQuaternion(q); g.translate(sx, sy, sz);
+      b.geo(g, legno.map(c => c * (0.8 + 0.4 * rr())), 0);
+    }
+    // sciarpe blu legate in cima e a metà fascio
+    const blu = col('#3d8bff'), bluScuro = col('#1f5fcf');
+    for (let k = 0; k < 4; k++) {
+      const a = k * 1.6 + 0.4, base = [Math.cos(a) * 90, 3900 - k * 380, Math.sin(a) * 90], K = 9, LUNGA = 650;
+      for (let i = 0; i < K; i++) {
+        const t0 = i / K, t1 = (i + 1) / K, w0 = 130 - t0 * 50, w1 = 130 - t1 * 50;
+        const A1 = [base[0] + Math.cos(a) * 60, base[1] - t0 * LUNGA - 0, base[2] + Math.sin(a) * 60];
+        const o = (t, w, up) => { const y = base[1] - t * LUNGA; return [base[0] + Math.cos(a) * (60 + t * 70) - Math.sin(a) * (up ? w / 2 : -w / 2), y, base[2] + Math.sin(a) * (60 + t * 70) + Math.cos(a) * (up ? w / 2 : -w / 2)]; };
+        const n = [Math.cos(a), 0, Math.sin(a)], c = t0 > 0.5 ? bluScuro : blu;
+        b.v(o(t0, w0, true), n, c, t0 + 0.02); b.v(o(t0, w0, false), n, c, t0 + 0.02); b.v(o(t1, w1, true), n, c, t1);
+        b.v(o(t1, w1, true), n, c, t1); b.v(o(t0, w0, false), n, c, t0 + 0.02); b.v(o(t1, w1, false), n, c, t1);
+      }
+    }
+    // fili di bandiere di preghiera: dalla cima del fascio a terra, in quattro direzioni
+    const COL5 = ['#2a6fd6', '#f2f2ee', '#d0312d', '#2e9e4f', '#f2c230'].map(col);
+    for (let k = 0; k < 4; k++) {
+      const a = k * 1.571 + 0.5 + rr() * 0.3, fine = [Math.cos(a) * 3600, 520, Math.sin(a) * 3600], NB = 13;
+      for (let i = 0; i < NB; i++) {
+        const t0 = 0.06 + i / NB * 0.9, t1 = t0 + 0.9 / NB * 0.92;
+        const pt = t => [TOP[0] + (fine[0] - TOP[0]) * t, TOP[1] + (fine[1] - TOP[1]) * t - Math.sin(t * Math.PI) * 360, TOP[2] + (fine[2] - TOP[2]) * t];
+        const P0 = pt(t0), P1 = pt(t1), c = COL5[(i + k) % 5], alto = 330;
+        const n = [-Math.sin(a), 0, Math.cos(a)];
+        b.v(P0, n, c, 0.05); b.v(P1, n, c, 0.05); b.v([P0[0], P0[1] - alto, P0[2]], n, c, 1);
+        b.v(P1, n, c, 0.05); b.v([P1[0], P1[1] - alto, P1[2]], n, c, 1); b.v([P0[0], P0[1] - alto, P0[2]], n, c, 1);
+      }
+    }
+    const g = b.geometria('aX');
+    // dove: qualche ovoo per tappa, a pochi metri dalla strada, mai nei fiumi
+    const PER_TAPPA = [1, 2, 2, 1, 2, 1, 2, 2, 3, 2, 1, 1];
+    const r = rng(4242), lista = [], scarti = { ponte: 0, libero: 0, fiume: 0, strada: 0 };
+    for (let k = 0; k < PER_TAPPA.length; k++) {
+      const i0 = Math.floor(tappaInizio[k] / SEGMENT_LENGTH) + 300, i1 = Math.floor(tappaInizio[k + 1] / SEGMENT_LENGTH) - 300;
+      for (let q = 0, messi = 0; q < 60 && messi < PER_TAPPA[k]; q++) {
+        const seg = Math.floor(i0 + r() * (i1 - i0)), lato = r() < 0.5 ? -1 : 1, lat = lato * (3.4 + r() * 1.6);
+        if (sulPonte.has(seg)) { scarti.ponte++; continue; }
+        if (!libero(seg, lat)) { scarti.libero++; continue; }
+        const f = fiumeAl(seg); if (f && Math.abs(f.lat - lat) < 2.5) { scarti.fiume++; continue; }
+        posToWorld(seg * SEGMENT_LENGTH, lat, P);
+        if (roadDist(P.x, P.z) < 3600) { scarti.strada++; continue; }
+        lista.push({ x: P.x, y: groundAt(P.x, P.z) - 40, z: P.z, yaw: r() * 6.28, s: 0.9 + r() * 0.5 });
+        vicini.push({ seg, lat, raggio: 1.7, ds: 22 }); messi++;
+      }
+    }
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, side: THREE.DoubleSide });
+    pietraShader(mat, 'paesaggio-ovoo', true);
+    const m = new THREE.InstancedMesh(g, mat, Math.max(1, lista.length)); m.count = lista.length;
+    lista.forEach((o, k) => m.setMatrixAt(k, M.compose(V.set(o.x, o.y, o.z), Q.setFromAxisAngle(su, o.yaw), S.setScalar(o.s))));
+    m.computeBoundingSphere(); m.castShadow = m.receiveShadow = true;
+    scene.add(m);
+    return { m, n: lista.length, scarti };
+  })();
+
+  // massi sparsi lungo la pista, più fitti dove la tappa è rocciosa
+  const massi = (() => {
+    const DENS = [0.05, 0.08, 0.30, 0.10, 0.28, 0.02, 0.10, 0.45, 0.35, 0.18, 0.12, 0.06];   // per tappa
+    const rr = rng(777), BLOCCO = 300, perBlocco = new Map(), ps = [0, 0, 0, 0];
+    for (let seg = 20; seg < N - 6; seg += 5) {
+      const k = Math.min(DENS.length - 1, tappaDi(seg * SEGMENT_LENGTH));
+      pesiSuolo(seg, ps);
+      const d = DENS[k] + 0.5 * ps[3];
+      if (rr() > d) continue;
+      const lato = rr() < 0.5 ? -1 : 1, lat = lato * (2.9 + Math.pow(rr(), 1.5) * 9);
+      if (sulPonte.has(seg) || !libero(seg, lat)) continue;
+      posToWorld((seg + rr() * 5) * SEGMENT_LENGTH, lat, P);
+      if (roadDist(P.x, P.z) < 3600) continue;
+      const grande = rr() < 0.08 + 0.2 * ps[3], sz = grande ? 900 + rr() * 1500 : 220 + rr() * 650;
+      const kk = Math.floor(seg / BLOCCO); if (!perBlocco.has(kk)) perBlocco.set(kk, []);
+      perBlocco.get(kk).push({ x: P.x, y: groundAt(P.x, P.z), z: P.z, sz, yaw: rr() * 6.28, forma: rr() < 0.5 ? 0 : 1, v: 0.8 + rr() * 0.4, sx: 0.8 + rr() * 0.5 });
+    }
+    const forme = [roccia(2.3), roccia(5.9)];
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8a867c, roughness: 0.95 });
+    pietraShader(mat, 'paesaggio-massi', false);
+    const gruppo = new THREE.Group(); let tot = 0;
+    for (const lista of perBlocco.values()) for (const f of [0, 1]) {
+      const l = lista.filter(o => o.forma === f); if (!l.length) continue;
+      const m = new THREE.InstancedMesh(forme[f], mat, l.length);
+      l.forEach((o, k) => m.setMatrixAt(k, M.compose(V.set(o.x, o.y - o.sz * 0.15, o.z), Q.setFromAxisAngle(su, o.yaw), S.set(o.sz * o.sx, o.sz, o.sz))));
+      m.setColorAt(0, new THREE.Color(1, 1, 1)); l.forEach((o, k) => m.setColorAt(k, new THREE.Color(o.v, o.v, o.v * 0.97)));
+      m.computeBoundingSphere(); m.castShadow = m.receiveShadow = true; gruppo.add(m); tot += l.length;
+    }
+    scene.add(gruppo);
+    return { gruppo, n: tot };
+  })();
 
   // ════════ ERBA: ciuffi fotografati a blocchi di pista attorno al cavallo ════════
   // 16 ciuffi (erbe, ortica, tarassaco, celidonia) da Poly Haven, fotografati di fianco con
@@ -586,7 +754,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
 
   let tPrec = performance.now();
   return {
-    libero, fiumi, accampamenti, pali, nuvole,
+    libero, fiumi, accampamenti, pali, nuvole, ovoo, massi,
     // la pagina passa la luce della tappa: sole (lato acceso) e cielo (lato in ombra)
     tingi(sole, cielo, foschia) { uNuvole.uSole.value.copy(sole); uNuvole.uOmbra.value.copy(cielo); uNuvole.uFoschia.value.copy(foschia); },
     aggiorna({ camera, posRender, giorno, nebbia }) {
