@@ -586,3 +586,16 @@ Si prosegue il piano grafico in WebGL.
   verso la camera, lato al sole col colore del sole (smorzato verso il bianco), ombra col cielo,
   sfumate nella foschia oltre 120 km di gioco; larghe ~90–160 mila unità.
 - Misure 1080p senza limite: 211 fps a SMARMELLA 0, 184 a livello 4. Nessun errore sulle 12 tappe.
+
+### 6 ottobre 2026 — Rifiniture del mondo di gioco
+- **Pali**: tronco a 8 facce con curva e inclinazione diverse per palo, scuro e umido in basso,
+  schiarito dal sole in cima; venature, spaccature e nodi disegnati nello shader (`aSciarpa = −1` marca
+  legno e corda); tre giri di corda di canapa; sciarpa di seta lunga, con onda che la percorre, pieghe
+  che scorrono e frange. Le luci a tempo accendono ancora la sciarpa.
+- **Banchina** (`patchBanchina` in `3d/mondo.js`): niente più righe alterne (`isDark`); terra a chiazze,
+  grumi, ghiaia, sassolini con ombra, ciglio pressato, esterno screziato d'erba secca. Trappola: le
+  frequenze del rumore sono in unità di gioco (1 m = 800): sotto 0,01 non si vede nulla a distanza di camera.
+- **Polvere** riscritta: nuvole irregolari (4 texture a batuffoli), un'emissione per zoccolo, colore =
+  terra della tappa × luce del momento (di notte scura, all'alba calda), svanisce vicino alla camera
+  (altrimenti è una macchia sull'obiettivo). Quella vecchia era color crema fisso e di notte era la
+  "macchia di luce" sotto il cavallo. `cm3d.dust` per il debug. Resta il bersaglio `mondo.polvere` sulla cassa.

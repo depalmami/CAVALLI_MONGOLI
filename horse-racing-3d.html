@@ -1210,8 +1210,9 @@ function tintaPista(i, k = 1) {
   for (let q = 0; q < 4; q++) for (let r = 0; r < 3; r++) c[r] += _ps[q] * TINTE_PISTA[q][r];
   return new THREE.Color(c[0] * k, c[1] * k, c[2] * k);
 }
-// i vecchi cordoli rossi e bianchi sono diventati il bordo della pista: terra più scura, a chiazze
-const rumbleCol = i => tintaPista(i, isDark(i) ? 0.40 : 0.44).multiply(new THREE.Color(0.62, 0.48, 0.32));   // terra bruna, non grigio
+// i vecchi cordoli rossi e bianchi sono diventati la banchina di ghiaia e terra (3d/mondo.js,
+// patchBanchina): niente più strisce a righe alterne, il colore lo dà lo shader
+const rumbleCol = i => tintaPista(i, 0.68);
 // con le texture i vertex-color fanno solo da modulazione (valori anche >1, gestiti dal tone mapping)
 const roadPre   = new THREE.Color(0.78,0.78,0.78);
 const roadBase  = new THREE.Color(0.92,0.92,0.92);
@@ -1229,8 +1230,10 @@ const strada = buildRibbon({ half: ROAD_WIDTH, roughness: 1, uvTile: 1300,
 // linee del battito ed equalizzatore sui cigli: le UV della strada sono già in unità
 // di pista (v = indice × SEGMENT_LENGTH / uvTile, coi PRE segmenti di coda davanti)
 mondo.patchStrada(strada.material, { uvTile: 1300, preD: PRE * SEGMENT_LENGTH, semiLarg: ROAD_WIDTH });
-for (const side of [-1, 1])
-  buildRibbon({ half: RUMBLE_W/2, centerOff: side*(ROAD_WIDTH + RUMBLE_W/2), colorOf: rumbleCol });
+for (const side of [-1, 1]) {
+  const banchina = buildRibbon({ half: RUMBLE_W/2, centerOff: side*(ROAD_WIDTH + RUMBLE_W/2), colorOf: rumbleCol });
+  mondo.patchBanchina(banchina.material, { uvTile: 2000, interno: ROAD_WIDTH, largo: RUMBLE_W });
+}
 
 //=========================================================================
 // BANCHINA + SCARPATA — dal cordolo al terreno.
@@ -2475,52 +2478,65 @@ addEventListener('keydown', e => {
 // POLVERE sotto gli zoccoli — pool di sprite che si gonfiano e svaniscono
 //=========================================================================
 const dust = (() => {
-  const tex = (() => {
-    const c = document.createElement('canvas'); c.width = c.height = 64;
-    const g = c.getContext('2d');
-    const grad = g.createRadialGradient(32,32,0, 32,32,32);
-    grad.addColorStop(0,   'rgba(255,255,255,0.9)');
-    grad.addColorStop(0.45,'rgba(255,255,255,0.32)');
-    grad.addColorStop(1,   'rgba(255,255,255,0)');
-    g.fillStyle = grad; g.fillRect(0,0,64,64);
-    return new THREE.CanvasTexture(c);
-  })();
-  const POOL = 56, puffs = [];
+  // una nuvola irregolare, non un tondo: tanti batuffoli morbidi sovrapposti, mai gli stessi due
+  const textures = Array.from({ length: 4 }, (_, v) => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'); let sd = 17 + v * 41;
+    const r = () => ((sd = (sd * 1664525 + 1013904223) >>> 0) / 4294967296);
+    for (let i = 0; i < 26; i++) {
+      const R = 18 + r() * 24, x = 64 + (r() - 0.5) * 56, y = 64 + (r() - 0.5) * 44;
+      const grad = g.createRadialGradient(x, y, 0, x, y, R);
+      grad.addColorStop(0, 'rgba(255,255,255,0.20)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.09)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad; g.fillRect(0, 0, 128, 128);
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  });
+  const POOL = 96, puffs = [];
   for (let i = 0; i < POOL; i++) {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: 0xcdb892,
-      transparent: true, opacity: 0, depthWrite: false }));
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: textures[i % 4], color: 0xcdb892,
+      transparent: true, opacity: 0, depthWrite: false, fog: true }));
+    s.material.rotation = Math.random() * 6.28;
     s.visible = false; scene.add(s);
-    puffs.push({ s, age: 0, life: 1, vx: 0, vy: 0, vz: 0, size0: 0 });
+    puffs.push({ s, age: 0, life: 1, vx: 0, vy: 0, vz: 0, size0: 0, giro: 0 });
   }
-  let cursor = 0, emitClock = 0;
-  function emit(x, y, z) {
+  const colore = new THREE.Color(0.7, 0.58, 0.42);              // il suolo, già moltiplicato per la luce
+  let cursor = 0, emitClock = 0, piede = 1;
+  function emit(x, y, z, forza = 1) {
     const p = puffs[cursor]; cursor = (cursor + 1) % POOL;
-    p.age = 0; p.life = 0.55 + Math.random()*0.45;
-    p.s.position.set(x + (Math.random()-0.5)*340, y + 60, z + (Math.random()-0.5)*340);
-    p.vx = (Math.random()-0.5)*500; p.vy = 240 + Math.random()*320; p.vz = (Math.random()-0.5)*500;
-    p.size0 = 520 + Math.random()*420; p.s.visible = true;
+    piede = -piede;                                              // uno zoccolo a sinistra, uno a destra
+    p.age = 0; p.life = (0.9 + Math.random() * 0.8) * (0.7 + 0.3 * forza);
+    p.s.position.set(x + piede * (80 + Math.random() * 120), y + 40, z + (Math.random() - 0.5) * 300);
+    p.vx = piede * (150 + Math.random() * 350); p.vz = (Math.random() - 0.5) * 500; p.vy = 90 + Math.random() * 220;
+    p.size0 = (450 + Math.random() * 500) * (0.6 + 0.4 * forza); p.giro = (Math.random() - 0.5) * 0.9; p.s.visible = true;
   }
   // sbuffo: un gruppo tutto insieme (la cassa), oltre all'emissione continua
-  function burst(x, y, z, n) { for (let i = 0; i < n; i++) emit(x, y, z); }
+  function burst(x, y, z, n) { for (let i = 0; i < n; i++) emit(x, y, z, 1.4); }
+  // colore del suolo × luce della tappa: di notte la polvere è scura, all'alba arancione
+  function tingi(suolo, luce) { colore.setRGB(suolo.r * luce.r, suolo.g * luce.g, suolo.b * luce.b); }
   function update(dt, fx, fy, fz, speedPct, moving) {
-    if (moving && speedPct > 0.12) {
+    if (moving && speedPct > 0.1) {
       emitClock += dt;
-      const interval = 0.028 / (0.3 + speedPct);   // più veloce = più polvere
-      while (emitClock > interval) { emitClock -= interval; emit(fx, fy, fz); }
+      const interval = 0.018 / (0.25 + speedPct * 1.2);          // più veloce = più polvere
+      while (emitClock > interval) { emitClock -= interval; emit(fx, fy, fz, 0.5 + speedPct * 0.6); }
     }
     for (const p of puffs) {
       if (!p.s.visible) continue;
       p.age += dt;
       const t = p.age / p.life;
       if (t >= 1) { p.s.visible = false; continue; }
-      p.s.position.x += p.vx*dt; p.s.position.y += p.vy*dt; p.s.position.z += p.vz*dt;
-      p.vy -= 240*dt;                               // gravità leggera
-      const sz = p.size0 * (0.6 + t*1.7);
-      p.s.scale.set(sz, sz, 1);
-      p.s.material.opacity = 0.5 * (1-t) * (1-t);
+      p.s.position.x += p.vx * dt; p.s.position.y += p.vy * dt; p.s.position.z += p.vz * dt;
+      p.vx *= 1 - 1.2 * dt; p.vz *= 1 - 1.2 * dt; p.vy -= 160 * dt;     // si frena nell'aria e ricade
+      if (p.s.position.y < fy + 20) { p.s.position.y = fy + 20; p.vy = 0; }
+      const sz = p.size0 * (0.6 + t * 1.6);
+      p.s.scale.set(sz, sz * 0.8, 1);
+      p.s.material.rotation += p.giro * dt;
+      p.s.material.color.copy(colore);
+      // vicino alla camera svanisce: una nuvola a due passi dalla lente sarebbe una macchia sull'obiettivo
+      const vicino = Math.min(1, Math.max(0, (p.s.position.distanceTo(camera.position) - 1200) / 2600));
+      p.s.material.opacity = 1.0 * Math.pow(1 - t, 1.15) * Math.min(1, t * 8) * vicino;
     }
   }
-  return { update, burst };
+  return { update, burst, tingi, puffs };
 })();
 
 // SCINTILLE D'IMPATTO — burst di particelle nel punto del colpo (a differenza di `dust`,
@@ -2878,6 +2894,7 @@ function applicaCielo(n) {
   return L;
 }
 const _vNs = new THREE.Vector3(), _vNc = new THREE.Vector3();
+const _luceTerra = new THREE.Color(), _suoloTerra = new THREE.Color(), _terraBruna = new THREE.Color(0.95, 0.78, 0.55);
 function applicaLuce() {
   const L = party.luce, v = centralina.v, n = Math.min(1, Math.max(0, v['mondo.notte']));
   const T = applicaCielo(n);
@@ -2895,6 +2912,10 @@ function applicaLuce() {
   _vNs.set(0.45 + 0.55 * sun.color.r, 0.45 + 0.55 * sun.color.g, 0.45 + 0.55 * sun.color.b).multiplyScalar(ns * (1 - 0.6 * n));
   _vNc.set(hemi.color.r * 0.8 + 0.15, hemi.color.g * 0.8 + 0.15, hemi.color.b * 0.8 + 0.2).multiplyScalar(nc * (1 - 0.5 * n));
   paesaggio.tingi(_vNs, _vNc, scene.fog.color);
+  // la polvere: colore della terra sotto il cavallo × luce del momento
+  _luceTerra.setRGB(sun.color.r * ks + hemi.color.r * kh, sun.color.g * ks + hemi.color.g * kh, sun.color.b * ks + hemi.color.b * kh);
+  _suoloTerra.copy(tintaPista(Math.floor(position / SEGMENT_LENGTH), 1)).multiply(_terraBruna);
+  dust.tingi(_suoloTerra, _luceTerra);
   renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
   bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
 }
@@ -3591,7 +3612,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],

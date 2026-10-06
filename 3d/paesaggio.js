@@ -246,53 +246,101 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
   })();
 
   // ════════ PALI con la sciarpa blu (khadag) ════════
+  // il palo è un tronco lavorato a mano: più grosso alla base, appena curvo, schiarito dal sole in
+  // cima e scuro e umido a terra; la sciarpa è legata con una corda di canapa e ha le frange.
+  // aSciarpa: −1 = legno/corda (lo shader gli disegna le venature), 0…1 = sciarpa dal nodo alla punta
   const pali = (() => {
     const b = costruttore();
-    const palo = new THREE.CylinderGeometry(38, 52, 980, 6); palo.translate(0, 490, 0);
-    b.geo(palo, col('#6b4a2e'), 0);
-    const cima = new THREE.ConeGeometry(60, 90, 6); cima.translate(0, 1025, 0);
-    b.geo(cima, col('#4a3220'), 0);
-    // sciarpa: una striscia che parte dal palo e ricade al vento; aX = 0 al nodo → 1 in punta
-    const blu = col('#3d8bff'), bluScuro = col('#1f5fcf'), K = 7;
+    const legno = col('#7a5636'), umido = col('#3b2a1a'), sole = col('#a98c68'), canapa = col('#d9c9a0');
+    const palo = new THREE.CylinderGeometry(36, 56, 1000, 8, 10); palo.translate(0, 500, 0);
+    b.geo(palo, null, -1, (x, y, z) => {
+      const t = Math.min(1, Math.max(0, y / 1000));
+      const c = t < 0.22 ? umido.map((u, i) => u + (legno[i] - u) * (t / 0.22)) : legno.map((l, i) => l + (sole[i] - l) * Math.pow((t - 0.22) / 0.78, 1.6));
+      return c;
+    });
+    // il fusto non è dritto: una curva dolce (applicata ai vertici già inseriti)
+    // la cima: taglio obliquo schiarito, come un palo segato
+    const cima = new THREE.ConeGeometry(62, 80, 8); cima.translate(0, 1040, 0);
+    b.geo(cima, sole.map(c => c * 0.85), -1);
+    // corda di canapa: tre giri attorno al palo dove si lega la sciarpa
+    for (let k = 0; k < 3; k++) {
+      const giro = new THREE.TorusGeometry(48 + (850 - 500) * 0.0, 11, 5, 10); giro.rotateX(Math.PI / 2); giro.translate(0, 820 + k * 24, 0);
+      b.geo(giro, canapa, -1);
+    }
+    // sciarpa di seta: lunga, ondulata, con un taglio a coda di rondine in punta e tre frange
+    const blu = col('#3d8bff'), bluScuro = col('#1f5fcf'), bluChiaro = col('#7db3ff'), K = 12, LUNGA = 360;
     for (let k = 0; k < K; k++) {
-      const q = [k / K, (k + 1) / K].map(t => ({ t, x: 45 + t * 240, y: 840 - t * t * 160, w: 70 - t * 25 }));
+      const q = [k / K, (k + 1) / K].map(t => ({ t, x: 50 + t * LUNGA, y: 830 - t * t * 220, w: 92 - t * 38 }));
       const [a, c] = q;
-      const A1 = [a.x, a.y, 0], A2 = [a.x, a.y - a.w, 8], C1 = [c.x, c.y, 0], C2 = [c.x, c.y - c.w, 8];
-      const n = [0, 0, 1], ca = a.t > 0.5 ? bluScuro : blu;
-      b.v(A1, n, ca, a.t); b.v(A2, n, ca, a.t); b.v(C1, n, ca, c.t);
+      const coda = c.t > 0.93;                                  // gli ultimi tratti si dividono in due punte
+      const A1 = [a.x, a.y, 0], A2 = [a.x, a.y - a.w, 10], C1 = [c.x, c.y, 0], C2 = [c.x, c.y - c.w * (coda ? 1.5 : 1), 10];
+      const n = [0, 0, 1], ca = a.t > 0.55 ? bluScuro : blu;
+      b.v(A1, n, ca, a.t); b.v(A2, n, ca, a.t); b.v(C1, n, bluChiaro.map((x, i) => x * 0.5 + ca[i] * 0.5), c.t);
       b.v(C1, n, ca, c.t); b.v(A2, n, ca, a.t); b.v(C2, n, ca, c.t);
+    }
+    for (let f = 0; f < 3; f++) {                                // frange: fili sottili alla punta
+      const x0 = 50 + LUNGA, y0 = 830 - 220 - 40 + f * 22;
+      const F1 = [x0, y0, 0], F2 = [x0 + 6, y0, 0], F3 = [x0 + 3 + f * 10, y0 - 70, 8];
+      b.v(F1, [0, 0, 1], bluChiaro, 1); b.v(F2, [0, 0, 1], bluChiaro, 1); b.v(F3, [0, 0, 1], bluChiaro, 1);
     }
     const g = b.geometria('aSciarpa');
     const slots = [];
     for (let i = 6; i < N - 4; i += 4) if (!sulPonte.has(i)) for (const lato of [-1, 1]) slots.push({ i, lato });   // sui ponti c'è il parapetto
     g.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(slots.map(p => p.i / 4)), 1));
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });
     mat.customProgramCacheKey = () => 'paesaggio-pali';
     mat.onBeforeCompile = sh => {
       uni(sh);
       sh.vertexShader = sh.vertexShader.replace('#include <common>', `#include <common>
           attribute float aIdx, aSciarpa;
           uniform float uLed, uLedFlash, uCorsa, uTempo, uVento;
-          varying float vLed;`)
+          varying float vLed, vS, vIdx;
+          varying vec3 vPL;`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           {
-            // la sciarpa sventola: più verso la punta, più si muove
-            float s = aSciarpa;
-            transformed.z += sin(uTempo * 6.0 + aIdx * 1.7 + s * 4.0) * s * 55.0 * uVento;
-            transformed.y += sin(uTempo * 4.3 + aIdx * 2.3 + s * 3.0) * s * 35.0;
+            vPL = position; vS = aSciarpa; vIdx = aIdx;
+            // il palo è appena curvo: la cima si sposta di lato
+            float h = clamp(position.y / 1000.0, 0.0, 1.2);
+            transformed.x += sin(aIdx * 1.3) * h * h * 26.0;
+            // la sciarpa sventola: più verso la punta, più si muove, con un'onda che la percorre
+            float s = max(aSciarpa, 0.0);
+            transformed.z += (sin(uTempo * 6.0 + aIdx * 1.7 - s * 9.0) * 0.6 + sin(uTempo * 3.1 + aIdx - s * 5.0) * 0.4) * s * 70.0 * (0.4 + uVento);
+            transformed.y += sin(uTempo * 4.3 + aIdx * 2.3 - s * 7.0) * s * 45.0;
             float k = mod(aIdx + uCorsa, 8.0);   // uno su otto acceso, la fila corre verso il cavallo
-            vLed = step(0.001, s) * (uLed * (0.12 + (1.0 - smoothstep(0.0, 1.6, k))) + uLedFlash);
+            vLed = step(0.001, s) * step(-0.5, aSciarpa) * (uLed * (0.12 + (1.0 - smoothstep(0.0, 1.6, k))) + uLedFlash);
           }`);
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying float vLed;\nuniform vec3 uColLed;')
+        .replace('#include <common>', `#include <common>
+          varying float vLed, vS, vIdx;
+          varying vec3 vPL;
+          uniform vec3 uColLed;
+          uniform float uTempo;
+          float hP(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float nP(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hP(i), hP(i + vec2(1, 0)), f.x), mix(hP(i + vec2(0, 1)), hP(i + vec2(1, 1)), f.x), f.y); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          if (vS < -0.5) {
+            // legno: venature lungo il palo (rumore stirato in verticale), spaccature e nodi
+            float ang = vPL.x * 0.045 + vPL.z * 0.037;
+            float ven = nP(vec2(ang * 3.0, vPL.y * 0.004 + vIdx)) * 0.6 + nP(vec2(ang * 9.0, vPL.y * 0.012)) * 0.4;
+            float crepa = smoothstep(0.78, 0.9, nP(vec2(ang * 5.0 + 3.0, vPL.y * 0.0022 + vIdx * 2.0)));
+            float nodo = smoothstep(0.88, 0.95, nP(vec2(ang * 1.5 + vIdx, vPL.y * 0.01)));
+            diffuseColor.rgb *= (0.72 + 0.5 * ven) * (1.0 - 0.45 * crepa) * (1.0 - 0.35 * nodo);
+          } else {
+            // seta: pieghe che corrono lungo la sciarpa, più chiare sulle creste
+            float piega = sin(vS * 17.0 - uTempo * 4.0 + vIdx * 2.0) * 0.5 + 0.5;
+            diffuseColor.rgb *= 0.72 + 0.5 * piega;
+          }`)
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uColLed * vLed;');
     };
     const m = new THREE.InstancedMesh(g, mat, slots.length);
-    const look = {};
+    const look = {}, tilt = new THREE.Quaternion(), eu = new THREE.Euler();
     slots.forEach((p, k) => {
       posToWorld(p.i * SEGMENT_LENGTH, p.lato * 1.18, P, look);
       Q.setFromAxisAngle(su, look.heading + Math.PI / 2);          // la sciarpa ricade all'indietro
-      m.setMatrixAt(k, M.compose(V.set(P.x, P.y - 20, P.z), Q, S.setScalar(0.9 + ((p.i * 7919) % 100) / 500)));
+      const h = ((p.i * 7919) % 100) / 100, h2 = ((p.i * 104729) % 100) / 100;
+      Q.multiply(tilt.setFromEuler(eu.set((h - 0.5) * 0.07, 0, (h2 - 0.5) * 0.07)));   // ogni palo un po' storto
+      m.setMatrixAt(k, M.compose(V.set(P.x, P.y - 20, P.z), Q, S.setScalar(0.86 + h2 * 0.28)));
     });
     m.castShadow = m.receiveShadow = true;
     scene.add(m);

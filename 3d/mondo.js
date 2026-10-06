@@ -118,6 +118,42 @@ export function creaMondo() {
       return mix(mix(hashT(i), hashT(i + vec2(1,0)), f.x), mix(hashT(i + vec2(0,1)), hashT(i + vec2(1,1)), f.x), f.y);
     }
     float fbmT(vec2 p) { float v = 0.0, a = 0.5; for (int k = 0; k < 4; k++) { v += a * rumoreT(p); p *= 2.07; a *= 0.5; } return v; }`;
+  // ── BANCHINA: la striscia di terra fra la pista e l'erba ──
+  // ghiaia fine, qualche sasso, il ciglio della pista pressato e scuro, e verso l'esterno la terra
+  // si fa umida e screziata d'erba secca (i ciuffi fotografati vengono a poggiarsi qui)
+  function patchBanchina(mat, { uvTile, interno, largo }) {
+    mat.customProgramCacheKey = () => 'mondo-banchina';
+    mat.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vBanc;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBanc = uv;');
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', `#include <common>\nvarying vec2 vBanc;\n${RUMORE_GLSL}`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            vec2 sp = vBanc * ${uvTile.toFixed(1)};
+            float t = clamp((abs(sp.x) - ${interno.toFixed(1)}) / ${largo.toFixed(1)}, 0.0, 1.0);   // 0 ciglio → 1 fuori
+            float g = fbmT(sp * 0.0024);
+            vec3 terra = mix(vec3(0.34, 0.25, 0.17), vec3(0.72, 0.58, 0.42), smoothstep(0.25, 0.75, g));   // chiazze di terra chiara e scura
+            terra *= 0.7 + 0.6 * fbmT(sp * 0.011);                              // grumi
+            terra *= 0.85 + 0.3 * rumoreT(sp * 0.07);                           // ghiaia fine
+            // sassolini (~5 cm) con l'ombra sotto, e qualche sasso più grosso (~15 cm) molto raro
+            float s1 = smoothstep(0.80, 0.85, rumoreT(sp * 0.022 + 7.0));
+            float s2 = smoothstep(0.90, 0.93, rumoreT(sp * 0.008 + 3.0));
+            vec3 pietra = vec3(0.60, 0.56, 0.50) * (0.7 + 0.6 * rumoreT(sp * 0.12));
+            terra = mix(terra, terra * 0.6, smoothstep(0.76, 0.80, rumoreT(sp * 0.022 + 7.0)) * (1.0 - s1));
+            terra = mix(terra, pietra, max(s1 * 0.75, s2 * 0.9));
+            // verso l'esterno: terra umida e scura, screziata d'erba secca
+            float erbaN = fbmT(sp * 0.004 + 11.0);
+            float erba = smoothstep(0.30, 0.95, t + (erbaN - 0.5) * 0.9);
+            terra = mix(terra, terra * vec3(0.82, 0.88, 0.62), erba * 0.55);
+            terra *= 1.0 - 0.3 * (1.0 - smoothstep(0.0, 0.1, t));            // ciglio pressato
+            diffuseColor.rgb *= terra * 1.7;                                   // × tinta del bioma
+          }`);
+    };
+    mat.needsUpdate = true;
+  }
+
   function patchTerreno(mat) {
     mat.customProgramCacheKey = () => 'mondo-terreno';
     mat.onBeforeCompile = sh => {
@@ -301,5 +337,5 @@ export function creaMondo() {
     }
   }
 
-  return { U, texSpettro, patchStrada, patchTerreno, patchAlbero, profonditaAlbero, patchPaletti, laser: laser.gruppo, aggiorna };
+  return { U, texSpettro, patchStrada, patchBanchina, patchTerreno, patchAlbero, profonditaAlbero, patchPaletti, laser: laser.gruppo, aggiorna };
 }
