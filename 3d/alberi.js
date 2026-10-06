@@ -159,18 +159,18 @@ const VARIANTI = 3;
 // dens = densità media · gruppi = quanto si raccolgono a boschetti (0 uniforme, 1 a macchie)
 // prof = fin dove arriva la foresta (in larghezze di strada dal centro) · autunno = larici dorati
 const BIOMI = [
-  { nome: 'Fiume Kherlen',             dens: 0.22, gruppi: 0.8, prof: 8,  mix: { betulla: 0.6, cespuglio: 0.4 } },
-  { nome: "Guado dell'Onon",           dens: 0.45, gruppi: 0.6, prof: 10, mix: { betulla: 0.5, larice: 0.3, pino: 0.1, cespuglio: 0.1 } },
-  { nome: 'Burkhan Khaldun',           dens: 0.9,  gruppi: 0.2, prof: 14, mix: { abete: 0.45, pino: 0.25, larice: 0.22, betulla: 0.08 } },
-  { nome: 'Piana del Tuul',            dens: 0.07, gruppi: 0.9, prof: 7,  mix: { cespuglio: 0.7, betulla: 0.3 } },
-  { nome: 'Colline di Khustai',        dens: 0.2,  gruppi: 0.8, prof: 9,  mix: { betulla: 0.5, cespuglio: 0.5 } },
+  { nome: 'Fiume Kherlen',             dens: 0.22, gruppi: 0.8, prof: 8,  mix: { latifoglia: 0.6, cespuglio: 0.4 } },
+  { nome: "Guado dell'Onon",           dens: 0.45, gruppi: 0.6, prof: 10, mix: { latifoglia: 0.5, larice: 0.3, pino: 0.1, cespuglio: 0.1 } },
+  { nome: 'Burkhan Khaldun',           dens: 0.9,  gruppi: 0.2, prof: 14, mix: { abete: 0.45, pino: 0.25, larice: 0.22, latifoglia: 0.08 } },
+  { nome: 'Piana del Tuul',            dens: 0.07, gruppi: 0.9, prof: 7,  mix: { cespuglio: 0.7, latifoglia: 0.3 } },
+  { nome: 'Colline di Khustai',        dens: 0.2,  gruppi: 0.8, prof: 9,  mix: { latifoglia: 0.5, cespuglio: 0.5 } },
   { nome: 'Dune di Elsen Tasarkhai',   dens: 0.06, gruppi: 0.5, prof: 8,  mix: { cespuglio: 1 } },
-  { nome: "Valle dell'Orkhon",         dens: 0.4,  gruppi: 0.6, prof: 11, mix: { larice: 0.4, betulla: 0.45, cespuglio: 0.15 } },
+  { nome: "Valle dell'Orkhon",         dens: 0.4,  gruppi: 0.6, prof: 11, mix: { larice: 0.4, latifoglia: 0.45, cespuglio: 0.15 } },
   { nome: 'Cascate di Ulaan Tsutgalan', dens: 0.6, gruppi: 0.4, prof: 12, mix: { pino: 0.35, abete: 0.3, larice: 0.25, cespuglio: 0.1 } },
   { nome: 'Monti Khangai',             dens: 0.85, gruppi: 0.25, prof: 14, mix: { larice: 0.45, abete: 0.3, pino: 0.25 }, autunno: 0.75 },
-  { nome: 'Rovine di Khar Balgas',     dens: 0.1,  gruppi: 0.8, prof: 8,  mix: { cespuglio: 0.6, betulla: 0.4 } },
-  { nome: 'Erdene Zuu',                dens: 0.25, gruppi: 0.5, prof: 9,  mix: { betulla: 0.7, pino: 0.3 } },
-  { nome: 'Karakorum',                 dens: 0.15, gruppi: 0.7, prof: 8,  mix: { betulla: 0.5, cespuglio: 0.5 } },
+  { nome: 'Rovine di Khar Balgas',     dens: 0.1,  gruppi: 0.8, prof: 8,  mix: { cespuglio: 0.6, latifoglia: 0.4 } },
+  { nome: 'Erdene Zuu',                dens: 0.25, gruppi: 0.5, prof: 9,  mix: { latifoglia: 0.7, pino: 0.3 } },
+  { nome: 'Karakorum',                 dens: 0.15, gruppi: 0.7, prof: 8,  mix: { latifoglia: 0.5, cespuglio: 0.5 } },
 ];
 
 // rumore 1D lungo la pista: dove nascono i boschetti
@@ -195,12 +195,20 @@ export const IMPOSTORI = {
               { url: 'assets/alberi/larice_c.webp', ortho: 17.49, base: 1.484 }],
   lariceOro: [{ url: 'assets/alberi/larice_oro_a.webp', ortho: 19.68, base: 0.379 }, { url: 'assets/alberi/larice_oro_b.webp', ortho: 16.8, base: 1.371 },
               { url: 'assets/alberi/larice_oro_c.webp', ortho: 17.49, base: 1.484 }],
+  // latifoglie (al posto delle betulle) e cespugli: Island Tree 01-03 e Fern 02, fotografati con
+  // tools/fotografa-piante.py in fotogrammi quadrati (le latifoglie) e bassi (i cespugli)
+  latifoglia: [{ url: 'assets/alberi/latifoglia_a.webp', ortho: 5.984, base: 0.478, aspetto: 1, scala: 2.0 },
+               { url: 'assets/alberi/latifoglia_b.webp', ortho: 5.175, base: 0.884, aspetto: 1, scala: 2.3 },
+               { url: 'assets/alberi/latifoglia_c.webp', ortho: 3.679, base: 0.532, aspetto: 1, scala: 2.6 }],
+  cespuglio:  [{ url: 'assets/alberi/cespuglio_a.webp', ortho: 0.589, base: 0.081, aspetto: 2, scala: 4.5 },
+               { url: 'assets/alberi/cespuglio_b.webp', ortho: 0.514, base: 0.082, aspetto: 2, scala: 4.5 },
+               { url: 'assets/alberi/cespuglio_c.webp', ortho: 0.365, base: 0.039, aspetto: 2, scala: 5.5 }],
 };
-const SCHIARISCI = { pino: 2.0, abete: 1.35, larice: 1.25, lariceOro: 1.2 };
-const VISTE = 8, ASPETTO = 384 / 1024;
-function materialeImpostore(tex, mondo, luce, schiarisci) {
+const SCHIARISCI = { pino: 2.0, abete: 1.35, larice: 1.25, lariceOro: 1.2, latifoglia: 1.45, cespuglio: 1.5 };
+const VISTE = 8, ASPETTO = 384 / 1024;     // larghezza/altezza del fotogramma (abeti, pini, larici)
+function materialeImpostore(tex, mondo, luce, schiarisci, aspetto = ASPETTO) {
   const m = new THREE.ShaderMaterial({
-    uniforms: { ...mondo.U, uTex: { value: tex }, uLuceAlberi: luce, uSchiarisci: { value: schiarisci },
+    uniforms: { ...mondo.U, uTex: { value: tex }, uLuceAlberi: luce, uSchiarisci: { value: schiarisci }, uAspetto: { value: aspetto },
                 ...THREE.UniformsLib.fog },
     fog: true, alphaToCoverage: true, side: THREE.DoubleSide,
     vertexShader: `
@@ -208,7 +216,7 @@ function materialeImpostore(tex, mondo, luce, schiarisci) {
       #include <fog_pars_vertex>
       attribute float aYaw, aAlt, aBase, aBanda;
       uniform sampler2D uSpettro;
-      uniform float uPulseXZ, uPulseY, uForesta, uTempo, uVento;
+      uniform float uPulseXZ, uPulseY, uForesta, uTempo, uVento, uAspetto;
       varying vec2 vUv;
       void main() {
         vec3 ip = instanceMatrix[3].xyz;
@@ -218,7 +226,7 @@ function materialeImpostore(tex, mondo, luce, schiarisci) {
         float k = mod(floor(fi / 6.2831853 * ${VISTE}.0 + 0.5), ${VISTE}.0);
         vUv = vec2((k + uv.x) / ${VISTE}.0, uv.y);
         float v = texture2D(uSpettro, vec2((aBanda * 63.0 + 0.5) / 64.0, 0.5)).r;
-        float alt = aAlt * uPulseY * (1.0 + uForesta * v * 1.2), larg = aAlt * ${ASPETTO} * uPulseXZ;
+        float alt = aAlt * uPulseY * (1.0 + uForesta * v * 1.2), larg = aAlt * uAspetto * uPulseXZ;
         vec3 destra = vec3(d.y, 0.0, -d.x);
         vec3 p = ip + destra * position.x * larg;
         p.y = ip.y - aBase * (alt / aAlt) + position.y * alt;      // il piede della foto va a terra
@@ -249,7 +257,7 @@ function materialeImpostore(tex, mondo, luce, schiarisci) {
 export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi, distanzaMinima, mondo, blocco = 1000, libero = () => true }) {
   const rand = rng(12345);                    // seme fisso: la foresta è sempre la stessa
   const geo = {};
-  for (const s in SPECIE) geo[s] = Array.from({ length: VARIANTI }, (_, v) => SPECIE[s](101 + v * 977 + s.length * 31));
+  for (const s in SPECIE) if (!IMPOSTORI[s]) geo[s] = Array.from({ length: VARIANTI }, (_, v) => SPECIE[s](101 + v * 977 + s.length * 31));
   const luceAlberi = { value: new THREE.Vector3(1, 1, 1) };   // la tinge la pagina con la luce della tappa
 
   // ── disposizione ──
@@ -297,12 +305,12 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
     const tex = caricatore.load(v.url);
     tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
     const g = new THREE.InstancedBufferGeometry().copy(quad);
-    const alt = lista.map(x => v.ortho * M_UNITA * x.s * 0.62);           // un po' più piccoli del vero: il mondo è stilizzato
+    const alt = lista.map(x => v.ortho * M_UNITA * x.s * 0.62 * (v.scala || 1));           // un po' più piccoli del vero: il mondo è stilizzato
     g.setAttribute('aYaw', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(x => x.yaw)), 1));
     g.setAttribute('aAlt', new THREE.InstancedBufferAttribute(new Float32Array(alt), 1));
     g.setAttribute('aBase', new THREE.InstancedBufferAttribute(new Float32Array(lista.map((x, n) => v.base / v.ortho * alt[n])), 1));
     g.setAttribute('aBanda', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(x => x.banda)), 1));
-    const m = new THREE.InstancedMesh(g, materialeImpostore(tex, mondo, luceAlberi, SCHIARISCI[specie]), lista.length);
+    const m = new THREE.InstancedMesh(g, materialeImpostore(tex, mondo, luceAlberi, SCHIARISCI[specie], v.aspetto), lista.length);
     lista.forEach((it, n) => m.setMatrixAt(n, iM.compose(iV.set(it.x, it.y, it.z), iQ, iS)));
     m.frustumCulled = false;
     scene.add(m); impostori.push(m);
@@ -337,7 +345,8 @@ export function creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, 
     m.customDepthMaterial = ombra;
     scene.add(m); meshes.push(m);
   }
-  const conteggio = Object.fromEntries(Object.keys(SPECIE).map(s => [s, istanze.filter(x => x.specie === s).length]));
+  const conteggio = {};
+  for (const it of istanze) conteggio[it.specie] = (conteggio[it.specie] || 0) + 1;
   console.info(`foresta: ${istanze.length} alberi in ${meshes.length} blocchi`, conteggio, `· scartati vicino alla strada: ${scartati}`);
 
   return {

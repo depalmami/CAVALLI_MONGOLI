@@ -7,7 +7,8 @@
 //   pali         · pali di legno con la sciarpa blu (khadag) al posto dei paletti da circuito;
 //                  le luci a tempo ora accendono la sciarpa
 //   accampamenti · gher bianche con porta rossa e lanterna, che di notte si accendono
-//   erba         · fili d'erba vicino al cavallo, a blocchi che lo seguono, mossi dal vento a raffiche
+//   erba         · ciuffi d'erba e fiori fotografati vicino al cavallo, a blocchi che lo seguono,
+//                  mossi dal vento a raffiche
 //
 // Tutto a coordinate di pista (segmento, laterale), come il resto del mondo.
 
@@ -366,53 +367,70 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     return true;
   }
 
-  // ════════ ERBA: fili a blocchi di pista attorno al cavallo ════════
+  // ════════ ERBA: ciuffi fotografati a blocchi di pista attorno al cavallo ════════
+  // 16 ciuffi (erbe, ortica, tarassaco, celidonia) da Poly Haven, fotografati di fianco con
+  // tools/fotografa-piante.py in assets/alberi/prato.webp (4×4); ogni ciuffo è una croce di
+  // due rettangoli. CELLE: [altezza inquadrata (m), metri fra il fondo della foto e il piede]
+  const CELLE = [[0.34, 0.096], [0.295, 0.063], [0.29, 0.074], [0.23, 0.006], [0.209, 0.016], [0.335, 0.006],
+                 [0.297, 0.006], [0.246, 0.005], [0.272, 0.02], [0.376, 0.058], [0.451, 0.024], [0.225, 0.004],
+                 [0.268, 0.052], [0.227, 0.056], [0.287, 0.05], [0.267, 0.046]];
+  // (3-7 hanno pennacchi che in foto vengono quasi neri: niente)
+  const ERBA_VERDE = [0, 1, 2, 0, 1, 2, 9, 10], ERBA_SECCA = [8, 9, 10], FIORI = [12, 13, 14, 15, 11];
   const erba = (() => {
-    const BLOCCO = 40, POOL = 7, MAX = 7000;
-    // un filo: tre tratti che si assottigliano, alto 1 e largo 1 (la misura la dà l'istanza)
-    const pos = [], colori = [], base = col('#2f3d17'), punta = col('#ffffff');
-    const seg = [[0, 1], [0.38, 0.8], [0.72, 0.5], [1, 0]];
-    for (let k = 0; k < 3; k++) {
-      const [ya, wa] = seg[k], [yb, wb] = seg[k + 1];
-      const A1 = [-wa / 2, ya, 0], A2 = [wa / 2, ya, 0], B1 = [-wb / 2, yb, 0], B2 = [wb / 2, yb, 0];
-      const ca = base.map((c, i) => c + (punta[i] - c) * ya), cb = base.map((c, i) => c + (punta[i] - c) * yb);
-      pos.push(...A1, ...A2, ...B2, ...A1, ...B2, ...B1); colori.push(...ca, ...ca, ...cb, ...ca, ...cb, ...cb);
-    }
+    const BLOCCO = 40, POOL = 7, MAX = 2400, K = 800 * 2.2;      // i ciuffi veri sono piccoli: ×2,2
+    const croce = [new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0), new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0).rotateY(Math.PI / 2)];
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(colori, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(pos.length).map((_, i) => i % 3 === 1 ? 1 : 0), 3));
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide });
+    {
+      const pos = [], uv = [], nor = [], idx = [];
+      croce.forEach((q, n) => {
+        pos.push(...q.attributes.position.array); uv.push(...q.attributes.uv.array);
+        for (let i = 0; i < 4; i++) nor.push(0, 1, 0);                 // luce come un prato, non come un muro
+        idx.push(...Array.from(q.index.array, i => i + n * 4));
+      });
+      g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+      g.setIndex(idx);
+    }
+    const tex = new THREE.TextureLoader().load('assets/alberi/prato.webp');
+    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.4, alphaToCoverage: true, roughness: 0.95, side: THREE.DoubleSide });
     mat.customProgramCacheKey = () => 'paesaggio-erba';
     mat.onBeforeCompile = sh => {
       uni(sh);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTempo, uVento;\nuniform vec3 uGiocatore;')
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float uTempo, uVento;\nuniform vec3 uGiocatore;\nattribute float aCella;')
+        .replace('#include <uv_vertex>', `#include <uv_vertex>
+          vMapUv = (vec2(mod(aCella, 4.0), 3.0 - floor(aCella / 4.0)) + uv) / 4.0;`)
         .replace('#include <begin_vertex>', `#include <begin_vertex>
           #ifdef USE_INSTANCING
           {
             vec3 ip = instanceMatrix[3].xyz;
+            float sx = length(instanceMatrix[0].xyz);
             // raffiche che attraversano il prato; i bassi (in uVento) le rinforzano
             float raffica = sin(dot(ip.xz, vec2(0.0007, 0.0005)) - uTempo * 1.8) * 0.5 + 0.5;
-            float h = transformed.y * transformed.y;
-            transformed.z += (0.35 + raffica * 1.3) * uVento * h * 160.0;   // z non è scalato: unità mondo
-            transformed.x += sin(uTempo * 2.7 + ip.x * 0.01) * h * 0.4;      // x è scalato dalla larghezza
+            float h = max(0.0, transformed.y) * max(0.0, transformed.y);
+            transformed.z += (0.35 + raffica * 1.3) * uVento * h * 160.0 / sx;   // in unità mondo
+            transformed.x += sin(uTempo * 2.7 + ip.x * 0.01) * h * 60.0 / sx;
             // lontano dal cavallo l'erba si abbassa fino a sparire: niente bordo netto
             transformed *= 1.0 - smoothstep(20000.0, 30000.0, distance(ip.xz, uGiocatore.xz));
           }
           #endif`);
     };
-    const verde = new THREE.Color('#6f9a36'), paglia = new THREE.Color('#b59a52'), c = new THREE.Color(), ps = [0, 0, 0, 0];
+    const verde = new THREE.Color(1.35, 1.45, 1.1), paglia = new THREE.Color(1.75, 1.45, 0.85), c = new THREE.Color(), ps = [0, 0, 0, 0];
     const pool = Array.from({ length: POOL }, () => {
-      const m = new THREE.InstancedMesh(g, mat, MAX); m.count = 0; m.blocco = -1; m.receiveShadow = true;
+      const gg = new THREE.InstancedBufferGeometry().copy(g);
+      gg.setAttribute('aCella', new THREE.InstancedBufferAttribute(new Float32Array(MAX), 1));
+      const m = new THREE.InstancedMesh(gg, mat, MAX); m.count = 0; m.blocco = -1; m.receiveShadow = true;
       scene.add(m); return m;
     });
+    const scegli = (r, l) => l[(r() * l.length) | 0];
     function genera(m, b) {
-      const r = rng(b * 7 + 3); let n = 0;
+      const r = rng(b * 7 + 3), celle = m.geometry.attributes.aCella; let n = 0;
       for (let s = b * BLOCCO; s < (b + 1) * BLOCCO && s < N - 2; s += 0.25) {
         pesiSuolo(Math.floor(s), ps);
         const dens = ps[0] + ps[1] * 0.85 + ps[3] * 0.2;           // sulla sabbia niente erba
         const verdeQ = ps[0] / Math.max(0.01, ps[0] + ps[1]);
-        for (let q = 0; q < 8 && n < MAX; q++) {
+        for (let q = 0; q < 7 && n < MAX; q++) {
           if (r() > dens) continue;
           const lato = r() < 0.5 ? -1 : 1, lat = lato * (1.32 + Math.pow(r(), 1.4) * 6.5);
           if (!libero(s, lat)) continue;
@@ -420,15 +438,17 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
           const a = Math.abs(lat);
           // sulla banchina a quota strada, sulla scarpata a scendere, poi il terreno
           const y = a <= 2.4 ? P.y : Math.max(groundAt(P.x, P.z), P.y - 300 - (a - 2.4) / 1.6 * 1200);
-          const alt = 260 + r() * 420;
-          M.compose(V.set(P.x, y - 10, P.z), Q.setFromAxisAngle(su, r() * 6.28), S.set(55 + r() * 35, alt, 1));
-          m.setMatrixAt(n, M);
-          c.copy(paglia).lerp(verde, verdeQ).multiplyScalar(0.75 + r() * 0.5);
+          // fiori dove il prato è verde, erba secca dove è steppa
+          const cella = r() < 0.07 * verdeQ ? scegli(r, FIORI) : r() < verdeQ ? scegli(r, ERBA_VERDE) : scegli(r, ERBA_SECCA);
+          const [orto, base] = CELLE[cella], lato2 = orto * K * (0.8 + r() * 0.6);
+          M.compose(V.set(P.x, y - base / orto * lato2 - 10, P.z), Q.setFromAxisAngle(su, r() * 6.28), S.set(lato2, lato2, lato2));
+          m.setMatrixAt(n, M); celle.array[n] = cella;
+          c.copy(paglia).lerp(verde, verdeQ).multiplyScalar(0.8 + r() * 0.4);
           m.setColorAt(n, c);
           n++;
         }
       }
-      m.count = n; m.blocco = b;
+      m.count = n; m.blocco = b; celle.needsUpdate = true;
       m.computeBoundingSphere();               // fuori vista il blocco non si disegna
       m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
