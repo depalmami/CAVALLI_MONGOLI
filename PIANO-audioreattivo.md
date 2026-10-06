@@ -571,3 +571,18 @@ Si prosegue il piano grafico in WebGL.
   WebP) e nel gioco sono rettangoli che guardano la camera e mostrano la foto del lato giusto,
   tinti dalla luce della tappa, col vento e l'equalizzatore. Abeti e pini nelle foreste di
   montagna e lungo Onon/Orkhon; larici e betulle restano procedurali (nessun asset gratuito).
+
+### 6 ottobre 2026 — Grafica: tutta la vegetazione e le nuvole fotografiche
+- **Larici** verdi e d'oro: le foto degli abeti ricolorate (`tools/larici-da-abete.py`).
+- **Latifoglie** al posto delle betulle procedurali: Island Tree 01–03 (Poly Haven, CC0), 8 vedute
+  512×512, ingrandite ×2–2,6 (i modelli sono alberelli da 2,6–5 m). **Cespugli**: Fern 02, 512×256.
+  Ora tutte le specie della foresta sono impostori; i modelli procedurali non si costruiscono più.
+- **Erba**: al posto dei fili, ciuffi fotografati di fianco (Grass Medium 01/02, ortica, tarassaco,
+  celidonia) in un atlante 4×4 (`assets/alberi/prato.webp`), ciascuno una croce di due rettangoli,
+  fiori solo dove il prato è verde. I ciuffi coi pennacchi (celle 3–7) in foto vengono quasi neri:
+  esclusi. Strumento unico `tools/fotografa-piante.py` (modi `impostore` e `ciuffi`).
+  Trappola zsh: `$C:celandine…` è un modificatore di variabile → scrivere `${C}:…`.
+- **Nuvole**: 6 nuvole volumetriche Cycles (`tools/nuvole-blender.py`, atlante 3×2) come rettangoli
+  verso la camera, lato al sole col colore del sole (smorzato verso il bianco), ombra col cielo,
+  sfumate nella foschia oltre 120 km di gioco; larghe ~90–160 mila unità.
+- Misure 1080p senza limite: 211 fps a SMARMELLA 0, 184 a livello 4. Nessun errore sulle 12 tappe.
