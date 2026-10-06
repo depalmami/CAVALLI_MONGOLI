@@ -312,6 +312,7 @@ import { creaHud } from './3d/hud.js';
 import { creaMondo } from './3d/mondo.js';
 import { creaForesta } from './3d/alberi.js';
 import { creaPaesaggio } from './3d/paesaggio.js';
+import { piazzaBranchi, creaFauna } from './3d/animali.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1308,6 +1309,10 @@ const TREE_CLEARANCE = 3000;   // distanza minima dal corridoio stradale (vedi s
 // fiumi, nuvole, montagne, pali con le sciarpe, accampamenti, erba (vedi 3d/paesaggio.js)
 const paesaggio = creaPaesaggio({ scene, U: mondo.U, posToWorld, groundAt, roadDist, tappaDi, tappaInizio, N, SEGMENT_LENGTH,
                                   ROAD_WIDTH, pesiSuolo, fiumeAl, punti: pts });
+// i branchi si piazzano PRIMA degli alberi (che devono girargli attorno); i modelli si caricano dopo (3d/animali.js)
+const posAnimali = piazzaBranchi({ N, SEGMENT_LENGTH, ROAD_WIDTH, tappaInizio, posToWorld, groundAt, roadDist,
+                                   libero: paesaggio.libero, occupa: paesaggio.occupa });
+const fauna = creaFauna({ scene, SEGMENT_LENGTH, posizione: posAnimali, groundAt });
 const trees = creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi,
                             distanzaMinima: TREE_CLEARANCE, mondo, libero: paesaggio.libero });   // specie, biomi e blocchi: vedi 3d/alberi.js
 
@@ -3162,6 +3167,7 @@ function statoHud() {
   };
 }
 musica.on('drop', () => hud.banner('DROP!', ''));
+musica.on('drop', () => fauna.scatta());              // gli animali fanno un giro su se stessi
 
 // ── IL MONDO SUL BATTITO (Fase 4): polvere, drop ──
 musica.on('cassa', () => {
@@ -3612,7 +3618,7 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
-window.cm3d = { dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
+window.cm3d = { fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
@@ -3745,6 +3751,8 @@ function frame(now) {
   mondo.aggiorna({ v: centralina.v, musica, pal: live.palette(),
                    stradaD: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH + PRE * SEGMENT_LENGTH,
                    velocita: speed, giocatore: player.group.position, heading: player.heading });
+  fauna.aggiorna({ posSeg: (((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH) / SEGMENT_LENGTH,
+                   giocatore: player.group.position, heading: player.heading, a: centralina.v['mondo.animali'], dt: frameDt, musica });
   paesaggio.aggiorna({ camera, posRender: ((posRender % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
                        giorno: giornoAttuale, nebbia: scene.fog.color });
   applicaLuce();

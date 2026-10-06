@@ -625,3 +625,21 @@ Si prosegue il piano grafico in WebGL.
   con camera libera finiscono dentro le colline, meglio la camera di gioco con `setPilota(false)` (cavallo
   fermo) e il cavallo ~55 segmenti prima, dal lato dell'oggetto; il lettore di immagini mette in cache per
   nome: copiare su un nome nuovo.
+
+### 6 ottobre 2026 — Animali che ballano (`3d/animali.js`)
+- Modelli: Quaternius CC0 (pecora, mucca, cavallo, lama, aquila), 300–800 poligoni, 24–28 ossa, clip
+  Idle/Walk/Run/Jump; Poly Haven non ha animali veri. `assets/animali/*.glb` (1,4 MB), esportati da
+  Blender con `tools/esporta-animali.py`. Yak = mucca scura, "cammello" = lama (manca un cammello vero).
+- Posizione: `piazzaBranchi()` mette ~1000 animali in 134 branchi (6–20 per branco, per tappa: pecore
+  nella steppa, yak in montagna, cavalli a Khustai, lama nelle dune), PRIMA degli alberi, che girano
+  attorno (`paesaggio.occupa`). `creaFauna()` carica i modelli e tiene un pool di cloni skinnati: vivi
+  solo i ~40 vicini al giocatore (da 30 segmenti dietro a 170 davanti). 44 animali ballanti: 193 fps.
+- Ballo: la clip del salto non gira da sola, è AGGANCIATA alla fase del battito (`jump.time = fase × durata`),
+  quindi cade sul tempo a qualunque BPM, anche se cambia; oltre 150 BPM un salto ogni due battiti. Sopra la
+  clip (che stacca le zampe di soli ~25 cm) c'è un rimbalzo in più di ~40 cm. Sfasamento di poco fra
+  animali del branco (l'onda attraversa il gregge), si voltano verso il giocatore, spinta/schiacciamento
+  sulla cassa, e al drop un giro su se stessi. Le aquile (3) girano in cielo e battono le ali a tempo.
+- Centralina: nuovo bersaglio `mondo.animali` (0 pascolano → 1 ballano): Groove 0,25, Festa 0,6,
+  Rave 0,9, Apri tutto 1. A livello 0 non ballano mai: pascolano (clip Idle).
+- Trappola: `action.setEffectiveWeight()` NON basta con `AnimationMixer`: il mixer ricalcola il peso da
+  `action.weight` a ogni update. Usare `.weight`.

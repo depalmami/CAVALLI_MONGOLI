@@ -28,6 +28,7 @@ export const BERSAGLI = {
   'mondo.laser':      [0, 1],
   'mondo.notte':      [0, 1],      // 0 tardo pomeriggio · 1 notte
   'mondo.polvere':    [0, 1],      // sbuffi sotto gli zoccoli sulla cassa
+  'mondo.animali':    [0, 1],      // 0 pascolano · 1 saltano tutti sul battito (3d/animali.js)
   'cavalli.tempo':    [0, 1],      // galoppo agganciato al battito
   'camera.scossa':    [0, 1],
   'camera.rollio':    [-0.6, 0.6],
@@ -39,13 +40,13 @@ const RIPOSO = { 'post.saturazione': 1, 'post.spicchi': 6, 'luce.bloom': 1, 'luc
 export const LIVELLI = [
   { nome: 'Diretta', base: {}, voci: [] },
   { nome: 'Groove',
-    base: { 'post.vignetta': 0.15, 'post.saturazione': 1.08, 'cavalli.tempo': 1, 'mondo.linee': 0.5, 'mondo.led': 0.3 },
+    base: { 'post.vignetta': 0.15, 'post.saturazione': 1.08, 'cavalli.tempo': 1, 'mondo.linee': 0.5, 'mondo.led': 0.3, 'mondo.animali': 0.25 },
     voci: [['cassa', 'post.barile', 0.06], ['cassa', 'post.aberrazione', 0.004], ['cassa', 'camera.fov', 2.5],
            ['energia', 'luce.bloom', 0.5], ['cassa', 'mondo.ledFlash', 0.4]] },
   { nome: 'Festa',
     base: { 'post.vignetta': 0.25, 'post.saturazione': 1.2, 'post.colata': 0.12, 'post.zoomFb': 0.004, 'post.grana': 0.04,
             'cavalli.tempo': 1, 'mondo.linee': 0.8, 'mondo.eqBordi': 0.6, 'mondo.foresta': 0.6, 'mondo.led': 0.6,
-            'mondo.polvere': 0.5, 'mondo.notte': 0.1 },
+            'mondo.polvere': 0.5, 'mondo.notte': 0.1, 'mondo.animali': 0.6 },
     voci: [['cassa', 'post.barile', 0.12], ['cassa', 'post.aberrazione', 0.01], ['rullante', 'post.glitch', 0.15],
            ['bassi', 'post.zoomRadiale', 0.05], ['charleston', 'post.grana', 0.12], ['cassa', 'camera.fov', 4],
            ['energia', 'luce.bloom', 1.0], ['drop', 'post.bruciato', 0.7], ['giro', 'post.hue', 0.08],
@@ -55,7 +56,7 @@ export const LIVELLI = [
     base: { 'post.vignetta': 0.3, 'post.saturazione': 1.45, 'post.colata': 0.3, 'post.scie': 0.55, 'post.zoomFb': 0.012,
             'post.ruotaFb': 0.004, 'post.ondaFb': 0.003, 'post.hueFb': 0.012, 'post.scanline': 0.12, 'post.tinta': 0.15,
             'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1, 'mondo.led': 1,
-            'mondo.polvere': 1, 'mondo.terreno': 300, 'mondo.laser': 0.6, 'mondo.notte': 0.35 },
+            'mondo.polvere': 1, 'mondo.terreno': 300, 'mondo.laser': 0.6, 'mondo.notte': 0.35, 'mondo.animali': 0.9 },
     voci: [['cassa', 'post.barile', 0.2], ['cassa', 'post.aberrazione', 0.018], ['rullante', 'post.glitch', 0.4],
            ['bassi', 'post.zoomRadiale', 0.12], ['energia', 'post.colata', 0.25], ['alti', 'post.hueFb', 0.03],
            ['rullante', 'post.bruciato', 0.3], ['dopoDrop', 'post.caleido', 1.0], ['charleston', 'post.grana', 0.2],
@@ -67,7 +68,7 @@ export const LIVELLI = [
             'post.ruotaFb': 0.01, 'post.ondaFb': 0.007, 'post.hueFb': 0.03, 'post.spicchi': 6,
             'post.scanline': 0.22, 'post.posterizza': 0.12, 'post.tinta': 0.4,
             'cavalli.tempo': 1, 'mondo.linee': 1, 'mondo.eqBordi': 1, 'mondo.foresta': 1.6, 'mondo.led': 1.5,
-            'mondo.polvere': 1, 'mondo.terreno': 600, 'mondo.laser': 1, 'mondo.notte': 0.6 },
+            'mondo.polvere': 1, 'mondo.terreno': 600, 'mondo.laser': 1, 'mondo.notte': 0.6, 'mondo.animali': 1 },
     voci: [['cassa', 'post.barile', 0.32], ['cassa', 'post.aberrazione', 0.03], ['rullante', 'post.glitch', 0.7],
            ['bassi', 'post.zoomRadiale', 0.22], ['rullante', 'post.bruciato', 0.5], ['dopoDrop', 'post.caleido', 1.0],
            ['frase1', 'post.caleido', 1.0], ['scoppio', 'post.flash', 0.85], ['drop', 'post.tinta', 0.5],

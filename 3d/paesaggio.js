@@ -754,7 +754,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
 
   let tPrec = performance.now();
   return {
-    libero, fiumi, accampamenti, pali, nuvole, ovoo, massi,
+    libero, occupa: (seg, lat, raggio, ds) => vicini.push({ seg, lat, raggio, ds }), fiumi, accampamenti, pali, nuvole, ovoo, massi,
     // la pagina passa la luce della tappa: sole (lato acceso) e cielo (lato in ombra)
     tingi(sole, cielo, foschia) { uNuvole.uSole.value.copy(sole); uNuvole.uOmbra.value.copy(cielo); uNuvole.uFoschia.value.copy(foschia); },
     aggiorna({ camera, posRender, giorno, nebbia }) {
