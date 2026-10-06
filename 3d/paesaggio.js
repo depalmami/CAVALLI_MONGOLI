@@ -52,41 +52,104 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
 
   // ════════ FIUMI: l'acqua sul letto già scavato nel terreno ════════
   const fiumi = (() => {
-    const pos = [];
-    let prima = null;
+    // un nastro lungo il fiume: ogni vertice sa dove sta fra le rive (aAcross 0…1), in che direzione
+    // corre l'acqua (aFlow, dal tracciato del centro) e quanto è turbolento (aTurb: i torrenti di montagna)
+    const pos = [], acr = [], flo = [], tur = [];
+    let corsa = [];
+    const chiudi = () => {
+      for (let i = 0; i + 1 < corsa.length; i++) {
+        const a = corsa[i], c = corsa[i + 1];
+        const v = (q, lato) => {
+          pos.push(...(lato ? q.R : q.L)); acr.push(lato); flo.push(q.fx, q.fz); tur.push(q.tur);
+        };
+        v(a, 0); v(a, 1); v(c, 1); v(a, 0); v(c, 1); v(c, 0);
+      }
+      corsa = [];
+    };
     for (let s = 0; s < N - 2; s += 2) {
       const f = fiumeAl(s);
-      if (!f || f.mezza < 60) { prima = null; continue; }
+      if (!f || f.mezza < 60) { chiudi(); continue; }
       const a = punti[s], rx = -Math.cos(a.heading), rz = Math.sin(a.heading);
       const cx = a.x + rx * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lat * ROAD_WIDTH;
-      const L = [cx - rx * f.mezza, f.y, cz - rz * f.mezza], R = [cx + rx * f.mezza, f.y, cz + rz * f.mezza];
-      if (prima) pos.push(...prima.L, ...prima.R, ...R, ...prima.L, ...R, ...L);
-      prima = { L, R };
+      const m = f.mezza * 1.3;               // il letto scavato arriva al pelo dell'acqua ~20-30% oltre la "mezza": il nastro arriva lì, senza sospendersi sulla riva
+      const L = [cx - rx * m, f.y, cz - rz * m], R = [cx + rx * m, f.y, cz + rz * m];
+      const k = tappaDi(s * SEGMENT_LENGTH);
+      corsa.push({ L, R, cx, cz, fx: 0, fz: 1, tur: (k === 2 || k === 8) ? 1 : 0.15 });
+    }
+    chiudi();
+    // direzione di scorrimento = tangente del centro (la strada va verso +s: l'acqua corre nello stesso verso)
+    // ricalcolata dopo, perché chiudi() ha già spezzato le corse: rifaccio il passaggio sui vertici
+    {
+      const n = pos.length / 3;
+      for (let i = 0; i < n; i += 6) {
+        // vertici del quad: 0=L(a),1=R(a),2=R(c),3=L(a),4=R(c),5=L(c) → centro a e centro c
+        const ca = [(pos[i * 3] + pos[(i + 1) * 3]) / 2, (pos[i * 3 + 2] + pos[(i + 1) * 3 + 2]) / 2];
+        const cc = [(pos[(i + 4) * 3] + pos[(i + 5) * 3]) / 2, (pos[(i + 4) * 3 + 2] + pos[(i + 5) * 3 + 2]) / 2];
+        const dx = cc[0] - ca[0], dz = cc[1] - ca[1], l = Math.hypot(dx, dz) || 1;
+        for (let q = 0; q < 6; q++) { flo[(i + q) * 2] = dx / l; flo[(i + q) * 2 + 1] = dz / l; }
+      }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('aAcross', new THREE.Float32BufferAttribute(acr, 1));
+    g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flo, 2));
+    g.setAttribute('aTurb', new THREE.Float32BufferAttribute(tur, 1));
     g.computeVertexNormals();
-    const mat = new THREE.MeshStandardMaterial({ color: '#24495a', roughness: 0.05, metalness: 0.1, side: THREE.DoubleSide,
-                                                 transparent: true, opacity: 0.93, envMapIntensity: 1.1 });
+    const mat = new THREE.MeshStandardMaterial({ color: '#24495a', roughness: 0.04, metalness: 0.0, side: THREE.DoubleSide,
+                                                 transparent: true, depthWrite: false, envMapIntensity: 0.6 });
     mat.userData.iblDosato = true;            // l'acqua il cielo lo deve riflettere tutto
-    mat.customProgramCacheKey = () => 'paesaggio-acqua';
+    mat.customProgramCacheKey = () => 'paesaggio-acqua2';
     mat.onBeforeCompile = sh => {
       uni(sh);
-      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPosA;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPosA = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aAcross, aTurb;\nattribute vec2 aFlow;\nvarying vec3 vPosA;\nvarying float vAcc, vTurb;\nvarying vec2 vFlow;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPosA = (modelMatrix * vec4(transformed, 1.0)).xyz; vAcc = aAcross; vTurb = aTurb; vFlow = aFlow;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vPosA;\nuniform float uTempo, uVento;')
+        .replace('#include <common>', `#include <common>
+          varying vec3 vPosA; varying float vAcc, vTurb; varying vec2 vFlow;
+          uniform float uTempo, uVento;
+          float hW(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float nW(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+            return mix(mix(hW(i), hW(i + vec2(1.0, 0.0)), f.x), mix(hW(i + vec2(0.0, 1.0)), hW(i + vec2(1.0, 1.0)), f.x), f.y); }
+          float fW(vec2 p) { float v = 0.0, a = 0.5; for (int k = 0; k < 3; k++) { v += a * nW(p); p *= 2.03; a *= 0.5; } return v; }
+          float gFoam, gProf;
+          vec2 qW() { vec2 f = normalize(vFlow); return vec2(dot(vPosA.xz, f), dot(vPosA.xz, vec2(-f.y, f.x))); }`)
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          {
+            vec2 q = qW(); float t = uTempo;
+            float e = min(vAcc, 1.0 - vAcc);                              // 0 alla riva → 0.5 al centro
+            gProf = smoothstep(0.0, 0.42, e);                             // 0 acqua bassa → 1 profonda
+            // schiuma: orlo di riva (frastagliato), e nei torrenti anche sulle rapide
+            float orlo = 1.0 - smoothstep(0.015, 0.09, e + (nW(q * vec2(0.006, 0.02) + vec2(-t * 0.8, 0.0)) - 0.5) * 0.14);
+            float rapide = vTurb * smoothstep(0.62, 0.82, fW(q * vec2(0.004, 0.013) + vec2(-t * 1.8, 0.0)));
+            gFoam = clamp(orlo * (0.25 + 0.55 * vTurb) + rapide * 0.8, 0.0, 1.0);
+            // colore: il fondo sabbioso si vede dove è basso, poi verde-azzurro, poi scuro
+            vec3 fondo = vec3(0.26, 0.27, 0.19), medio = vec3(0.045, 0.20, 0.23), prof = vec3(0.01, 0.065, 0.10);
+            vec3 acqua = mix(mix(fondo, medio, smoothstep(0.0, 0.5, gProf)), prof, smoothstep(0.5, 1.0, gProf));
+            diffuseColor.rgb = mix(acqua, vec3(0.90, 0.95, 0.97), gFoam);
+            diffuseColor.a = mix(mix(0.42, 0.93, smoothstep(0.0, 0.6, gProf)), 1.0, gFoam) * smoothstep(0.0, 0.06, e);
+          }`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.03, 0.85, gFoam);')
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
           {
-            // increspature: somme di onde che scorrono; i bassi (dentro uVento) le gonfiano
-            vec2 q = vPosA.xz; float t = uTempo, k = 0.07 + 0.12 * max(0.0, uVento - 1.0);
-            vec2 g = vec2(cos(q.x * 0.004 + t * 1.3) + 0.6 * cos((q.x + q.y) * 0.009 - t * 1.9),
-                          sin(q.y * 0.005 + t * 1.1) + 0.6 * sin((q.x - q.y) * 0.011 + t * 2.3)) * k;
-            normal = normalize((viewMatrix * vec4(normalize(vec3(g.x, 1.0, g.y)), 0.0)).xyz);
+            // increspature che scorrono lungo il fiume, più veloci al centro; i bassi (uVento) le gonfiano
+            vec2 q = qW(); float t = uTempo;
+            float v = 1.0 + 0.6 * (1.0 - abs(2.0 * vAcc - 1.0));
+            float k = 0.30 + 0.30 * vTurb + 0.14 * max(0.0, uVento - 1.0);
+            vec2 p1 = q * vec2(0.0045, 0.013) + vec2(-t * 1.3 * v, 0.0);
+            vec2 p2 = q * vec2(0.012, 0.03) + vec2(-t * 2.4 * v, t * 0.15);
+            float d = 0.35;
+            float h0 = nW(p1) * 0.7 + nW(p2) * 0.3;
+            float hA = nW(p1 + vec2(d, 0.0)) * 0.7 + nW(p2 + vec2(d, 0.0)) * 0.3;
+            float hB = nW(p1 + vec2(0.0, d)) * 0.7 + nW(p2 + vec2(0.0, d)) * 0.3;
+            float sa = (hA - h0) / d * k * (1.0 - 0.6 * gFoam), sc = (hB - h0) / d * k * (1.0 - 0.6 * gFoam);
+            vec2 f = normalize(vFlow), pp = vec2(-f.y, f.x);
+            vec3 nw = normalize(vec3(-(f.x * sa + pp.x * sc), 1.0, -(f.y * sa + pp.y * sc)));
+            normal = normalize((viewMatrix * vec4(nw, 0.0)).xyz);
           }`);
     };
     const m = new THREE.Mesh(g, mat);
-    m.receiveShadow = true;
+    m.receiveShadow = true; m.renderOrder = 1;
     scene.add(m);
     return m;
   })();
@@ -252,7 +315,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
   const pali = (() => {
     const b = costruttore();
     const legno = col('#7a5636'), umido = col('#3b2a1a'), sole = col('#a98c68'), canapa = col('#d9c9a0');
-    const palo = new THREE.CylinderGeometry(36, 56, 1000, 8, 10); palo.translate(0, 500, 0);
+    const palo = new THREE.CylinderGeometry(36, 56, 1000, 8, 4); palo.translate(0, 500, 0);
     b.geo(palo, null, -1, (x, y, z) => {
       const t = Math.min(1, Math.max(0, y / 1000));
       const c = t < 0.22 ? umido.map((u, i) => u + (legno[i] - u) * (t / 0.22)) : legno.map((l, i) => l + (sole[i] - l) * Math.pow((t - 0.22) / 0.78, 1.6));
@@ -260,11 +323,11 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
     });
     // il fusto non è dritto: una curva dolce (applicata ai vertici già inseriti)
     // la cima: taglio obliquo schiarito, come un palo segato
-    const cima = new THREE.ConeGeometry(62, 80, 8); cima.translate(0, 1040, 0);
+    const cima = new THREE.ConeGeometry(62, 80, 8, 1, true); cima.translate(0, 1040, 0);
     b.geo(cima, sole.map(c => c * 0.85), -1);
     // corda di canapa: tre giri attorno al palo dove si lega la sciarpa
-    for (let k = 0; k < 3; k++) {
-      const giro = new THREE.TorusGeometry(48 + (850 - 500) * 0.0, 11, 5, 10); giro.rotateX(Math.PI / 2); giro.translate(0, 820 + k * 24, 0);
+    for (let k = 0; k < 3; k++) {                                  // anelli bassi di 8 facce: con 26 mila pali ogni vertice conta
+      const giro = new THREE.CylinderGeometry(46, 46, 16, 8, 1, true); giro.translate(0, 820 + k * 26, 0);
       b.geo(giro, canapa, -1);
     }
     // sciarpa di seta: lunga, ondulata, con un taglio a coda di rondine in punta e tre frange
@@ -283,10 +346,9 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       const F1 = [x0, y0, 0], F2 = [x0 + 6, y0, 0], F3 = [x0 + 3 + f * 10, y0 - 70, 8];
       b.v(F1, [0, 0, 1], bluChiaro, 1); b.v(F2, [0, 0, 1], bluChiaro, 1); b.v(F3, [0, 0, 1], bluChiaro, 1);
     }
-    const g = b.geometria('aSciarpa');
+    const base = b.geometria('aSciarpa');
     const slots = [];
     for (let i = 6; i < N - 4; i += 4) if (!sulPonte.has(i)) for (const lato of [-1, 1]) slots.push({ i, lato });   // sui ponti c'è il parapetto
-    g.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(slots.map(p => p.i / 4)), 1));
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide });
     mat.customProgramCacheKey = () => 'paesaggio-pali';
     mat.onBeforeCompile = sh => {
@@ -333,18 +395,29 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
           }`)
         .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += uColLed * vLed;');
     };
-    const m = new THREE.InstancedMesh(g, mat, slots.length);
-    const look = {}, tilt = new THREE.Quaternion(), eu = new THREE.Euler();
-    slots.forEach((p, k) => {
-      posToWorld(p.i * SEGMENT_LENGTH, p.lato * 1.18, P, look);
-      Q.setFromAxisAngle(su, look.heading + Math.PI / 2);          // la sciarpa ricade all'indietro
-      const h = ((p.i * 7919) % 100) / 100, h2 = ((p.i * 104729) % 100) / 100;
-      Q.multiply(tilt.setFromEuler(eu.set((h - 0.5) * 0.07, 0, (h2 - 0.5) * 0.07)));   // ogni palo un po' storto
-      m.setMatrixAt(k, M.compose(V.set(P.x, P.y - 20, P.z), Q, S.setScalar(0.86 + h2 * 0.28)));
-    });
-    m.castShadow = m.receiveShadow = true;
-    scene.add(m);
-    return m;
+    // a blocchi lungo la pista: quelli fuori dall'inquadratura non si disegnano (26 mila pali tutti insieme pesavano 100 fps)
+    const gruppo = new THREE.Group(), BLOCCO = 300, look = {}, tilt = new THREE.Quaternion(), eu = new THREE.Euler();
+    const perBlocco = new Map();
+    for (const sl of slots) { const k = Math.floor(sl.i / BLOCCO); if (!perBlocco.has(k)) perBlocco.set(k, []); perBlocco.get(k).push(sl); }
+    for (const lista of perBlocco.values()) {
+      const g = new THREE.BufferGeometry();
+      for (const a of ['position', 'normal', 'color', 'aSciarpa']) g.setAttribute(a, base.attributes[a]);
+      g.boundingSphere = base.boundingSphere;
+      g.setAttribute('aIdx', new THREE.InstancedBufferAttribute(new Float32Array(lista.map(p => p.i / 4)), 1));
+      const m = new THREE.InstancedMesh(g, mat, lista.length);
+      lista.forEach((p, k) => {
+        posToWorld(p.i * SEGMENT_LENGTH, p.lato * 1.18, P, look);
+        Q.setFromAxisAngle(su, look.heading + Math.PI / 2);          // la sciarpa ricade all'indietro
+        const h = ((p.i * 7919) % 100) / 100, h2 = ((p.i * 104729) % 100) / 100;
+        Q.multiply(tilt.setFromEuler(eu.set((h - 0.5) * 0.07, 0, (h2 - 0.5) * 0.07)));   // ogni palo un po' storto
+        m.setMatrixAt(k, M.compose(V.set(P.x, P.y - 20, P.z), Q, S.setScalar(0.86 + h2 * 0.28)));
+      });
+      m.computeBoundingSphere();
+      m.castShadow = m.receiveShadow = true;
+      gruppo.add(m);
+    }
+    scene.add(gruppo);
+    return gruppo;
   })();
 
   // ════════ ACCAMPAMENTI: gher con porta rossa e lanterna ════════

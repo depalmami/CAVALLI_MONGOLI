@@ -599,3 +599,16 @@ Si prosegue il piano grafico in WebGL.
   terra della tappa × luce del momento (di notte scura, all'alba calda), svanisce vicino alla camera
   (altrimenti è una macchia sull'obiettivo). Quella vecchia era color crema fisso e di notte era la
   "macchia di luce" sotto il cavallo. `cm3d.dust` per il debug. Resta il bersaglio `mondo.polvere` sulla cassa.
+
+### 6 ottobre 2026 — Acqua e pali a blocchi
+- **Acqua** (`fiumi` in `3d/paesaggio.js`): il nastro ora porta per vertice la posizione fra le rive,
+  la direzione di corrente (tangente del centro) e la turbolenza. Shader: fondo sabbioso trasparente
+  vicino a riva → verde-azzurro → scuro al centro; increspature che scorrono lungo il fiume (più veloci
+  al centro, gonfiate dai bassi); schiuma sulla riva e, nei torrenti di montagna (tappe 3 e 9), sulle
+  rapide; rugosità alta dove c'è schiuma; riflesso del cielo ridotto (1,25 → 0,6: a vista radente
+  riflette tutto il cielo chiaro e diventa bianca). Il nastro è largo 1,3× la "mezza": prima il bordo
+  stava 20–25 cm sopra la riva e l'acqua sembrava un canale sospeso (misurato: letto 450 sotto il pelo
+  al centro, la riva lo raggiunge ~1,2× la mezza). Niente riflessi veri (planari): costerebbero un secondo rendering.
+- **Pali**: con 26.000 istanze da 1500 vertici facevano scendere a 69 fps. Ora 420 vertici e a blocchi di
+  300 segmenti con la propria sfera di visibilità: 241 fps (prima 211), il culling per blocchi li ha
+  resi più veloci di prima. Lezione: ogni InstancedMesh lungo tutta la pista va a blocchi.
