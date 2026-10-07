@@ -684,3 +684,12 @@ Si prosegue il piano grafico in WebGL.
   camera (smoothstep 26–48 mila nello shader): resta solo lontano, come foschia di valle.
 - Le strisce colorate orizzontali (rosa/verde/azzurro) dentro la fascia nell'immagine NON le ho riprodotte a
   livello 0: potrebbero essere il glitch/aberrazione del post a livelli alti. Da chiedere: tappa, livello, ora.
+
+### 7 ottobre 2026 — Pallini colorati (forse solo Safari)
+- L'utente vede un velo di puntini multicolore sopra la strada a SMARMELLA 0, che sparisce quando ci si entra;
+  gioca in Safari, i miei test sono in Chrome e non lo riproducono. Sospetti, corretti per prudenza:
+  `smoothstep` con i bordi invertiti (indefinito per le specifiche GLSL: Chrome/ANGLE lo tollera, Metal no) nelle
+  lucciole e nelle fiamme; `pow` di un numero che può essere un soffio sotto zero (NaN) nelle lucciole; banchi di
+  nebbia bassa sopra il corridoio della strada (ora mai).
+- Nuovo interruttore nell'indirizzo: `?spegni=nebbia,lucciole,fuochi,montagne,luna,nuvole,acqua,erba,polvere,
+  animali,ovoo,massi,pali,alberi` toglie quei pezzi dalla scena, per isolare un difetto di resa a occhio.

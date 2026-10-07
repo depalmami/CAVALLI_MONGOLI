@@ -3646,6 +3646,22 @@ function showBriefing() {
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
+// ?spegni=nebbia,lucciole,… — per cercare a occhio un difetto di resa (es. solo in Safari): toglie dalla scena
+// i pezzi nominati. Nomi: nebbia lucciole fuochi montagne luna nuvole acqua erba polvere animali ovoo massi pali alberi
+{
+  const spegni = new Set((new URLSearchParams(location.search).get('spegni') || '').split(',').map(x => x.trim()).filter(Boolean));
+  const via = o => o && o.removeFromParent && o.removeFromParent();
+  const pezzi = {
+    nebbia: () => via(atmosfera.nebbiaBassa.m), lucciole: () => via(atmosfera.lucciole.p),
+    fuochi: () => { via(atmosfera.fuochi.mesh); via(atmosfera.fuochi.lume); atmosfera.fuochi.luci.forEach(via); },
+    montagne: () => via(atmosfera.montagne.m), luna: () => via(atmosfera.luna.m), nuvole: () => via(paesaggio.nuvole.mesh),
+    acqua: () => via(paesaggio.fiumi), erba: () => scene.children.filter(o => o.isInstancedMesh && o.material?.customProgramCacheKey?.() === 'paesaggio-erba').forEach(via),
+    polvere: () => dust.puffs.forEach(p => via(p.s)), animali: () => { fauna.aggiorna = () => {}; const t = setInterval(() => { if (fauna.pronto) { fauna.aquile.forEach(o => via(o.grp)); clearInterval(t); } }, 300); },
+    ovoo: () => via(paesaggio.ovoo.m), massi: () => via(paesaggio.massi.gruppo), pali: () => via(paesaggio.pali),
+    alberi: () => { trees.meshes.forEach(via); trees.impostori.forEach(via); },
+  };
+  for (const n of spegni) { if (pezzi[n]) { pezzi[n](); console.info('spento:', n); } else console.warn('spegni: nome sconosciuto', n); }
+}
 window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
   eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,

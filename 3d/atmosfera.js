@@ -148,7 +148,7 @@ export function creaAtmosfera({ scene, camera, U, groundAt, roadDist, posToWorld
           vec3 p = fract(aSeme.xyz + vec3(sin(t * 0.07 * aSeme.w + aSeme.x * 30.0), t * 0.012 * aSeme.w, cos(t * 0.06 * aSeme.w + aSeme.z * 30.0)) * 0.5) * 2.0 - 1.0;
           vec3 w = uGiocatore + vec3(p.x * 9000.0, 250.0 + (p.y * 0.5 + 0.5) * 2100.0, p.z * 9000.0);
           w.xz += vec2(sin(t * 0.9 + aSeme.y * 40.0), cos(t * 0.8 + aSeme.x * 40.0)) * 140.0;
-          float lamp = pow(sin(t * aSeme.w * 1.8 + aSeme.x * 60.0) * 0.5 + 0.5, 5.0);
+          float lamp = pow(max(0.0, sin(t * aSeme.w * 1.8 + aSeme.x * 60.0) * 0.5 + 0.5), 5.0);   // pow di un negativo = NaN su Metal
           vL = uLuci * (0.12 + 0.88 * lamp + 0.6 * uCassa);
           vec4 mv = viewMatrix * vec4(w, 1.0);
           gl_PointSize = clamp(40000.0 * (1.0 + uCassa) / -mv.z, 1.5, 14.0);
@@ -159,7 +159,7 @@ export function creaAtmosfera({ scene, camera, U, groundAt, roadDist, posToWorld
         varying float vL;
         void main() {
           float d = length(gl_PointCoord - 0.5) * 2.0;
-          float a = smoothstep(1.0, 0.0, d); a *= a;
+          float a = 1.0 - smoothstep(0.0, 1.0, d); a *= a;          // smoothstep con i bordi invertiti è indefinito in GLSL (Safari/Metal)
           gl_FragColor = vec4(vec3(0.62, 1.0, 0.3) * 2.2 * a * vL, 1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -212,7 +212,7 @@ export function creaAtmosfera({ scene, camera, U, groundAt, roadDist, posToWorld
           float t = uTempo * 2.4 + vPh * 9.0;
           float n = nF(vec2(x * 2.4 + vPh, y * 3.2 - t)) * 0.65 + nF(vec2(x * 5.1 - vPh, y * 6.0 - t * 1.7)) * 0.35;
           float larg = (1.0 - y) * (0.85 + 0.25 * sin(t * 1.3));
-          float m = smoothstep(larg, larg - 0.45, abs(x) + (n - 0.5) * 0.9) * smoothstep(1.0, 0.15, y + (n - 0.5) * 0.55);
+          float m = (1.0 - smoothstep(larg - 0.45, larg, abs(x) + (n - 0.5) * 0.9)) * (1.0 - smoothstep(0.15, 1.0, y + (n - 0.5) * 0.55));
           vec3 c = mix(vec3(1.0, 0.18, 0.02), vec3(1.0, 0.72, 0.18), smoothstep(0.0, 0.55, m * (1.0 - y * 0.6)));
           c = mix(c, vec3(1.0, 0.95, 0.75), smoothstep(0.62, 0.95, m) * (1.0 - y));
           gl_FragColor = vec4(c * 2.6 * m * (1.0 + 0.7 * uCassa), 1.0);
