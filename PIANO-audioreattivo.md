@@ -676,3 +676,11 @@ Si prosegue il piano grafico in WebGL.
   `atmosfera.aggiorna` `cassa = musica.cassa × festa`, con `festa = min(1, mondo.animali × 1.6)`: 0 a Diretta,
   ~0,4 a Groove, 1 da Rave. Restano solo i guizzi naturali (la fiamma sfarfalla da sola, le lucciole lampeggiano da sole).
 - REGOLA: ogni nuovo effetto a tempo deve passare da un bersaglio della centralina; a livello 0 il gioco è uguale a prima.
+
+### 7 ottobre 2026 — Il velo di nebbia sulla strada
+- Segnalato: una fascia lattiginosa sulla strada, con le basi dei pali sfumate e un bordo netto, "solo in certi
+  punti". Era la nebbia bassa: piani orizzontali larghi 22–52 mila unità a ~0,5 m da terra; se il cavallo ci
+  passa sotto/sopra il piano taglia la strada. Ora ogni banco svanisce del tutto entro 26.000 unità dalla
+  camera (smoothstep 26–48 mila nello shader): resta solo lontano, come foschia di valle.
+- Le strisce colorate orizzontali (rosa/verde/azzurro) dentro la fascia nell'immagine NON le ho riprodotte a
+  livello 0: potrebbero essere il glitch/aberrazione del post a livelli alti. Da chiedere: tappa, livello, ora.

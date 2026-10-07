@@ -249,6 +249,16 @@ export function creaAtmosfera({ scene, camera, U, groundAt, posToWorld, SEGMENT_
       g.fillStyle = q; g.fillRect(0, 0, 128, 128); }
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     const N = 70, mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.5, side: THREE.DoubleSide });
+    // i banchi sono piani bassi: se la camera ci passa sopra si vede un velo con un bordo netto sulla strada.
+    // Quindi svaniscono del tutto entro 26.000 unità dalla camera e prendono corpo solo lontano (45.000+)
+    mat.customProgramCacheKey = () => 'atmosfera-nebbia';
+    mat.onBeforeCompile = sh => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vDW;')
+        .replace('#include <begin_vertex>', `#include <begin_vertex>
+          vDW = distance((modelMatrix * instanceMatrix * vec4(position, 1.0)).xz, cameraPosition.xz);`);
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vDW;')
+        .replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= smoothstep(26000.0, 48000.0, vDW);');
+    };
     const quad = new THREE.PlaneGeometry(1, 1);
     const m = new THREE.InstancedMesh(quad, mat, N); m.frustumCulled = false; m.renderOrder = 1; m.count = 0;
     scene.add(m);
