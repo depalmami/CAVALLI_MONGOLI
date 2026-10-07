@@ -666,3 +666,13 @@ Si prosegue il piano grafico in WebGL.
   170 istanze `drawElementsInstanced` fallisce e la mesh sparisce senza un errore in console (solo un
   warning WebGL). Controllare `m.count` contro la lunghezza di ogni InstancedBufferAttribute.
 - Misure: 229 fps a SMARMELLA 0, 192 a livello 4 (di notte accanto ai fuochi: 213 con i due lumi accesi).
+
+### 7 ottobre 2026 — Livello 0 faceva ancora festa (bug mio)
+- Segnalato dall'utente: tornando a SMARMELLA 0 il mondo continuava a battere. Misurato con una cassa finta
+  (`Object.defineProperty(musica, 'cassa', { get, set: () => {} })` — il setter che ignora le scritture è
+  necessario, un getter solo manda in errore il motore musicale): a livello 0 `U.uCassa` (bandiere degli ovoo,
+  sciarpe dei pali, fiamme) pulsava 0→1, l'alone dei fuochi 0,25→0,67 e le lucciole fino a 0,3.
+- Causa: quegli effetti leggevano `musica.cassa` direttamente invece di passare dalla centralina. Ora in
+  `atmosfera.aggiorna` `cassa = musica.cassa × festa`, con `festa = min(1, mondo.animali × 1.6)`: 0 a Diretta,
+  ~0,4 a Groove, 1 da Rave. Restano solo i guizzi naturali (la fiamma sfarfalla da sola, le lucciole lampeggiano da sole).
+- REGOLA: ogni nuovo effetto a tempo deve passare da un bersaglio della centralina; a livello 0 il gioco è uguale a prima.

@@ -260,7 +260,9 @@ export function creaAtmosfera({ scene, camera, U, groundAt, posToWorld, SEGMENT_
   const lun = new THREE.Vector3(), bas = new THREE.Color();
   function aggiorna({ cam, tappa, nebbia, giorno, stelleOpacita, musica, v, dt, giocatore, tempo }) {
     dt = Math.min(dt, 0.1);
-    const buio = 1 - giorno, cassa = musica.cassa, balla = Math.min(1, (v['mondo.animali'] ?? 0));
+    // tutto quello che batte a tempo passa dal livello di SMARMELLA: a 0 resta il paesaggio fermo (i fuochi guizzano
+    // da soli, le lucciole lampeggiano da sole), ma niente cassa. `festa` va da 0 (Diretta) a 1 (da Rave in su).
+    const buio = 1 - giorno, balla = Math.min(1, (v['mondo.animali'] ?? 0)), festa = Math.min(1, balla * 1.6), cassa = musica.cassa * festa;
     montagne.aggiorna(cam, nebbia, tappa, dt);
 
     // luna
@@ -280,7 +282,7 @@ export function creaAtmosfera({ scene, camera, U, groundAt, posToWorld, SEGMENT_
     // lucciole: la sera, e un po' di più a tempo
     lucciole.p.visible = buio > 0.12;
     lucciole.u.uLuci.value = smooth(0.12, 0.6, buio);
-    lucciole.u.uCassa.value = cassa * (0.3 + 0.7 * balla);
+    lucciole.u.uCassa.value = cassa;
 
     // fuochi
     const accesi = smooth(0.22, 0.6, buio);
