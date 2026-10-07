@@ -54,3 +54,4 @@ __pycache__/
 
 # Tracce di prova generate da tools/orecchie/gen-tracce.js (si rigenerano)
 tools/orecchie/tracce/
+*.blend1
