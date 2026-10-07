@@ -33,7 +33,7 @@ const MONTI = [
 // per tappa: quanta nebbia bassa (0…1)
 const NEBBIA_BASSA = [0.9, 0.7, 0.35, 0.3, 0.2, 0.0, 0.7, 0.55, 0.35, 0.2, 0.45, 0.3];
 
-export function creaAtmosfera({ scene, camera, U, groundAt, posToWorld, SEGMENT_LENGTH, gher }) {
+export function creaAtmosfera({ scene, camera, U, groundAt, roadDist, posToWorld, SEGMENT_LENGTH, gher }) {
   const tmp = new THREE.Vector3(), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), V = new THREE.Vector3();
   const su = new THREE.Vector3(0, 1, 0);
 
@@ -326,7 +326,13 @@ export function creaAtmosfera({ scene, camera, U, groundAt, posToWorld, SEGMENT_
       const dx = ((b.x - cam.x) % 180000 + 270000) % 180000 - 90000, dz = ((b.z - cam.z) % 180000 + 270000) % 180000 - 90000;
       const wx = cam.x + dx, wz = cam.z + dz;
       if (b.soglia > densita) continue;
-      if (b.wx === undefined || Math.abs(wx - b.wx) > 5000 || Math.abs(wz - b.wz) > 5000) { b.ya = groundAt(wx, wz); b.wx = wx; b.wz = wz; }
+      if (b.wx === undefined || Math.abs(wx - b.wx) > 5000 || Math.abs(wz - b.wz) > 5000) {
+        b.ya = groundAt(wx, wz); b.wx = wx; b.wz = wz;
+        // mai sopra la strada: un piano quasi a filo della pista, visto da lontano, "litiga" con lei pixel per
+        // pixel (z-fighting) e diventa un velo di puntini. Il banco deve stare tutto fuori dal corridoio.
+        b.sullaStrada = roadDist ? roadDist(wx, wz) < b.w * 0.55 + 4000 : false;
+      }
+      if (b.sullaStrada) continue;
       if (Math.hypot(dx, dz) < 12000) continue;                                               // non addosso al cavallo
       V.set(wx, b.ya + 450, wz); S.set(b.w, b.w * 0.7, 1);
       nb.m.setMatrixAt(n++, M.compose(V, nb.q, S));

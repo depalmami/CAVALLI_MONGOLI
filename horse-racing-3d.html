@@ -1314,7 +1314,7 @@ const paesaggio = creaPaesaggio({ scene, U: mondo.U, posToWorld, groundAt, roadD
 const posAnimali = piazzaBranchi({ N, SEGMENT_LENGTH, ROAD_WIDTH, tappaInizio, posToWorld, groundAt, roadDist,
                                    libero: paesaggio.libero, occupa: paesaggio.occupa });
 const fauna = creaFauna({ scene, SEGMENT_LENGTH, posizione: posAnimali, groundAt });
-const atmosfera = creaAtmosfera({ scene, camera, U: mondo.U, groundAt, posToWorld, SEGMENT_LENGTH, gher: paesaggio.accampamenti.lista });
+const atmosfera = creaAtmosfera({ scene, camera, U: mondo.U, groundAt, roadDist, posToWorld, SEGMENT_LENGTH, gher: paesaggio.accampamenti.lista });
 const trees = creaForesta({ scene, N, SEGMENT_LENGTH, ROAD_WIDTH, posToWorld, roadDist, groundAt, tappaDi,
                             distanzaMinima: TREE_CLEARANCE, mondo, libero: paesaggio.libero });   // specie, biomi e blocchi: vedi 3d/alberi.js
 
@@ -1452,7 +1452,26 @@ const MODEL_SOURCES = [
   { url: 'assets/models/horse-quaternius.glb', yaw: 0 },               // fallback CC0 animato
   { url: 'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r160/examples/models/gltf/Horse.glb', yaw: 0 }, // fallback CDN
 ];
-const modelReady = new Promise((res) => {
+// ┌─ PROTAGONISTA ──────────────────────────────────────────────────────────┐
+// │ Il cavallo del giocatore ha un modello suo: il cavallo di cartone        │
+// │ (due persone nella scatola), riggato in Blender con clip Gallop, Walk e  │
+// │ Idle. Ossa con gli stessi nomi del rig Quaternius (Torso2, Neck1, Head,   │
+// │ Tail1…), così la piega in curva funziona uguale. Il Gallop contiene DUE  │
+// │ falcate: le gambe umane sono corte e così coprono i 4 HORSE_HEIGHT di    │
+// │ GALLOP_STRIDE senza pattinare. Se il file manca, il giocatore usa il     │
+// │ modello dei rivali qui sotto.                                            │
+// └──────────────────────────────────────────────────────────────────────────┘
+const PROTAGONISTA = { url: 'assets/models/protagonista-cartone.glb', yaw: 0, template: null, clips: [], clip: null };
+const protaReady = new Promise((res) => {
+  new GLTFLoader().load(PROTAGONISTA.url, gltf => {
+    PROTAGONISTA.template = gltf.scene;
+    PROTAGONISTA.clips = gltf.animations || [];
+    PROTAGONISTA.clip = PROTAGONISTA.clips.find(a => /(^|\|)Gallop$/i.test(a.name)) || PROTAGONISTA.clips[0];
+    console.log('Protagonista caricato:', PROTAGONISTA.url, '· animazioni:', PROTAGONISTA.clips.map(a => a.name).join(', '));
+    res(true);
+  }, undefined, () => res(false));
+});
+const rivaliReady = new Promise((res) => {
   const loader = new GLTFLoader();
   const tryLoad = (idx) => {
     if (idx >= MODEL_SOURCES.length) { console.warn('Nessun modello 3D disponibile'); return res(false); }
@@ -1468,6 +1487,7 @@ const modelReady = new Promise((res) => {
   };
   tryLoad(0);
 });
+const modelReady = Promise.all([rivaliReady, protaReady]).then(([ok]) => ok);
 
 // LOCOMOZIONE realistica: andature legate alla velocità (niente "pattinamento" dei piedi),
 // inclinazione in curva, imbardata in sterzata, beccheggio in accelerazione/frenata
@@ -1518,8 +1538,11 @@ const _bq = new THREE.Quaternion(), _bq2 = new THREE.Quaternion(), _bax = new TH
 const _fwdAx = new THREE.Vector3();
 
 class HorseActor {
-  constructor(tintHex = 0xffffff) {
+  // modello: { template, clips, clip, yaw } tutto suo (PROTAGONISTA); null = quello dei rivali
+  constructor(tintHex = 0xffffff, modello = null) {
     this.tint = new THREE.Color(tintHex);
+    this.modello = modello;
+    this.yaw = 0;
     this.group = new THREE.Group();
     scene.add(this.group);
 
@@ -1561,8 +1584,11 @@ class HorseActor {
     this.spriteMat.map = frames[0]; this.spriteMat.needsUpdate = true;
   }
   initModel() {
-    if (!modelTemplate || this.model) return;
-    this.model = SkeletonUtils.clone(modelTemplate);
+    const M = this.modello && this.modello.template ? this.modello
+            : { template: modelTemplate, clips: modelClips, clip: modelClip, yaw: MODEL_YAW };
+    if (!M.template || this.model) return;
+    this.yaw = M.yaw;
+    this.model = SkeletonUtils.clone(M.template);
     this.model.updateWorldMatrix(true, true);
     // dimensione REALE renderizzata: per i modelli skinnati il box della geometria
     // ignora la scala dell'armatura (qui ×100) → misurare dalle ossa dello scheletro
@@ -1583,8 +1609,8 @@ class HorseActor {
       if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiply(this.tint); o.castShadow = true; }
     });
     this.mixer = new THREE.AnimationMixer(this.model);
-    const byName = re => modelClips.find(a => re.test(a.name));
-    const cG = byName(/gallop|run|canter/i) || modelClip;     // tollerante ai nomi-clip del tuo modello
+    const byName = re => M.clips.find(a => re.test(a.name));
+    const cG = byName(/gallop|run|canter/i) || M.clip;        // tollerante ai nomi-clip del tuo modello
     let   cW = byName(/walk|trot/i);  if (cW === cG) cW = null;
     let   cI = byName(/idle|stand/i); if (cI === cG) cI = null;
     this.durG = cG.duration || 0.6;  this.durW = (cW && cW.duration) || 1;
@@ -1619,7 +1645,7 @@ class HorseActor {
     // quali ossa le muove già l'animazione? Quelle sì le posso premoltiplicare ogni
     // frame (il mixer le riscrive), le altre vanno ripartite dalla posa a riposo,
     // altrimenti la rotazione si accumulerebbe all'infinito.
-    const animata = nome => modelClips.some(c => c.tracks.some(t =>
+    const animata = nome => M.clips.some(c => c.tracks.some(t =>
       t.name === nome + '.quaternion' || t.name.endsWith('/' + nome + '.quaternion')));
     this.shape = [];
     this.model.traverse(o => {
@@ -1748,7 +1774,7 @@ class HorseActor {
       // + il muso puntava dalla parte OPPOSTA al moto: era questo il "sembra un'auto
       // che derapa", e c'era da prima che toccassimo l'assetto. Verificato proiettando
       // muso e spostamento reale sullo SCHERMO, non confrontando numeri fra loro.
-      this.model.rotation.y = this.heading + MODEL_YAW - this.steerYaw + yawX;
+      this.model.rotation.y = this.heading + this.yaw - this.steerYaw + yawX;
       this.model.rotation.z = this.bank + rollX;
       this.model.rotation.x = this.pitch + pitchX;
       if (this.mixer) {
@@ -1801,7 +1827,7 @@ class HorseActor {
   }
 }
 
-const player = new HorseActor(0xffffff);
+const player = new HorseActor(0xffffff, PROTAGONISTA);
 // RIVALI — guerrieri mongoli con salute e AND che combattono (stile Road Redemption)
 const RIVAL_DEFS = [
   // stile = arma "di firma", solo estetica: ognuno colpisce in modo riconoscibile
