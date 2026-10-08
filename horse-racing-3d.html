@@ -1830,19 +1830,20 @@ class HorseActor {
 
 const player = new HorseActor(0xffffff, PROTAGONISTA);
 // RIVALI — guerrieri mongoli con salute e AND che combattono (stile Road Redemption)
+// Senza nome: sono predoni anonimi che COMPAIONO lungo il tracciato a intervalli regolari (vedi
+// spawnRivali) e, abbattuti, escono di scena. Questi quattro sono il "pool" di attori: al massimo
+// quattro in pista insieme. stile = arma "di firma", solo estetica.
 const RIVAL_DEFS = [
-  // stile = arma "di firma", solo estetica: ognuno colpisce in modo riconoscibile
-  { tint: 0xffc9a3, name: 'Batu',    skill: 0.82, pos: 1500, stile: 'mace'  },
-  { tint: 0xa9c8ff, name: 'Ganzo',   skill: 0.88, pos: 2600, stile: 'saber' },
-  { tint: 0xd6ffb3, name: 'Temujin', skill: 0.85, pos: -900, stile: 'whip'  },
-  { tint: 0xffb3d9, name: 'Altan',   skill: 0.92, pos: 3400, stile: 'saber' },
+  { tint: 0xffc9a3, skill: 0.82, stile: 'mace'  },
+  { tint: 0xa9c8ff, skill: 0.88, stile: 'saber' },
+  { tint: 0xd6ffb3, skill: 0.85, stile: 'whip'  },
+  { tint: 0xffb3d9, skill: 0.92, stile: 'saber' },
 ];
 const opponents = RIVAL_DEFS.map((d, i) => ({
-  actor: new HorseActor(d.tint), name: d.name, skill: d.skill, tint: d.tint, stile: d.stile,
-  pos: ((d.pos % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH,
-  lat: (i % 2 ? 0.45 : -0.45), targetLat: (i % 2 ? 0.45 : -0.45),
+  actor: new HorseActor(d.tint), skill: d.skill, tint: d.tint, stile: d.stile,
+  pos: 0, lat: (i % 2 ? 0.45 : -0.45), targetLat: (i % 2 ? 0.45 : -0.45),
   spd0: MAX_SPEED * d.skill, speed: MAX_SPEED * d.skill,
-  health: 100, hp0: 100, state: 'race', wipeT: 0, atkCd: 1 + i*0.4, laneCd: Math.random()*2, flash: 0,
+  health: 100, hp0: 100, state: 'fuori',      // 'fuori' = non in pista, aspetta di comparire wipeT: 0, atkCd: 1 + i*0.4, laneCd: Math.random()*2, flash: 0,
 }));
 const allActors = [player, ...opponents.map(o => o.actor)];
 
@@ -1880,7 +1881,11 @@ const keySlower = () => keys['arrowdown']  || keys['s'] || pad.freno || (ap.on &
 let MAX_HEALTH = 100, MAX_NITRO = 100;   // aumentabili con gli upgrade permanenti (Fase 4)
 const ATK_RANGE = 3200;      // "affiancati" lungo pista (unità mondo)
 const LAT_RANGE = 0.95;      // affiancati lateralmente (unità playerX)
-let pHealth = MAX_HEALTH, nitro = 0, money = 0, score = 0, kills = 0;
+let pHealth = MAX_HEALTH, nitro = 0, score = 0, kills = 0;
+// BONUS: niente più soldi (con 40-80 $ a takedown si comprava tutto il negozio a ogni tappa).
+// Ogni TAKEDOWN_PER_BONUS abbattuti si guadagna un gettone; a fine tappa ogni gettone vale UNA cosa a scelta.
+const TAKEDOWN_PER_BONUS = 5;
+let gettoni = 0;
 let blocking = false, critical = false, boosting = false;
 // MODALITÀ LIBERA (tasto N): spegne tutta la parte Road Redemption — rivali,
 // combattimento, casse-arma, obiettivi d'evento e morte — e lascia solo la guida.
@@ -1993,28 +1998,52 @@ function wipe(o, cause) {
   { const q = o.actor.group.position;
     hitSpark.burst(q.x, q.y + 300, q.z, 0xd9c9a3, 18, 1400); fendenti.onda(q.x, q.y, q.z); }
   fermaImmagine(0.1);
-  kills++; const cash = 40 + ((Math.random()*40)|0);
-  money += cash; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
-  addPopup(o, 1200, '+$' + cash, '#7fffa0'); shake = Math.max(shake, 0.7);
-  hud.banner('TAKEDOWN', o.name + ' A TERRA +' + cash + '$');
+  kills++; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
+  addPopup(o, 1200, '+150', '#7fffa0'); shake = Math.max(shake, 0.7);
+  // ogni TAKEDOWN_PER_BONUS abbattuti: UN gettone, da spendere a fine tappa su UNA cosa a scelta
+  if (kills % TAKEDOWN_PER_BONUS === 0) { gettoni++; hud.banner('BONUS!', 'SCEGLILO A FINE TAPPA'); }
+  else hud.banner('TAKEDOWN', 'BONUS ' + (kills % TAKEDOWN_PER_BONUS) + '/' + TAKEDOWN_PER_BONUS);
   onKill(o);
 }
 
 // AI dei rivali: rubber-band per restare nel gruppo, cambio corsia, contrattacco
+// COMPARSA DEI RIVALI: uno ogni RIVALE_OGNI unità di strada percorsa (circa ogni 5 s a tutta),
+// davanti o dietro, finché ci sono attori liberi. Più si va avanti nel viaggio, più sono robusti.
+const RIVALE_OGNI = 60000;
+function vitaRivale() {
+  const avanti = limit(position / FINE_VIAGGIO, 0, 1);       // 0 alla partenza → 1 a Karakorum
+  return Math.round(50 + 170 * avanti);                       // 50 (3 pugni) → 220 (11 pugni)
+}
+function spawnRivali() {
+  if (game.state !== 'racing' || game.dist < game.prossimoRivale) return;
+  const o = opponents.find(x => x.state === 'fuori');
+  if (!o) return;                                             // tutti in pista: riprova al prossimo frame
+  game.prossimoRivale = game.dist + RIVALE_OGNI * (0.8 + Math.random() * 0.4);
+  const davanti = Math.random() < 0.65;                       // più spesso li raggiungi, a volte ti raggiungono
+  o.pos = (((position + (davanti ? 1 : -1) * (11000 + Math.random() * 5000)) % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
+  o.prevPos = o.pos;
+  o.lat = o.targetLat = o.prevLat = Math.random() * 1.6 - 0.8;
+  o.hp0 = o.health = vitaRivale();
+  o.spd0 = MAX_SPEED * (o.skill + Math.min(0.22, game.eventIndex * 0.025));
+  o.speed = davanti ? speed * 0.8 : speed * 1.15;
+  o.state = 'race'; o.atkCd = 1.5; o.laneCd = Math.random() * 2; o.flash = 0; o.spintaLat = 0;
+  o.actor.rimettiInPiedi();
+}
 function updateAI(dt) {
   if (freeRoam) return;                // modalità libera: nessun rivale si muove né attacca
+  spawnRivali();
   for (const o of opponents) {
     if (o.flash > 0) o.flash -= dt*3;
     if (o.spintaLat) {                                  // spinta del calcio, graduale
       const d = Math.abs(o.spintaLat) < 1e-3 ? o.spintaLat : o.spintaLat * Math.min(1, dt*9);
       o.lat += d; o.spintaLat -= d;
     }
+    if (o.state === 'fuori') continue;
     if (o.state === 'wipe') {
       o.speed = Math.max(MAX_SPEED*0.15, accel(o.speed, DECEL*1.6, dt));
       o.lat += (Math.sign(o.lat) || 1) * 0.5 * dt;
       o.wipeT -= dt;
-      if (o.wipeT < 0.7) o.actor.rialzati();          // si rimette in piedi prima di ripartire
-      if (o.wipeT <= 0) { o.state = 'race'; o.health = o.hp0*0.7; o.targetLat = limit(o.lat, -0.7, 0.7); }
+      if (o.wipeT <= 0) { o.state = 'fuori'; o.actor.rialzati(); }   // abbattuto: esce di scena, il posto torna libero
     } else {
       const g = gapTo(o.pos);                       // + davanti al giocatore
       // rubber-band FORTE attorno al giocatore: match della sua velocità + chiusura del gap
@@ -2204,7 +2233,7 @@ function updateAutopilot(dt) {
   // --- 3. minacce, ordinate per tempo all'impatto ---
   const minacce = [];
   for (const o of opponents) {
-    if (o.state === 'wipe') continue;
+    if (o.state !== 'race') continue;
     const gap = gapTo(o.pos);                       // + = davanti a noi
     if (gap <= 0) continue;
     const ttc = gap / Math.max(projSpeed - o.speed, 40);
@@ -2279,7 +2308,7 @@ function updateAutopilot(dt) {
   ap.parata = false;
   let bersaglio = null;
   for (const o of opponents) {
-    if (o.state === 'wipe') continue;
+    if (o.state !== 'race') continue;
     const g = Math.abs(gapTo(o.pos)), l = Math.abs(o.lat - playerX);
     if (g < ATK_RANGE*1.15 && l < LAT_RANGE*1.1) ap.parata = true;
     if (g < ATK_RANGE && l < LAT_RANGE && !bersaglio) bersaglio = o;
@@ -3175,14 +3204,15 @@ const vHud = new THREE.Vector3();
 function statoHud() {
   const k = tappaDi(position), rivali = [], dietro = [];
   if (!freeRoam) for (const o of opponents) {
+    if (o.state === 'fuori') continue;
     const g = gapTo(o.pos);
     if (Math.abs(g) > 26000) continue;                                   // solo rivali vicini
     vHud.copy(o.actor.group.position); vHud.y += HORSE_HEIGHT * 1.7; vHud.project(camera);
     if (vHud.z < 1 && Math.abs(vHud.x) < 1.05 && Math.abs(vHud.y) < 1.05 && g > -1500)
-      rivali.push({ x: vHud.x*0.5 + 0.5, y: -vHud.y*0.5 + 0.5, nome: hud.ascii(o.name),
+      rivali.push({ x: vHud.x*0.5 + 0.5, y: -vHud.y*0.5 + 0.5, nome: '',
                     hp: Math.max(0, o.health) / o.hp0, ko: o.state === 'wipe' });
     else if (g < 0 && g > -20000 && o.state === 'race')                  // chi arriva da dietro, entro ~90 m
-      dietro.push({ nome: hud.ascii(o.name), lato: o.lat < playerX ? -1 : 1, metri: Math.round(-g * UNITA_KM * 1000) });
+      dietro.push({ nome: '', lato: o.lat < playerX ? -1 : 1, metri: Math.round(-g * UNITA_KM * 1000) });
   }
   dietro.sort((a, b) => a.metri - b.metri);
   return {
@@ -3191,7 +3221,7 @@ function statoHud() {
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
     obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
     vita: Math.max(0, pHealth) / MAX_HEALTH, nitro: nitro / MAX_NITRO, boost: boosting,
-    arma: { nome: curWeapon.name, usi: curWeapon.uses }, soldi: money, takedown: kills, punti: score,
+    arma: { nome: curWeapon.name, usi: curWeapon.uses }, bonus: gettoni, versoBonus: kills % TAKEDOWN_PER_BONUS, perBonus: TAKEDOWN_PER_BONUS, takedown: kills, punti: score,
     combo, comboT, rivali, dietro, musica, smarmella: centralina.liscia,
   };
 }
@@ -3485,7 +3515,7 @@ const proiezione = (() => {
 //=========================================================================
 // META / ROGUELIKE — eventi, obiettivi, shop tra un evento e l'altro, permadeath
 //=========================================================================
-const game = { state: 'boot', eventIndex: 0, dist: 0, target: 1, type: 'race',
+const game = { state: 'boot', eventIndex: 0, dist: 0, prossimoRivale: 0, target: 1, type: 'race',
                need: 0, time: 0, timeLeft: 0, xp: 0, up: { strength: 0, health: 0, nitro: 0 }, killsThisEvent: 0 };
 const $screen = document.getElementById('screen');
 const $sbox   = document.getElementById('screen-box');
@@ -3504,36 +3534,30 @@ function eventFor(i) {
   // un evento = una tappa del viaggio: parte dove finisce la precedente
   const k = Math.min(i, TAPPE.length - 1);
   const inizio = tappaInizio[k], dist = tappaInizio[k+1] - inizio;
-  const need = 2 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
+  const need = 3 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
   const title = { race:'🏁 GARA', takedown:'⚔️ RAZZIA', survival:'🛡️ SOPRAVVIVENZA', time:'⏱️ CONTRO IL TEMPO' }[type];
   const desc = { race:'Taglia il traguardo davanti a tutti.', takedown:'Abbatti '+need+' rivali prima del traguardo.',
                  survival:'Arriva vivo al traguardo: i rivali sono più aggressivi.', time:'Raggiungi il traguardo prima che scada il tempo.' }[type];
   return { type, dist, need, time, title, desc, inizio, indice: k, tappa: TAPPE[k],
            ultima: k === TAPPE.length - 1 };
 }
-function respawnRivals(i) {
-  opponents.forEach((o, k) => {
-    o.state = 'race'; o.hp0 = 100 + i*18; o.health = o.hp0; o.actor.rimettiInPiedi();
-    o.spd0 = MAX_SPEED * (o.skill + Math.min(0.22, i*0.025));
-    o.speed = o.spd0; o.atkCd = 1 + k*0.4; o.laneCd = Math.random()*2; o.flash = 0;
-    // accanto al giocatore, dovunque parta la tappa: con la partenza fissa a 0
-    // un rivale sarebbe rimasto milioni di unità indietro
-    o.pos = (((position + 800 + k*650) % TRACK_LENGTH) + TRACK_LENGTH) % TRACK_LENGTH;
-    o.lat = o.targetLat = (k % 2 ? 0.45 : -0.45);
-  });
+// a inizio tappa la pista è vuota: i rivali compaiono man mano (spawnRivali), il primo dopo ~1,5 s
+function respawnRivals() {
+  opponents.forEach(o => { o.state = 'fuori'; o.actor.rimettiInPiedi(); o.actor.group.visible = false; });
+  game.prossimoRivale = 18000;
 }
 function startEvent() {
   const ev = eventFor(game.eventIndex);
   Object.assign(game, { type: ev.type, target: ev.dist, need: ev.need, time: ev.time, timeLeft: ev.time,
                         dist: 0, killsThisEvent: 0, state: 'racing' });
   position = prevPosition = ev.inizio; playerX = prevPlayerX = 0; speed = 0; started = true;
-  respawnRivals(game.eventIndex); hideScreen();
+  respawnRivals(); hideScreen();
   hud.banner('TAPPA ' + (ev.indice + 1), ev.tappa.nome + ' - ' + { race:'GARA', takedown:'RAZZIA', survival:'SOPRAVVIVENZA', time:'CONTRO IL TEMPO' }[ev.type]);
 }
 // obiettivo dell'evento per l'HUD: solo ASCII, il font a pixel non ha emoji né accenti
 function objectiveText() {
   const pct = Math.min(100, Math.round(game.dist / game.target * 100));
-  if (game.type === 'takedown') return `ABBATTI ${game.killsThisEvent}/${game.need} - TRAGUARDO ${pct}%`;
+  if (game.type === 'takedown') return `ABBATTI ${game.killsThisEvent}/${game.need} ENTRO IL TRAGUARDO ${pct}%`;
   if (game.type === 'time')     return `TEMPO ${Math.max(0, game.timeLeft).toFixed(1)}S - TRAGUARDO ${pct}%`;
   if (game.type === 'survival') return `SOPRAVVIVI - TRAGUARDO ${pct}%`;
   return `TRAGUARDO ${pct}%`;
@@ -3544,8 +3568,8 @@ function checkGame() {
     return;                            // l'HUD scrive «MODALITA LIBERA» da solo
   }
   if (game.type === 'takedown') {
-    if (game.killsThisEvent >= game.need) return winEvent();
-    if (game.dist >= game.target) return loseEvent('Non hai abbattuto abbastanza rivali!');
+    // non si vince più al N-esimo takedown (con 2-3 colpi fortunati la tappa finiva subito): si corre fino in fondo
+    if (game.dist >= game.target) return game.killsThisEvent >= game.need ? winEvent() : loseEvent('Non hai abbattuto abbastanza rivali!');
   } else if (game.type === 'time') {
     if (game.dist >= game.target) return winEvent();
     if (game.timeLeft <= 0) return loseEvent('⏱️ Tempo scaduto!');
@@ -3553,8 +3577,8 @@ function checkGame() {
 }
 function winEvent() {
   game.state = 'won';
-  hud.banner(eventFor(game.eventIndex).ultima ? 'KARAKORUM!' : 'TAPPA VINTA', '+$' + (30 + game.eventIndex*10));
-  money += 30 + game.eventIndex*10; game.xp += 3 + game.eventIndex;
+  hud.banner(eventFor(game.eventIndex).ultima ? 'KARAKORUM!' : 'TAPPA VINTA', gettoni ? gettoni + ' BONUS DA SCEGLIERE' : '');
+  game.xp += 3 + game.eventIndex;
   if (eventFor(game.eventIndex).ultima) return renderArrivo();
   renderShop();
 }
@@ -3563,36 +3587,43 @@ function renderArrivo() {
   showScreen(`
     <h1>🏯 KARAKORUM</h1>
     <h2>Viaggio compiuto: ${TAPPE.length} tappe, ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} km di steppa</h2>
-    <p>Punteggio <b>${score}</b> &nbsp; Takedown <b>${kills}</b> &nbsp; 💰 $<b>${money}</b></p>
+    <p>Punteggio <b>${score}</b> &nbsp; Takedown <b>${kills}</b></p>
     <p>⭐ <b>${game.xp}</b> XP (+10 per l'arrivo) — restano per il prossimo viaggio</p>
     <button class="big" id="b-restart">🐎 NUOVO VIAGGIO</button>`);
   D('b-restart').onclick = () => resetRun();
 }
+// FINE TAPPA: ogni gettone (uno ogni TAKEDOWN_PER_BONUS takedown) vale UNA cosa a scelta.
+// Gli upgrade permanenti restano a XP, come prima.
+const BONUS = [
+  { id: 'cura',   txt: '❤️ Cura +60',       ok: () => pHealth < MAX_HEALTH, fai: () => { pHealth = Math.min(MAX_HEALTH, pHealth + 60); } },
+  { id: 'nitro',  txt: '⚡ Nitro pieno',     ok: () => nitro < MAX_NITRO,    fai: () => { nitro = MAX_NITRO; } },
+  { id: 'saber',  txt: '🗡 Sciabola',        ok: () => true, fai: () => equipWeapon('saber') },
+  { id: 'mace',   txt: '🔨 Mazza',           ok: () => true, fai: () => equipWeapon('mace') },
+  { id: 'whip',   txt: '🪢 Frusta',          ok: () => true, fai: () => equipWeapon('whip') },
+  { id: 'bow',    txt: '🏹 Arco',            ok: () => true, fai: () => equipWeapon('bow') },
+];
 function renderShop() {
-  const nx = eventFor(game.eventIndex + 1);
+  const nx = eventFor(game.eventIndex + 1), manca = TAKEDOWN_PER_BONUS - (kills % TAKEDOWN_PER_BONUS);
   showScreen(`
     <h1>✅ ${eventFor(game.eventIndex).tappa.nome.toUpperCase()}</h1>
-    <h2>Tappa ${game.eventIndex + 1} di ${TAPPE.length} superata · punteggio ${score}</h2>
-    <p>💰 $<b>${money}</b> &nbsp; ⭐ <b>${game.xp}</b> XP &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH}</p>
+    <h2>Tappa ${game.eventIndex + 1} di ${TAPPE.length} superata · punteggio ${score} · takedown ${kills}</h2>
+    <p>🎁 Bonus da scegliere: <b>${gettoni}</b> &nbsp; (il prossimo fra ${manca} takedown) &nbsp; ⭐ <b>${game.xp}</b> XP &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; arma: ${curWeapon.name}</p>
     <div class="shopgrid">
-      <button id="b-heal">❤️ Cura +60 · $40</button>
-      <button id="b-nitro">⚡ Nitro pieno · $25</button>
-      <button id="b-saber">🗡 Sciabola · $60</button>
+      ${BONUS.map(b => `<button id="b-${b.id}">${b.txt} · 1🎁</button>`).join('')}
       <button id="b-str">💪 +Forza · 2⭐</button>
       <button id="b-hp">❤️ +Salute max · 3⭐</button>
       <button id="b-nt">⚡ +Nitro max · 2⭐</button>
     </div>
+    <p style="opacity:.75">Un bonus ogni ${TAKEDOWN_PER_BONUS} takedown: ogni 🎁 vale una sola scelta. Un'arma nuova sostituisce quella che hai.</p>
     <p style="opacity:.75">Prossima tappa: <b>${nx.tappa.nome}</b> · ${nx.title} — ${nx.desc}</p>
     <button class="big" id="b-next">VIA! →</button>`);
-  D('b-heal').disabled  = money < 40 || pHealth >= MAX_HEALTH;
-  D('b-nitro').disabled = money < 25 || nitro >= MAX_NITRO;
-  D('b-saber').disabled = money < 60;
+  for (const b of BONUS) {
+    D('b-' + b.id).disabled = gettoni < 1 || !b.ok();
+    D('b-' + b.id).onclick = () => { gettoni--; b.fai(); renderShop(); };
+  }
   D('b-str').disabled   = game.xp < 2;
   D('b-hp').disabled    = game.xp < 3;
   D('b-nt').disabled    = game.xp < 2;
-  D('b-heal').onclick  = () => { money -= 40; pHealth = Math.min(MAX_HEALTH, pHealth + 60); renderShop(); };
-  D('b-nitro').onclick = () => { money -= 25; nitro = MAX_NITRO; renderShop(); };
-  D('b-saber').onclick = () => { money -= 60; equipWeapon('saber'); renderShop(); };
   D('b-str').onclick   = () => { game.xp -= 2; game.up.strength++; applyUpgrades(); renderShop(); };
   D('b-hp').onclick    = () => { game.xp -= 3; game.up.health++; applyUpgrades(); pHealth += 30; renderShop(); };
   D('b-nt').onclick    = () => { game.xp -= 2; game.up.nitro++; applyUpgrades(); renderShop(); };
@@ -3612,7 +3643,7 @@ function loseEvent(reason) {
   D('b-restart').onclick = () => resetRun();
 }
 function resetRun() {
-  game.eventIndex = 0; money = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
+  game.eventIndex = 0; gettoni = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
 // MODALITÀ LIBERA — spegne la parte Road Redemption e lascia solo la guida.
@@ -3670,7 +3701,7 @@ window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { r
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
-  get kills(){return kills}, get score(){return score}, get money(){return money},
+  get kills(){return kills}, get score(){return score}, get gettoni(){return gettoni}, vitaRivale,
   // teleport per ispezione headless: piazza il giocatore a un punto della pista
   teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
                            playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
@@ -3768,7 +3799,9 @@ function frame(now) {
     const pp = player.group.position, ph = player.heading;
     dust.update(dtG, pp.x - Math.sin(ph)*300, pp.y, pp.z - Math.cos(ph)*300, sp, speed > 0);
   }
+  for (const o of opponents) o.actor.group.visible = !freeRoam && o.state !== 'fuori';
   if (!freeRoam) for (const o of opponents) {
+    if (o.state === 'fuori') continue;
     o.actor.place(interpWrap(o.prevPos ?? o.pos, o.pos, alpha), o.lat);
     // stesso assetto del giocatore: prima i rivali NON imbardavano affatto, quindi
     // cambiando corsia traslavano di lato restando puntati dritti (granchio)

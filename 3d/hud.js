@@ -128,14 +128,14 @@ export function creaHud(cv) {
       const l = Math.max(4, Math.round(12 * u)), g = Math.max(1, Math.round(3 * u));
       for (const { r, x, y } of separa(S.rivali, W, H, larg('TEMUJIN', T.s) + 10 * u, T.s + l + 14 * u)) {
         const yy = y - l - 10 * u;
-        testo(r.ko ? r.nome + ' KO' : r.nome, x, yy - T.s - 6 * u, T.s, r.ko ? GRIGIO : BIANCO, 'center');
+        if (r.ko) testo('KO', x, yy - T.s - 6 * u, T.s, GRIGIO, 'center');   // i rivali non hanno nome
         if (!r.ko) blocchi(x - (6 * l + 5 * g) / 2, yy, 6, Math.ceil(r.hp * 6), l, g, r.hp > 0.5 ? '#3fd66b' : r.hp > 0.25 ? GIALLO : ROSSO, '#000');
       }
       S.dietro.slice(0, 2).forEach((d, i) => {
         const sx = d.lato < 0, x = sx ? Math.round(14 * u) : W - Math.round(14 * u), y = H * 0.64 + i * (T.s + 30 * u), s = Math.max(6, Math.round(16 * u));   // sotto la combo, che sta a metà
         ctx.fillStyle = lamp ? GIALLO : BIANCO;
         ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (sx ? s : -s), y - s); ctx.lineTo(x + (sx ? s : -s), y + s); ctx.closePath(); ctx.fill();
-        testo(`${d.nome} ${d.metri}M`, x + (sx ? 1 : -1) * (s + 10 * u), y - T.s / 2, T.s, BIANCO, sx ? 'left' : 'right');
+        testo(`${d.metri}M`, x + (sx ? 1 : -1) * (s + 10 * u), y - T.s / 2, T.s, BIANCO, sx ? 'left' : 'right');
       });
     }
 
@@ -177,7 +177,7 @@ export function creaHud(cv) {
       {
         const lato = Math.max(8, Math.round(26 * u)), gap = Math.max(2, Math.round(8 * u)), et = larg('NITRO', T.s) + pad;
         const arma = ascii(S.arma.nome) + (isFinite(S.arma.usi) ? ' X' + S.arma.usi : '');
-        const bottino = `$${S.soldi}  KO ${S.takedown}  ${String(S.punti).padStart(6, '0')}`;
+        const bottino = `KO ${S.takedown}  BONUS ${S.bonus ?? 0} (${S.versoBonus ?? 0}/${S.perBonus ?? 5})  ${String(S.punti).padStart(6, '0')}`;
         const w = Math.max(et + 9 * (lato + gap) - gap, larg(arma, T.s), larg(bottino, T.s)) + pad * 2;
         const rr = Math.max(lato, T.s) + Math.max(8, Math.round(14 * u));
         const h = pad * 2 + rr * 2 + riga + T.s;

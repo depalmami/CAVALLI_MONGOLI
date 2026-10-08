@@ -699,3 +699,13 @@ Si prosegue il piano grafico in WebGL.
   erba, fiumi, alberi da 4,3, ovoo, animali, portali, limite ±2,2 del giocatore). Sistemati a mano: i pezzi dei ponti
   (erano misure fisse, ora 2,6/2,8/3 × ROAD_WIDTH) e il piede della scarpata, che ora è VERGE_OUT + 3200 = 10400:
   con 4 × ROAD_WIDTH sarebbe arrivato a 12000, troppo vicino al raggio di curva minimo (13158).
+
+### 8 ottobre 2026 — Takedown, bonus e rivali rifatti
+- Problemi segnalati: nella razzia la tappa si vinceva al 2°-3° takedown; 40-80 $ a takedown compravano tutto il
+  negozio a ogni tappa; 4 rivali con nome, sempre gli stessi, legati al giocatore e risorti dopo 3,5 s.
+- **Rivali**: senza nome; pool di 4 attori, stato 'fuori' finché non compaiono. `spawnRivali()` ne fa comparire uno
+  ogni ~60.000 unità di strada (±20%, ~4-5 s a tutta), 65% davanti e 35% dietro; abbattuti escono di scena (non si
+  rialzano più). Vita `vitaRivale()` = 50 → 220 lungo il viaggio (da 3 a 11 pugni). Misurato: ~10 rivali a tappa.
+- **Tappe**: finiscono sempre al traguardo; la razzia chiede `3 + i/2` takedown ENTRO il traguardo.
+- **Bonus**: niente soldi. Ogni `TAKEDOWN_PER_BONUS` (5) takedown un gettone; a fine tappa ogni gettone vale UNA cosa
+  fra cura, nitro pieno, sciabola, mazza, frusta, arco. Gli upgrade permanenti restano a XP. HUD: `KO n  BONUS g (k/5)`.
