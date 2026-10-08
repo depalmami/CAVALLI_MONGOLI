@@ -693,3 +693,9 @@ Si prosegue il piano grafico in WebGL.
   nebbia bassa sopra il corridoio della strada (ora mai).
 - Nuovo interruttore nell'indirizzo: `?spegni=nebbia,lucciole,fuochi,montagne,luna,nuvole,acqua,erba,polvere,
   animali,ovoo,massi,pali,alberi` toglie quei pezzi dalla scena, per isolare un difetto di resa a occhio.
+
+### 8 ottobre 2026 — Pista 1,5× più larga
+- `ROAD_WIDTH` 2000 → 3000. Quasi tutto è in unità di larghezza strada e segue da solo (banchine, pali a 1,18,
+  erba, fiumi, alberi da 4,3, ovoo, animali, portali, limite ±2,2 del giocatore). Sistemati a mano: i pezzi dei ponti
+  (erano misure fisse, ora 2,6/2,8/3 × ROAD_WIDTH) e il piede della scarpata, che ora è VERGE_OUT + 3200 = 10400:
+  con 4 × ROAD_WIDTH sarebbe arrivato a 12000, troppo vicino al raggio di curva minimo (13158).

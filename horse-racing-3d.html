@@ -320,7 +320,7 @@ import { creaAtmosfera } from './3d/atmosfera.js';
 //=========================================================================
 const SEGMENT_LENGTH = 200;
 const RUMBLE_LENGTH  = 3;
-const ROAD_WIDTH     = 2000;          // semilarghezza: playerX = ±1 è il bordo strada
+const ROAD_WIDTH     = 3000;          // semilarghezza: playerX = ±1 è il bordo strada (8 ott 2026: 2000 → 3000, pista 1,5× più larga)
 const MAX_SPEED      = 12000;         // unità/secondo (= segmentLength/(1/60))
 const ACCEL          =  MAX_SPEED/5;
 const BRAKING        = -MAX_SPEED;
@@ -836,17 +836,18 @@ const TERR_MARGIN = 50000;      // quanto il terreno deborda dal bounding box de
 const SKIRT       = 600000;     // l'anello di bordo si allunga fin qui → orizzonte pieno
 const GROUND_TILE = 3500;       // passo di ripetizione della texture d'erba (unità mondo)
 
-// SEZIONE TRASVERSALE (semilarghezze, dal centro strada verso l'esterno):
-//   0 → 2000   asfalto            ┐
-//   2000→2480  cordolo            ├ tutto in piano, a quota strada
-//   2480→4800  banchina erbosa    ┘  ← qui finisce chi esce di strada
-//   4800→8000  scarpata: scende fino a sparire sotto il terreno
-// La banchina arriva a 4800 perché playerX è limitato a ±2.2 = 4400 unità:
+// SEZIONE TRASVERSALE (semilarghezze, dal centro strada verso l'esterno; ROAD_WIDTH = 3000):
+//   0 → 3000    sterrato           ┐
+//   3000→3720   banchina di ghiaia ├ tutto in piano, a quota strada
+//   3720→7200   banchina erbosa    ┘  ← qui finisce chi esce di strada
+//   7200→10400  scarpata: scende fino a sparire sotto il terreno
+// La banchina arriva a 2,4 × ROAD_WIDTH perché playerX è limitato a ±2.2:
 // tutto ciò che il giocatore può calpestare deve stare a quota strada, altrimenti
 // il cavallo (che prende la quota dalla linea d'asse) galleggerebbe sulla scarpata.
-// 8000 è ben sotto il raggio di curva minimo (13158): la geometria non si ripiega.
+// La scarpata resta larga 3200 (non in proporzione): il suo piede, 10400, deve stare sotto
+// il raggio di curva minimo (13158), se no la geometria sul lato interno si ripiega.
 const VERGE_OUT   = ROAD_WIDTH * 2.4;   // bordo esterno della banchina calpestabile
-const BANK_OUT    = ROAD_WIDTH * 4;     // piede della scarpata
+const BANK_OUT    = VERGE_OUT + 3200;   // piede della scarpata (vedi sopra: < raggio di curva minimo)
 const STAMP_HALF  = ROAD_WIDTH * 2.5;   // corridoio timbrato: copre tutta la parte in piano
 
 // SUOLO PER BIOMA: quanto erba verde, steppa secca, sabbia e roccia c'è attorno a

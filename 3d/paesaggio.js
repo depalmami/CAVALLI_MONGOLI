@@ -189,11 +189,11 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
           }`);
     };
     const pezzi = {
-      piano:    new THREE.BoxGeometry(5200, 90, SEGMENT_LENGTH + 4),    // lastre: 45 sopra la pista
-      soletta:  new THREE.BoxGeometry(5600, 520, SEGMENT_LENGTH + 4),   // lo spessore sotto
+      piano:    new THREE.BoxGeometry(ROAD_WIDTH * 2.6, 90, SEGMENT_LENGTH + 4),    // lastre: 45 sopra la pista (copre carreggiata e ghiaia)
+      soletta:  new THREE.BoxGeometry(ROAD_WIDTH * 2.8, 520, SEGMENT_LENGTH + 4),   // lo spessore sotto
       parapetto:new THREE.BoxGeometry(300, 560, SEGMENT_LENGTH + 4),
       copertina:new THREE.BoxGeometry(400, 90, SEGMENT_LENGTH + 4),
-      spalla:   new THREE.BoxGeometry(6000, 2600, 900),
+      spalla:   new THREE.BoxGeometry(ROAD_WIDTH * 3, 2600, 900),
     };
     const mesh = {};
     for (const k in pezzi) { mesh[k] = new THREE.InstancedMesh(pezzi[k], mat, Math.max(2, segs.length * 2 + 4)); mesh[k].count = 0; }
