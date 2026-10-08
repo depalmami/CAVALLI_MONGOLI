@@ -19,6 +19,8 @@
 
 const FONT = '"Press Start 2P", monospace';
 const GIALLO = '#ffd23f', ROSSO = '#ff3b30', CIANO = '#3fd0ff', BIANCO = '#ffffff', SPENTO = '#2a2f45', GRIGIO = '#9aa3c0';
+// i colori della bandiera mongola, per i menu (scelta del bonus): blu, rosso, e il giallo del Soyombo per i dettagli
+const MN_BLU = '#0b3a8c', MN_BLU_SCURO = '#06204f', MN_ROSSO = '#c4272f', MN_ORO = '#f9cf02';
 
 // solo ASCII stampabile: accenti tolti, simboli sostituiti
 export function ascii(s) {
@@ -107,6 +109,58 @@ export function creaHud(cv) {
 
   // ── disegno ─────────────────────────────────────────────────────────────
   function disegna(S, W, H) {
+    disegnaHud(S, W, H);
+    if (S.scelta && fontPronto) disegnaScelta(S.scelta, S, W, H);   // il menu dei bonus si vede in ogni modo, anche PULITO
+    else rettScelta = [];
+  }
+
+  // ── SCELTA DEL BONUS: a schermo, a 8 bit, nei colori della Mongolia ─────────
+  // Sei caselle 3×2; quella scelta è rossa col bordo giallo e lampeggia a tempo. Le caselle non disponibili
+  // (cura a vita piena, nitro pieno) sono spente. rettScelta tiene i rettangoli per il clic.
+  let rettScelta = [];
+  function disegnaScelta(C, S, W, H) {
+    const u = H / 1080, px = n => Math.max(8, Math.round(n * u / 8) * 8);
+    const T = { s: px(16), m: px(24), l: px(32), xl: px(48) };
+    const lamp = S.musica.fase < 0.5, o = Math.max(2, Math.round(6 * u)), b = Math.max(2, Math.round(4 * u));
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+    const pw = Math.min(W * 0.86, 1500 * u), cols = 3, gap = Math.round(18 * u), pad = Math.round(28 * u);
+    const cw = (pw - pad * 2 - gap * (cols - 1)) / cols, ch = Math.round(T.m + T.s * 2 + 58 * u);
+    const testa = Math.round(T.xl + 40 * u), sotto = Math.round(T.s * 3 + 46 * u);
+    const ph = testa + pad + 2 * ch + gap + sotto;
+    const x0 = Math.round(W / 2 - pw / 2), y0 = Math.round(H / 2 - ph / 2);
+    // pannello blu, bordo bianco, ombra a scalino
+    ctx.fillStyle = '#000'; ctx.fillRect(x0 + o, y0 + o, pw, ph);
+    ctx.fillStyle = MN_BLU; ctx.fillRect(x0, y0, pw, ph);
+    ctx.fillStyle = MN_ROSSO; ctx.fillRect(x0, y0, pw, testa);                             // testata rossa
+    ctx.fillStyle = MN_ORO; ctx.fillRect(x0, y0 + testa - b, pw, b);
+    ctx.strokeStyle = BIANCO; ctx.lineWidth = b; ctx.strokeRect(x0 + b / 2, y0 + b / 2, pw - b, ph - b);
+    testo(ascii(C.titolo), W / 2, y0 + (testa - T.xl) / 2, T.xl, lamp ? MN_ORO : BIANCO, 'center');
+    rettScelta = [];
+    C.opzioni.forEach((op, i) => {
+      const cx = x0 + pad + (i % cols) * (cw + gap), cy = y0 + testa + pad + Math.floor(i / cols) * (ch + gap);
+      const sel = i === C.indice, ok = op.ok;
+      ctx.fillStyle = '#000'; ctx.fillRect(Math.round(cx + o), Math.round(cy + o), Math.round(cw), ch);
+      ctx.fillStyle = !ok ? '#1b2440' : sel ? MN_ROSSO : MN_BLU_SCURO;
+      ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(cw), ch);
+      ctx.strokeStyle = sel ? (lamp ? MN_ORO : BIANCO) : ok ? BIANCO : SPENTO; ctx.lineWidth = sel ? b * 1.6 : b;
+      ctx.strokeRect(Math.round(cx) + b / 2, Math.round(cy) + b / 2, Math.round(cw) - b, ch - b);
+      const ty = cy + Math.round(20 * u);
+      testo(ascii(op.nome), cx + cw / 2, ty, T.m, ok ? (sel ? MN_ORO : BIANCO) : GRIGIO, 'center');
+      testo(ascii(op.descr), cx + cw / 2, ty + T.m + Math.round(14 * u), T.s, ok ? (sel ? BIANCO : MN_ORO) : SPENTO, 'center');
+      if (op.nota) testo(ascii(op.nota), cx + cw / 2, ty + T.m + T.s + Math.round(26 * u), T.s, ok ? GRIGIO : SPENTO, 'center');
+      rettScelta.push({ x: cx / W, y: cy / H, w: cw / W, h: ch / H, i });
+    });
+    const ys = y0 + testa + pad + 2 * ch + gap + Math.round(24 * u);
+    testo(ascii(C.sotto), W / 2, ys, T.s, MN_ORO, 'center');
+    testo(ascii(C.aiuto), W / 2, ys + T.s + Math.round(18 * u), T.s, BIANCO, 'center');
+  }
+  // clic sulla tela (coordinate 0..1): quale casella
+  function sceltaA(xn, yn) {
+    const r = rettScelta.find(r => xn >= r.x && xn <= r.x + r.w && yn >= r.y && yn <= r.y + r.h);
+    return r ? r.i : -1;
+  }
+
+  function disegnaHud(S, W, H) {
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
@@ -177,10 +231,12 @@ export function creaHud(cv) {
       {
         const lato = Math.max(8, Math.round(26 * u)), gap = Math.max(2, Math.round(8 * u)), et = larg('NITRO', T.s) + pad;
         const arma = ascii(S.arma.nome) + (isFinite(S.arma.usi) ? ' X' + S.arma.usi : '');
-        const bottino = `KO ${S.takedown}  BONUS ${S.bonus ?? 0} (${S.versoBonus ?? 0}/${S.perBonus ?? 5})  ${String(S.punti).padStart(6, '0')}`;
-        const w = Math.max(et + 9 * (lato + gap) - gap, larg(arma, T.s), larg(bottino, T.s)) + pad * 2;
+        // il contatore scende: BONUS FRA 5, 4, 3, 2, 1 — poi riparte da 7, poi da 10… — e accanto i takedown totali
+        const fra = 'BONUS FRA ', n = String(S.mancano ?? 0), tot = `   KO TOT ${S.takedown}`;
+        const wBott = larg(fra, T.s) + larg(n, T.m) + larg(tot, T.s);
+        const w = Math.max(et + 9 * (lato + gap) - gap, larg(arma, T.s), wBott) + pad * 2;
         const rr = Math.max(lato, T.s) + Math.max(8, Math.round(14 * u));
-        const h = pad * 2 + rr * 2 + riga + T.s;
+        const h = pad * 2 + rr * 2 + riga + T.s + Math.round(4 * u);
         const x = M, y = H - M - h;
         scatola(x, y, w, h, u);
         const ty = (lato - T.s) / 2;
@@ -189,7 +245,12 @@ export function creaHud(cv) {
         testo('NITRO', x + pad, y + pad + rr + ty, T.s, GIALLO);
         blocchi(x + pad + et, y + pad + rr, 9, Math.floor(S.nitro * 9 + 1e-6), lato, gap, (S.boost || S.nitro >= 1) && lamp ? BIANCO : CIANO);
         testo(S.nitro >= 1 && !S.boost ? (lamp ? 'NITRO PRONTO!' : '') : arma, x + pad, y + pad + rr * 2, T.s, S.nitro >= 1 ? CIANO : BIANCO);
-        testo(bottino, x + pad, y + pad + rr * 2 + riga, T.s, GRIGIO);
+        {
+          const yb = y + pad + rr * 2 + riga, ultimo = (S.mancano ?? 0) <= 1;
+          let xb = x + pad + testo(fra, x + pad, yb, T.s, GRIGIO);
+          xb += testo(n, xb, yb - (T.m - T.s), T.m, ultimo && lamp ? BIANCO : GIALLO);
+          testo(tot, xb, yb, T.s, GRIGIO);
+        }
       }
       // ── combo (a destra, a metà): rimbalza sulla cassa ──
       {
@@ -275,7 +336,7 @@ export function creaHud(cv) {
   }
 
   return {
-    disegna, colpo, ascii,
+    disegna, colpo, ascii, sceltaA,
     banner: lanciaBanner,
     comboRotta() { rotta = ora(); },
     setModo(m) { modo = m; },

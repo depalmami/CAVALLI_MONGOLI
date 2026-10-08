@@ -66,17 +66,42 @@
   #loading small { opacity:.6; font-size:12px; }
   .err { color:#feb2b2; max-width:600px; text-align:center; font-size:13px; }
 
-  /* schermate di briefing/shop: sopra l'ANTEPRIMA, non sopra la console */
+  /* schermate di tappa (briefing, fine tappa, sconfitta, arrivo): sopra l'ANTEPRIMA, non sopra la console.
+     Stesso linguaggio dell'HUD a 8 bit — Press Start 2P, riquadri pieni, bordo bianco spesso, ombra a scalino
+     senza sfocatura — nei colori della bandiera mongola: blu, rosso, giallo del Soyombo per i dettagli. */
   #screen { position:absolute; inset:0; z-index:12; display:none; align-items:center; justify-content:center;
-            background:rgba(8,10,18,.88); backdrop-filter:blur(5px); color:#fff; text-align:center; }
-  #screen .box { max-width:92%; padding:14px 18px; }
-  #screen h1 { font-size:26px; margin:0 0 3px; }
-  #screen h2 { font-size:15px; opacity:.85; margin:0 0 10px; font-weight:500; }
-  #screen p  { opacity:.85; margin:6px 0; font-size:13px; }
-  #screen .shopgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
-  #screen button { font-size:13px; padding:9px 11px; width:100%; }
-  #screen .big { font-size:15px; padding:11px 20px; margin-top:10px; background:var(--acc); }
-  #screen .amber { background:#c98a3a; }
+            background:rgba(3,10,30,.82); color:#fff; text-align:center; font-family:'Press Start 2P', monospace;
+            image-rendering:pixelated; }
+  #screen .box { max-width:min(92%, 980px); max-height:calc(100% - 20px); overflow:auto; padding:0 22px 16px;
+                 background:#0b3a8c; border:4px solid #fff; box-shadow:7px 7px 0 #000; box-sizing:border-box; }
+  #screen .box::before { content:''; display:block; height:14px; margin:0 -22px 16px; background:#c4272f;
+                         border-bottom:4px solid #f9cf02; }
+  #screen h1 { font-size:clamp(14px, 2.6vw, 26px); margin:6px 0 10px; color:#f9cf02; text-shadow:3px 3px 0 #000;
+               letter-spacing:.04em; line-height:1.3; }
+  #screen h2 { font-size:clamp(8px, 1.1vw, 12px); color:#fff; margin:0 0 12px; font-weight:400; line-height:1.7; }
+  #screen p  { margin:8px 0; font-size:clamp(7px, .95vw, 10px); line-height:1.8; color:#dfe6ff; }
+  #screen p b, #screen h2 b { color:#f9cf02; font-weight:400; }
+  #screen .occhiello { color:#f9cf02; letter-spacing:.12em; margin:0; }
+  #screen .motto { color:#9fb6ec; }
+  #screen .nota { color:#9fb6ec; }
+  #screen .righe { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin:10px 0; }
+  #screen .righe div { background:#06204f; border:3px solid #fff; box-shadow:4px 4px 0 #000; padding:8px 6px;
+                       display:flex; flex-direction:column; gap:7px; font-size:clamp(7px, .9vw, 10px); }
+  #screen .righe span { color:#9fb6ec; }
+  #screen .righe b { color:#fff; font-weight:400; font-size:clamp(9px, 1.2vw, 14px); }
+  #screen .shopgrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; margin:10px 0 12px; }
+  #screen button { font-family:inherit; font-size:clamp(7px, .95vw, 11px); padding:11px 8px; width:100%; color:#fff;
+                   background:#06204f; border:3px solid #fff; border-radius:0; box-shadow:4px 4px 0 #000; cursor:pointer;
+                   line-height:1.6; }
+  #screen button small { display:block; color:#f9cf02; font-size:.85em; margin-top:4px; }
+  #screen button:hover:not(:disabled) { background:#c4272f; border-color:#f9cf02; }
+  #screen button:active:not(:disabled) { transform:translate(3px,3px); box-shadow:1px 1px 0 #000; }
+  #screen button:disabled { opacity:1; color:#56658f; border-color:#2b3a66; background:#0a1838; box-shadow:4px 4px 0 #000; cursor:default; }
+  #screen button:disabled small { color:#56658f; }
+  #screen .big { font-size:clamp(9px, 1.3vw, 15px); padding:14px 20px; margin-top:8px; background:#c4272f; color:#f9cf02;
+                 border-color:#f9cf02; }
+  #screen .big:hover { background:#e0353d; }
+  #screen .amber { background:#c4272f; }
 
   /* ── MUSICA: la card larga in cima alla regia ── */
   #card-musica { grid-column:1 / -1; }
@@ -728,7 +753,7 @@ function anteprimaPiena() {
   const box = document.getElementById('gioco');
   if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen().catch(e => console.warn('schermo intero rifiutato:', e));
 }
-document.getElementById('gioco').addEventListener('dblclick', anteprimaPiena);
+document.getElementById('gioco').addEventListener('dblclick', () => { if (game.state !== 'bonus') anteprimaPiena(); });   // nel menu dei bonus i clic servono a scegliere
 new ResizeObserver(() => ridimensiona()).observe(document.getElementById('gioco'));
 
 //=========================================================================
@@ -1898,7 +1923,7 @@ const ATK_RANGE = 3200;      // "affiancati" lungo pista (unità mondo)
 const LAT_RANGE = 0.95;      // affiancati lateralmente (unità playerX)
 let pHealth = MAX_HEALTH, nitro = 0, score = 0, kills = 0;
 // BONUS: niente più soldi (con 40-80 $ a takedown si comprava tutto il negozio a ogni tappa).
-// Si guadagna un gettone a ogni soglia di takedown; a fine tappa ogni gettone vale UNA cosa a scelta.
+// Arrivati alla soglia di takedown il gioco si ferma e si sceglie SUBITO UN bonus (vedi apriScelta).
 // Ogni bonus costa più del precedente: 5, poi altri 7, 10, 15, 23, 36… (gli aumenti 2, 3, 5, 8, 13 sono la somma
 // dei due precedenti). Takedown totali per ottenerli: 5, 12, 22, 37, 60, 96…
 const COSTI_BONUS = [5, 7, 10, 15];
@@ -1907,7 +1932,7 @@ function costoBonus(n) {                       // takedown che servono per il bo
   while (c.length <= n) { const k = c.length; c.push(c[k - 1] + (c[k - 1] - c[k - 2]) + (c[k - 2] - c[k - 3])); }
   return c[n];
 }
-let gettoni = 0, bonusPresi = 0, sogliaPrec = 0;          // bonusPresi = gettoni guadagnati in questo viaggio
+let bonusPresi = 0, sogliaPrec = 0;                      // bonusPresi = bonus già scelti in questo viaggio
 const sogliaBonus = () => sogliaPrec + costoBonus(bonusPresi);
 let blocking = false, critical = false, boosting = false;
 // MODALITÀ LIBERA (tasto N): spegne tutta la parte Road Redemption — rivali,
@@ -2023,11 +2048,9 @@ function wipe(o, cause) {
   fermaImmagine(0.1);
   kills++; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
   addPopup(o, 1200, '+150', '#7fffa0'); shake = Math.max(shake, 0.7);
-  // a ogni soglia (sempre più alta): UN gettone, da spendere a fine tappa su UNA cosa a scelta
-  if (kills >= sogliaBonus()) {
-    sogliaPrec = sogliaBonus(); bonusPresi++; gettoni++;
-    hud.banner('BONUS!', 'SCEGLILO A FINE TAPPA - IL PROSSIMO FRA ' + costoBonus(bonusPresi));
-  } else hud.banner('TAKEDOWN', 'BONUS ' + (kills - sogliaPrec) + '/' + costoBonus(bonusPresi));
+  // a ogni soglia (sempre più alta) il gioco si ferma e si sceglie UN bonus, subito
+  if (kills >= sogliaBonus()) { sogliaPrec = sogliaBonus(); bonusPresi++; apriScelta(); }
+  else hud.banner('TAKEDOWN', 'BONUS FRA ' + (sogliaBonus() - kills));
   onKill(o);
 }
 
@@ -2181,6 +2204,14 @@ const gamepad = (() => {
     pad.parata = premuto(g, B.LB);
     pad.boost  = premuto(g, B.RB);
     const scatto = b => { const ora = premuto(g, b), era = prima[b]; prima[b] = ora; return ora && !era; };
+    if (game.state === 'bonus') {                    // menu dei bonus: croce per scegliere, A per confermare
+      if (scatto(B.SX)) muoviScelta(-1);
+      if (scatto(B.DX)) muoviScelta(1);
+      if (scatto(B.SU)) muoviScelta(-3);
+      if (scatto(B.GIU)) muoviScelta(3);
+      if (scatto(B.A)) confermaScelta();
+      return;
+    }
     if (scatto(B.X))     playerAttack(-1);
     if (scatto(B.B))     playerAttack(1);
     if (scatto(B.Y))     playerKick();
@@ -3241,12 +3272,12 @@ function statoHud() {
   }
   dietro.sort((a, b) => a.metri - b.metri);
   return {
-    inGara: game.state === 'racing',
+    inGara: game.state === 'racing' || game.state === 'bonus',
     kmh: Math.round(speed/60), tappa: k, tappe: TAPPE.length, nomeTappa: TAPPE[k].nome,
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
     obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
     vita: Math.max(0, pHealth) / MAX_HEALTH, nitro: nitro / MAX_NITRO, boost: boosting,
-    arma: { nome: curWeapon.name, usi: curWeapon.uses }, bonus: gettoni, versoBonus: kills - sogliaPrec, perBonus: costoBonus(bonusPresi), takedown: kills, punti: score,
+    arma: { nome: curWeapon.name, usi: curWeapon.uses }, mancano: sogliaBonus() - kills, scelta: statoScelta(), takedown: kills, punti: score,
     combo, comboT, rivali, dietro, musica, smarmella: centralina.liscia,
   };
 }
@@ -3602,7 +3633,7 @@ function checkGame() {
 }
 function winEvent() {
   game.state = 'won';
-  hud.banner(eventFor(game.eventIndex).ultima ? 'KARAKORUM!' : 'TAPPA VINTA', gettoni ? gettoni + ' BONUS DA SCEGLIERE' : '');
+  hud.banner(eventFor(game.eventIndex).ultima ? 'KARAKORUM!' : 'TAPPA VINTA', '');
   game.xp += 3 + game.eventIndex;
   if (eventFor(game.eventIndex).ultima) return renderArrivo();
   renderShop();
@@ -3610,42 +3641,94 @@ function winEvent() {
 function renderArrivo() {
   game.xp += 10;                                    // il viaggio completo vale un bonus
   showScreen(`
-    <h1>🏯 KARAKORUM</h1>
-    <h2>Viaggio compiuto: ${TAPPE.length} tappe, ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} km di steppa</h2>
-    <p>Punteggio <b>${score}</b> &nbsp; Takedown <b>${kills}</b></p>
-    <p>⭐ <b>${game.xp}</b> XP (+10 per l'arrivo) — restano per il prossimo viaggio</p>
-    <button class="big" id="b-restart">🐎 NUOVO VIAGGIO</button>`);
+    <p class="occhiello">VIAGGIO COMPIUTO - ${TAPPE.length} TAPPE - ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} KM DI STEPPA</p>
+    <h1>KARAKORUM</h1>
+    <div class="righe">
+      <div><span>PUNTI</span><b>${score}</b></div>
+      <div><span>TAKEDOWN</span><b>${kills}</b></div>
+      <div><span>XP</span><b>${game.xp}</b></div>
+    </div>
+    <p class="nota">+10 XP PER L'ARRIVO - RESTANO PER IL PROSSIMO VIAGGIO</p>
+    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
   D('b-restart').onclick = () => resetRun();
 }
-// FINE TAPPA: ogni gettone (soglie crescenti di takedown, vedi COSTI_BONUS) vale UNA cosa a scelta.
-// Gli upgrade permanenti restano a XP, come prima.
+// I BONUS: uno a scelta a ogni soglia di takedown (5, poi altri 7, 10, 15…). Testi solo ASCII: vanno nell'HUD a pixel.
 const BONUS = [
-  { id: 'cura',   txt: '❤️ Cura +60',       ok: () => pHealth < MAX_HEALTH, fai: () => { pHealth = Math.min(MAX_HEALTH, pHealth + 60); } },
-  { id: 'nitro',  txt: '⚡ Nitro pieno',     ok: () => nitro < MAX_NITRO,    fai: () => { nitro = MAX_NITRO; } },
-  { id: 'saber',  txt: '🗡 Sciabola',        ok: () => true, fai: () => equipWeapon('saber') },
-  { id: 'mace',   txt: '🔨 Mazza',           ok: () => true, fai: () => equipWeapon('mace') },
-  { id: 'whip',   txt: '🪢 Frusta',          ok: () => true, fai: () => equipWeapon('whip') },
-  { id: 'bow',    txt: '🏹 Arco',            ok: () => true, fai: () => equipWeapon('bow') },
+  { nome: 'CURA',     descr: '+60 VITA',        ok: () => pHealth < MAX_HEALTH, fai: () => { pHealth = Math.min(MAX_HEALTH, pHealth + 60); } },
+  { nome: 'NITRO',    descr: 'SERBATOIO PIENO', ok: () => nitro < MAX_NITRO,    fai: () => { nitro = MAX_NITRO; } },
+  { nome: 'SCIABOLA', descr: 'ABBATTE IN 1',    nota: WEAPONS.saber.uses + ' COLPI', ok: () => true, fai: () => equipWeapon('saber') },
+  { nome: 'MAZZA',    descr: 'STORDISCE',       nota: WEAPONS.mace.uses + ' COLPI',  ok: () => true, fai: () => equipWeapon('mace') },
+  { nome: 'FRUSTA',   descr: 'ARRIVA LONTANO',  nota: WEAPONS.whip.uses + ' COLPI',  ok: () => true, fai: () => equipWeapon('whip') },
+  { nome: 'ARCO',     descr: 'TIRA DAVANTI',    nota: WEAPONS.bow.uses + ' FRECCE',  ok: () => true, fai: () => equipWeapon('bow') },
 ];
-function renderShop() {
-  const nx = eventFor(game.eventIndex + 1), manca = sogliaBonus() - kills;
-  showScreen(`
-    <h1>✅ ${eventFor(game.eventIndex).tappa.nome.toUpperCase()}</h1>
-    <h2>Tappa ${game.eventIndex + 1} di ${TAPPE.length} superata · punteggio ${score} · takedown ${kills}</h2>
-    <p>🎁 Bonus da scegliere: <b>${gettoni}</b> &nbsp; (il prossimo fra ${manca} takedown) &nbsp; ⭐ <b>${game.xp}</b> XP &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; arma: ${curWeapon.name}</p>
-    <div class="shopgrid">
-      ${BONUS.map(b => `<button id="b-${b.id}">${b.txt} · 1🎁</button>`).join('')}
-      <button id="b-str">💪 +Forza · 2⭐</button>
-      <button id="b-hp">❤️ +Salute max · 3⭐</button>
-      <button id="b-nt">⚡ +Nitro max · 2⭐</button>
-    </div>
-    <p style="opacity:.75">Ogni bonus costa più takedown del precedente (5, 7, 10, 15…): ogni 🎁 vale una sola scelta. Un'arma nuova sostituisce quella che hai.</p>
-    <p style="opacity:.75">Prossima tappa: <b>${nx.tappa.nome}</b> · ${nx.title} — ${nx.desc}</p>
-    <button class="big" id="b-next">VIA! →</button>`);
-  for (const b of BONUS) {
-    D('b-' + b.id).disabled = gettoni < 1 || !b.ok();
-    D('b-' + b.id).onclick = () => { gettoni--; b.fai(); renderShop(); };
+// il gioco si ferma (stato 'bonus': la fisica non avanza) finché non si sceglie: frecce + Invio, pad (croce + A),
+// clic sulla casella; col pilota automatico sceglie da solo dopo 2 s (lo show non resta mai fermo)
+let scelta = null;
+function apriScelta() {
+  const primo = BONUS.findIndex(b => b.ok());
+  scelta = { indice: Math.max(0, primo), t0: performance.now() };
+  game.state = 'bonus';
+}
+function muoviScelta(d) {
+  if (!scelta) return;
+  for (let k = 1; k <= BONUS.length; k++) {          // salta le caselle spente
+    const i = ((scelta.indice + d * k) % BONUS.length + BONUS.length) % BONUS.length;
+    if (BONUS[i].ok()) { scelta.indice = i; return; }
+    if (Math.abs(d) === 3) return;                   // su/giù: una riga sola, non si cerca oltre
   }
+}
+function confermaScelta(i = scelta && scelta.indice) {
+  if (!scelta || i < 0 || !BONUS[i] || !BONUS[i].ok()) return;
+  BONUS[i].fai(); scelta = null;
+  if (game.state === 'bonus') game.state = 'racing';
+  hud.banner(BONUS[i].nome + '!', 'BONUS FRA ' + (sogliaBonus() - kills));
+}
+function sceltaPilota() {                            // cosa sceglie il pilota automatico
+  if (pHealth < MAX_HEALTH * 0.5) return 0;
+  if (curWeapon.key === 'fists') return 2;
+  return BONUS[1].ok() ? 1 : 2;
+}
+function statoScelta() {
+  if (!scelta) return null;
+  return { indice: scelta.indice, titolo: 'BONUS! SCEGLINE UNO',
+           opzioni: BONUS.map(b => ({ nome: b.nome, descr: b.descr, nota: b.nota, ok: b.ok() })),
+           sotto: `TAKEDOWN ${kills} - IL PROSSIMO BONUS FRA ${costoBonus(bonusPresi)}`,
+           aiuto: ap.on ? 'PILOTA AUTOMATICO: SCEGLIE DA SOLO' : 'FRECCE + INVIO - PAD: CROCE + A - CLIC' };
+}
+addEventListener('keydown', e => {
+  if (game.state !== 'bonus' || staScrivendo(e)) return;
+  const d = { arrowleft: -1, arrowright: 1, arrowup: -3, arrowdown: 3 }[e.key.toLowerCase()];
+  if (d) { muoviScelta(d); e.preventDefault(); }
+  else if (e.key === 'Enter' || e.key === ' ') { confermaScelta(); e.preventDefault(); }
+});
+document.getElementById('gioco').addEventListener('click', e => {
+  if (game.state !== 'bonus') return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const i = hud.sceltaA((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  if (i >= 0) { scelta.indice = i; confermaScelta(i); }
+});
+
+function renderShop() {
+  const nx = eventFor(game.eventIndex + 1);
+  showScreen(`
+    <p class="occhiello">TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} SUPERATA</p>
+    <h1>${hud.ascii(eventFor(game.eventIndex).tappa.nome)}</h1>
+    <div class="righe">
+      <div><span>PUNTI</span><b>${score}</b></div>
+      <div><span>TAKEDOWN</span><b>${kills}</b></div>
+      <div><span>BONUS FRA</span><b>${sogliaBonus() - kills}</b></div>
+      <div><span>VITA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
+      <div><span>ARMA</span><b>${hud.ascii(curWeapon.name)}</b></div>
+      <div><span>XP</span><b>${game.xp}</b></div>
+    </div>
+    <p class="nota">POTENZIAMENTI PERMANENTI (COSTANO XP)</p>
+    <div class="shopgrid">
+      <button id="b-str">+ FORZA<small>2 XP</small></button>
+      <button id="b-hp">+ VITA MAX<small>3 XP</small></button>
+      <button id="b-nt">+ NITRO MAX<small>2 XP</small></button>
+    </div>
+    <p class="nota">PROSSIMA: <b>${hud.ascii(nx.tappa.nome)}</b> - ${hud.ascii(nx.desc)}</p>
+    <button class="big" id="b-next">VIA! &gt;</button>`);
   D('b-str').disabled   = game.xp < 2;
   D('b-hp').disabled    = game.xp < 3;
   D('b-nt').disabled    = game.xp < 2;
@@ -3658,17 +3741,20 @@ function loseEvent(reason) {
   game.state = 'dead';
   hud.banner('KO', 'VIAGGIO INTERROTTO', 3);
   showScreen(`
-    <h1>💀 VIAGGIO INTERROTTO</h1>
-    <h2>${reason}</h2>
-    <p>Caduto a <b>${eventFor(game.eventIndex).tappa.nome}</b> — tappa ${game.eventIndex + 1} di ${TAPPE.length},
-       ${Math.round(100*position/FINE_VIAGGIO)}% della strada per Karakorum</p>
-    <p>Punteggio: <b>${score}</b> &nbsp; Takedown totali: <b>${kills}</b></p>
-    <p>⭐ XP accumulato: <b>${game.xp}</b> — resta per la prossima corsa (upgrade permanenti)</p>
-    <button class="big amber" id="b-restart">🔄 NUOVO VIAGGIO</button>`);
+    <p class="occhiello">TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} - ${Math.round(100*position/FINE_VIAGGIO)}% DELLA STRADA</p>
+    <h1>VIAGGIO INTERROTTO</h1>
+    <h2>${hud.ascii(reason)}</h2>
+    <div class="righe">
+      <div><span>CADUTO A</span><b>${hud.ascii(eventFor(game.eventIndex).tappa.nome)}</b></div>
+      <div><span>PUNTI</span><b>${score}</b></div>
+      <div><span>TAKEDOWN</span><b>${kills}</b></div>
+    </div>
+    <p class="nota">XP ACCUMULATO: <b>${game.xp}</b> - RESTA PER IL PROSSIMO VIAGGIO</p>
+    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
   D('b-restart').onclick = () => resetRun();
 }
 function resetRun() {
-  game.eventIndex = 0; gettoni = 0; bonusPresi = 0; sogliaPrec = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
+  game.eventIndex = 0; scelta = null; bonusPresi = 0; sogliaPrec = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
 // MODALITÀ LIBERA — spegne la parte Road Redemption e lascia solo la guida.
@@ -3690,14 +3776,19 @@ function setFreeRoam(on) {
 function showBriefing() {
   game.state = 'briefing';
   const ev = eventFor(game.eventIndex);
+  const tipo = { race:'GARA', takedown:'RAZZIA', survival:'SOPRAVVIVENZA', time:'CONTRO IL TEMPO' }[ev.type];
   showScreen(`
-    <p style="letter-spacing:.14em;opacity:.7;margin:0">TAPPA ${ev.indice + 1} DI ${TAPPE.length}</p>
-    <h1>${ev.tappa.nome}</h1>
-    <p style="font-style:italic;opacity:.8">${ev.tappa.motto}</p>
-    <h2>${ev.title} — ${ev.desc}</h2>
-    <p>${(ev.dist*UNITA_KM).toFixed(1)} km &nbsp; ❤️ ${Math.round(pHealth)}/${MAX_HEALTH} &nbsp; ⭐ ${game.xp} XP</p>
-    <p style="opacity:.7"><b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata · <b>Shift</b> boost · raccogli le casse-arma 📦</p>
-    <button class="big" id="b-go">VIA! →</button>`);
+    <p class="occhiello">TAPPA ${ev.indice + 1} DI ${TAPPE.length}</p>
+    <h1>${hud.ascii(ev.tappa.nome)}</h1>
+    <p class="motto">${hud.ascii(ev.tappa.motto)}</p>
+    <h2><b>${tipo}</b> - ${hud.ascii(ev.desc)}</h2>
+    <div class="righe">
+      <div><span>STRADA</span><b>${(ev.dist*UNITA_KM).toFixed(1)} KM</b></div>
+      <div><span>VITA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
+      <div><span>XP</span><b>${game.xp}</b></div>
+    </div>
+    <p class="nota">J/L ATTACCA - K CALCIO - I PARATA - SHIFT BOOST<br>BONUS A SCELTA OGNI 5, 7, 10, 15... TAKEDOWN</p>
+    <button class="big" id="b-go">VIA! &gt;</button>`);
   D('b-go').onclick = () => startEvent();
 }
 function begin() {                          // primo avvio, a caricamento finito
@@ -3726,7 +3817,7 @@ window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { r
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
-  get kills(){return kills}, get score(){return score}, get gettoni(){return gettoni}, get bonusPresi(){return bonusPresi}, costoBonus, vitaRivale,
+  get kills(){return kills}, get score(){return score}, get bonusPresi(){return bonusPresi}, get scelta(){return scelta}, confermaScelta, muoviScelta, costoBonus, vitaRivale,
   // teleport per ispezione headless: piazza il giocatore a un punto della pista
   teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
                            playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
@@ -3780,6 +3871,7 @@ function frame(now) {
       acc -= FIXED_DT;
     }
   } else { acc = 0; }
+  if (scelta && ap.on && now - scelta.t0 > 2000) { scelta.indice = sceltaPilota(); confermaScelta(); }
   checkGame();
   const alpha = acc / FIXED_DT;                        // frazione tra stato precedente e corrente
 

@@ -715,3 +715,15 @@ Si prosegue il piano grafico in WebGL.
   (23, 36, 57…). Takedown totali: 5, 12, 22, 37, 60, 96. `COSTI_BONUS` + `costoBonus(n)`; HUD `BONUS g (k/costo)`.
 - «Pieno» senza proiezione (o doppio clic sull'anteprima) mette a schermo intero l'anteprima della console: lì
   tastiera, pad e schermate di fine tappa funzionano (nella finestra di proiezione no, i tasti non arrivano). Esc esce.
+
+### 9 ottobre 2026 — Bonus scelto subito, contatore alla rovescia, menu a 8 bit
+- Alla soglia di takedown il gioco si FERMA (stato 'bonus': la fisica non avanza) e compare il menu dei sei bonus
+  (cura, nitro, sciabola, mazza, frusta, arco), disegnato sulla tela dell'HUD — quindi va anche in proiezione.
+  Comandi: frecce + Invio, pad (croce + A), clic sulla casella; col pilota automatico sceglie da solo dopo 2 s
+  (`sceltaPilota`: cura sotto metà vita, sciabola se a mani nude, altrimenti nitro). Caselle non disponibili spente.
+  Spariti i gettoni e la spesa a fine tappa: lì restano solo gli upgrade permanenti a XP.
+- Contatore nell'HUD alla rovescia: `BONUS FRA 5…1`, poi 7…1, 10…1 (numero grande in giallo, lampeggia all'ultimo),
+  accanto `KO TOT n`.
+- Menu e schermate di tappa (briefing, fine tappa, sconfitta, arrivo) rifatti nello stile dell'HUD: Press Start 2P,
+  riquadri pieni con bordo bianco e ombra a scalino, colori della bandiera mongola (blu #0b3a8c, rosso #c4272f,
+  giallo Soyombo #f9cf02). Niente emoji (il font a pixel non le ha).
