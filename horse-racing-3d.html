@@ -3667,6 +3667,14 @@ let scelta = null;
 function apriScelta() {
   const primo = BONUS.findIndex(b => b.ok());
   scelta = { indice: Math.max(0, primo), t0: performance.now() };
+  // rete di sicurezza: se il browser ha caricato un 3d/hud.js vecchio dalla cache, il menu non si
+  // disegnerebbe e il gioco resterebbe fermo. Allora sceglie da solo e avvisa di ricaricare senza cache.
+  if (typeof hud.sceltaA !== 'function') {
+    console.warn('3d/hud.js vecchio (in cache): ricarica con Cmd+Shift+R, o usa tools/server-sviluppo.py');
+    scelta.indice = sceltaPilota(); confermaScelta();
+    hud.banner('RICARICA LA PAGINA', 'FILE VECCHI IN CACHE: CMD+SHIFT+R', 4);
+    return;
+  }
   game.state = 'bonus';
 }
 function muoviScelta(d) {

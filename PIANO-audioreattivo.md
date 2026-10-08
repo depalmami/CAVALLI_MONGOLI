@@ -727,3 +727,12 @@ Si prosegue il piano grafico in WebGL.
 - Menu e schermate di tappa (briefing, fine tappa, sconfitta, arrivo) rifatti nello stile dell'HUD: Press Start 2P,
   riquadri pieni con bordo bianco e ombra a scalino, colori della bandiera mongola (blu #0b3a8c, rosso #c4272f,
   giallo Soyombo #f9cf02). Niente emoji (il font a pixel non le ha).
+
+### 9 ottobre 2026 — Gioco bloccato al bonus: moduli vecchi in cache
+- Al 5° takedown il gioco si fermava senza menu. L'HUD dell'immagine scriveva `$undefined`: il browser aveva la
+  pagina nuova (che ferma il gioco per la scelta) e un `3d/hud.js` di due versioni prima, preso dalla cache, che il
+  menu non lo disegna. `python3 -m http.server` non vieta la cache e i moduli ES restano in memoria.
+- `tools/server-sviluppo.py`: lo stesso server statico con `Cache-Control: no-store` (porta e indirizzo come argomenti).
+  Va usato al posto di `http.server` mentre si sviluppa.
+- Rete di sicurezza in `apriScelta()`: se l'HUD caricato non ha `sceltaA`, sceglie come il pilota, NON ferma il
+  gioco e lancia il banner «RICARICA LA PAGINA».
