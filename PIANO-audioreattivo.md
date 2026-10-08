@@ -709,3 +709,9 @@ Si prosegue il piano grafico in WebGL.
 - **Tappe**: finiscono sempre al traguardo; la razzia chiede `3 + i/2` takedown ENTRO il traguardo.
 - **Bonus**: niente soldi. Ogni `TAKEDOWN_PER_BONUS` (5) takedown un gettone; a fine tappa ogni gettone vale UNA cosa
   fra cura, nitro pieno, sciabola, mazza, frusta, arco. Gli upgrade permanenti restano a XP. HUD: `KO n  BONUS g (k/5)`.
+
+### 8 ottobre 2026 — Bonus progressivi, schermo intero per il debug
+- Ogni bonus costa più takedown del precedente: 5, 7, 10, 15, poi gli aumenti seguono la somma dei due precedenti
+  (23, 36, 57…). Takedown totali: 5, 12, 22, 37, 60, 96. `COSTI_BONUS` + `costoBonus(n)`; HUD `BONUS g (k/costo)`.
+- «Pieno» senza proiezione (o doppio clic sull'anteprima) mette a schermo intero l'anteprima della console: lì
+  tastiera, pad e schermate di fine tappa funzionano (nella finestra di proiezione no, i tasti non arrivano). Esc esce.

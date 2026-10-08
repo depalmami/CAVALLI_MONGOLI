@@ -93,6 +93,7 @@
   .sm-livelli { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin:8px 0; }
   .sm-livelli button { padding:8px 4px; font-size:16px; font-weight:800; line-height:1.1; }
   .sm-livelli button small { display:block; font-size:9.5px; font-weight:600; opacity:.85; white-space:nowrap; }
+  #gioco:fullscreen { background:#000; width:100vw; height:100vh; max-width:none; }
 </style>
 <!-- Three.js 0.160 VENDORATO in vendor/three (solo i file usati + le loro dipendenze):
      in location la rete non è garantita, e un CDN che non risponde vuol dire niente show.
@@ -232,7 +233,7 @@
       </select>
       <div class="bottoni">
         <button id="proj-open">▶︎ Apri proiezione</button>
-        <button id="proj-full" disabled>⛶ Pieno</button>
+        <button id="proj-full" title="Con la proiezione: schermo intero sul 2° schermo. Senza: il gioco a schermo intero su questo schermo (anche doppio clic sull'anteprima, Esc per uscire)">⛶ Pieno</button>
       </div>
       <div class="riga"><label for="hud-modo">HUD <span class="tasto">V</span></label>
         <select id="hud-modo" style="width:auto; flex:1.6">
@@ -692,28 +693,42 @@ function ridimensiona() {
   // Risoluzione di render: quella scelta per la proiezione, oppure quella
   // dell'anteprima. In entrambi i casi il RIQUADRO prende l'aspetto del render,
   // così l'anteprima non ha mai bande nere e mostra esattamente ciò che esce.
-  const W = vista.nativa ? vista.nativa.w : Math.round(bw);
-  const H = vista.nativa ? vista.nativa.h : Math.round(bw * 9/16);
+  // schermo intero dell'anteprima (bottone «Pieno» senza proiezione, o doppio clic): il gioco riempie
+  // lo schermo del Mac mantenendo l'aspetto del render, e si gioca con tastiera e pad come in console
+  const pieno = document.fullscreenElement === box;
+  const fw = pieno ? Math.min(innerWidth, innerHeight * 16/9) : 0;
+  const W = vista.nativa ? vista.nativa.w : Math.round(pieno ? fw : bw);
+  const H = vista.nativa ? vista.nativa.h : Math.round((pieno ? fw : bw) * 9/16);
   vista.W = W; vista.H = H;
-  box.style.aspectRatio = W + ' / ' + H;
+  box.style.aspectRatio = pieno ? 'auto' : W + ' / ' + H;
   // L'anteprima non deve mangiarsi la finestra: sotto ci vanno i controlli, ed
   // è quello il senso della console. Tetto in altezza, larghezza di conseguenza
   // per non deformare nulla.
   const tetto = Math.round(innerHeight * (proiezione.attiva() ? 0.30 : 0.46));
-  box.style.maxWidth = Math.round(tetto * W/H) + 'px';
+  box.style.maxWidth = pieno ? 'none' : Math.round(tetto * W/H) + 'px';
   camera.aspect = W/H;
   camera.updateProjectionMatrix();
   renderer.setSize(W, H, false);        // false: la misura CSS la decidiamo qui sotto
   composer.setSize(W, H);
   bloom.setSize(W, H);
-  const bh = Math.max(120, Math.round(bw * H/W));
+  let cw = bw, ch = Math.max(120, Math.round(bw * H/W)), cx = 0, cy = 0;
+  if (pieno) {                                   // la più grande che entra, centrata (bande nere ai lati o sopra/sotto)
+    cw = Math.min(innerWidth, innerHeight * W/H); ch = cw * H/W;
+    cx = (innerWidth - cw) / 2; cy = (innerHeight - ch) / 2;
+  }
   for (const c of [renderer.domElement, ...teleVista]) {
     if (!c) continue;
-    c.style.left = '0'; c.style.top = '0';
-    c.style.width = bw+'px'; c.style.height = bh+'px';
+    c.style.left = cx+'px'; c.style.top = cy+'px';
+    c.style.width = cw+'px'; c.style.height = ch+'px';
   }
 }
 addEventListener('resize', ridimensiona);
+document.addEventListener('fullscreenchange', ridimensiona);
+function anteprimaPiena() {
+  const box = document.getElementById('gioco');
+  if (document.fullscreenElement) document.exitFullscreen(); else box.requestFullscreen().catch(e => console.warn('schermo intero rifiutato:', e));
+}
+document.getElementById('gioco').addEventListener('dblclick', anteprimaPiena);
 new ResizeObserver(() => ridimensiona()).observe(document.getElementById('gioco'));
 
 //=========================================================================
@@ -1883,9 +1898,17 @@ const ATK_RANGE = 3200;      // "affiancati" lungo pista (unità mondo)
 const LAT_RANGE = 0.95;      // affiancati lateralmente (unità playerX)
 let pHealth = MAX_HEALTH, nitro = 0, score = 0, kills = 0;
 // BONUS: niente più soldi (con 40-80 $ a takedown si comprava tutto il negozio a ogni tappa).
-// Ogni TAKEDOWN_PER_BONUS abbattuti si guadagna un gettone; a fine tappa ogni gettone vale UNA cosa a scelta.
-const TAKEDOWN_PER_BONUS = 5;
-let gettoni = 0;
+// Si guadagna un gettone a ogni soglia di takedown; a fine tappa ogni gettone vale UNA cosa a scelta.
+// Ogni bonus costa più del precedente: 5, poi altri 7, 10, 15, 23, 36… (gli aumenti 2, 3, 5, 8, 13 sono la somma
+// dei due precedenti). Takedown totali per ottenerli: 5, 12, 22, 37, 60, 96…
+const COSTI_BONUS = [5, 7, 10, 15];
+function costoBonus(n) {                       // takedown che servono per il bonus n (0 = il primo)
+  const c = COSTI_BONUS.slice();
+  while (c.length <= n) { const k = c.length; c.push(c[k - 1] + (c[k - 1] - c[k - 2]) + (c[k - 2] - c[k - 3])); }
+  return c[n];
+}
+let gettoni = 0, bonusPresi = 0, sogliaPrec = 0;          // bonusPresi = gettoni guadagnati in questo viaggio
+const sogliaBonus = () => sogliaPrec + costoBonus(bonusPresi);
 let blocking = false, critical = false, boosting = false;
 // MODALITÀ LIBERA (tasto N): spegne tutta la parte Road Redemption — rivali,
 // combattimento, casse-arma, obiettivi d'evento e morte — e lascia solo la guida.
@@ -2000,9 +2023,11 @@ function wipe(o, cause) {
   fermaImmagine(0.1);
   kills++; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
   addPopup(o, 1200, '+150', '#7fffa0'); shake = Math.max(shake, 0.7);
-  // ogni TAKEDOWN_PER_BONUS abbattuti: UN gettone, da spendere a fine tappa su UNA cosa a scelta
-  if (kills % TAKEDOWN_PER_BONUS === 0) { gettoni++; hud.banner('BONUS!', 'SCEGLILO A FINE TAPPA'); }
-  else hud.banner('TAKEDOWN', 'BONUS ' + (kills % TAKEDOWN_PER_BONUS) + '/' + TAKEDOWN_PER_BONUS);
+  // a ogni soglia (sempre più alta): UN gettone, da spendere a fine tappa su UNA cosa a scelta
+  if (kills >= sogliaBonus()) {
+    sogliaPrec = sogliaBonus(); bonusPresi++; gettoni++;
+    hud.banner('BONUS!', 'SCEGLILO A FINE TAPPA - IL PROSSIMO FRA ' + costoBonus(bonusPresi));
+  } else hud.banner('TAKEDOWN', 'BONUS ' + (kills - sogliaPrec) + '/' + costoBonus(bonusPresi));
   onKill(o);
 }
 
@@ -2408,7 +2433,7 @@ $('free-on').onchange   = e => setFreeRoam(e.target.checked);
 $('ap-on').onchange      = e => setPilota(e.target.checked);
 $('proj-detect').onclick = () => proiezione.rileva();
 $('proj-open').onclick   = () => proiezione.apri();
-$('proj-full').onclick   = () => proiezione.pieno();
+$('proj-full').onclick   = () => proiezione.attiva() ? proiezione.pieno() : anteprimaPiena();   // senza proiezione: il gioco a schermo intero qui, per il debug
 $('proj-screen').onchange = e => proiezione.setSchermo(+e.target.value);
 $('proj-mode').onchange  = e => proiezione.setModo(e.target.value);
 $('hud-modo').onchange   = e => { hud.setModo(e.target.value); proiezione.setHud(e.target.value === 'gioco'); };
@@ -3221,7 +3246,7 @@ function statoHud() {
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
     obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
     vita: Math.max(0, pHealth) / MAX_HEALTH, nitro: nitro / MAX_NITRO, boost: boosting,
-    arma: { nome: curWeapon.name, usi: curWeapon.uses }, bonus: gettoni, versoBonus: kills % TAKEDOWN_PER_BONUS, perBonus: TAKEDOWN_PER_BONUS, takedown: kills, punti: score,
+    arma: { nome: curWeapon.name, usi: curWeapon.uses }, bonus: gettoni, versoBonus: kills - sogliaPrec, perBonus: costoBonus(bonusPresi), takedown: kills, punti: score,
     combo, comboT, rivali, dietro, musica, smarmella: centralina.liscia,
   };
 }
@@ -3493,7 +3518,7 @@ const proiezione = (() => {
     const b = document.getElementById('proj-open');
     if (b) { b.textContent = attiva ? '■ Chiudi proiezione' : '▶︎ Apri proiezione'; b.classList.toggle('active', attiva); }
     const f = document.getElementById('proj-full');
-    if (f) f.disabled = !attiva;
+    if (f) f.disabled = false;              // senza proiezione mette a schermo intero l'anteprima (debug)
     // come nel 2D: con la proiezione accesa l'output vero è sull'altro schermo,
     // qui basta un'anteprima compatta
     document.getElementById('card-anteprima').classList.toggle('compatta', attiva);
@@ -3592,7 +3617,7 @@ function renderArrivo() {
     <button class="big" id="b-restart">🐎 NUOVO VIAGGIO</button>`);
   D('b-restart').onclick = () => resetRun();
 }
-// FINE TAPPA: ogni gettone (uno ogni TAKEDOWN_PER_BONUS takedown) vale UNA cosa a scelta.
+// FINE TAPPA: ogni gettone (soglie crescenti di takedown, vedi COSTI_BONUS) vale UNA cosa a scelta.
 // Gli upgrade permanenti restano a XP, come prima.
 const BONUS = [
   { id: 'cura',   txt: '❤️ Cura +60',       ok: () => pHealth < MAX_HEALTH, fai: () => { pHealth = Math.min(MAX_HEALTH, pHealth + 60); } },
@@ -3603,7 +3628,7 @@ const BONUS = [
   { id: 'bow',    txt: '🏹 Arco',            ok: () => true, fai: () => equipWeapon('bow') },
 ];
 function renderShop() {
-  const nx = eventFor(game.eventIndex + 1), manca = TAKEDOWN_PER_BONUS - (kills % TAKEDOWN_PER_BONUS);
+  const nx = eventFor(game.eventIndex + 1), manca = sogliaBonus() - kills;
   showScreen(`
     <h1>✅ ${eventFor(game.eventIndex).tappa.nome.toUpperCase()}</h1>
     <h2>Tappa ${game.eventIndex + 1} di ${TAPPE.length} superata · punteggio ${score} · takedown ${kills}</h2>
@@ -3614,7 +3639,7 @@ function renderShop() {
       <button id="b-hp">❤️ +Salute max · 3⭐</button>
       <button id="b-nt">⚡ +Nitro max · 2⭐</button>
     </div>
-    <p style="opacity:.75">Un bonus ogni ${TAKEDOWN_PER_BONUS} takedown: ogni 🎁 vale una sola scelta. Un'arma nuova sostituisce quella che hai.</p>
+    <p style="opacity:.75">Ogni bonus costa più takedown del precedente (5, 7, 10, 15…): ogni 🎁 vale una sola scelta. Un'arma nuova sostituisce quella che hai.</p>
     <p style="opacity:.75">Prossima tappa: <b>${nx.tappa.nome}</b> · ${nx.title} — ${nx.desc}</p>
     <button class="big" id="b-next">VIA! →</button>`);
   for (const b of BONUS) {
@@ -3643,7 +3668,7 @@ function loseEvent(reason) {
   D('b-restart').onclick = () => resetRun();
 }
 function resetRun() {
-  game.eventIndex = 0; gettoni = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
+  game.eventIndex = 0; gettoni = 0; bonusPresi = 0; sogliaPrec = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
   applyUpgrades(); pHealth = MAX_HEALTH; showBriefing();
 }
 // MODALITÀ LIBERA — spegne la parte Road Redemption e lascia solo la guida.
@@ -3701,7 +3726,7 @@ window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { r
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
   get speed(){return speed}, get pHealth(){return pHealth}, get playerX(){return playerX},
-  get kills(){return kills}, get score(){return score}, get gettoni(){return gettoni}, vitaRivale,
+  get kills(){return kills}, get score(){return score}, get gettoni(){return gettoni}, get bonusPresi(){return bonusPresi}, costoBonus, vitaRivale,
   // teleport per ispezione headless: piazza il giocatore a un punto della pista
   teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
                            playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
