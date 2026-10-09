@@ -2047,13 +2047,14 @@ function wipe(o, cause) {
     hitSpark.burst(q.x, q.y + 300, q.z, 0xd9c9a3, 18, 1400); fendenti.onda(q.x, q.y, q.z); }
   fermaImmagine(0.1);
   kills++; score += 150; nitro = Math.min(MAX_NITRO, nitro + 25);
-  addPopup(o, 1200, '+150', '#7fffa0'); shake = Math.max(shake, 0.7);
+  if (hud.stileNotifica !== 'rivale') addPopup(o, 1200, '+150', '#7fffa0');   // con lo stile «rivale» il +150 sta nella scritta
+  shake = Math.max(shake, 0.7); ultimoAbbattuto = o;
   // a ogni soglia (sempre più alta) il gioco si ferma e si sceglie UN bonus, subito
   if (kills >= sogliaBonus()) { sogliaPrec = sogliaBonus(); bonusPresi++; apriScelta(); }
   else {
     // la notifica sta dove non copre la strada (stile: hud.setNotifica, o ?takedown= nell'indirizzo)
     vHud.copy(o.actor.group.position); vHud.y += HORSE_HEIGHT * 1.6; vHud.project(camera);
-    hud.notifica('TAKEDOWN', 'BONUS FRA ' + (sogliaBonus() - kills), { x: vHud.x * 0.5 + 0.5, y: -vHud.y * 0.5 + 0.5 });
+    hud.notifica('TAKEDOWN', '+150 - BONUS FRA ' + (sogliaBonus() - kills), { x: vHud.x * 0.5 + 0.5, y: -vHud.y * 0.5 + 0.5 });
   }
   onKill(o);
 }
@@ -3259,7 +3260,7 @@ const hud = (() => {
   teleVista.push(cv);
   return creaHud(cv);
 })();
-let combo = 0, comboT = -1e9;
+let combo = 0, comboT = -1e9, ultimoAbbattuto = null;   // ultimoAbbattuto: la scritta del takedown lo segue
 { const t = new URLSearchParams(location.search).get('takedown'); if (t) hud.setNotifica(t); }   // prova gli stili: ?takedown=centro|alto|nastro|lato|rivale            // colpi a segno di fila (2,5 s al massimo fra uno e l'altro)
 const vHud = new THREE.Vector3();
 function statoHud() {
@@ -3276,7 +3277,13 @@ function statoHud() {
       dietro.push({ nome: '', lato: o.lat < playerX ? -1 : 1, metri: Math.round(-g * UNITA_KM * 1000) });
   }
   dietro.sort((a, b) => a.metri - b.metri);
+  let notificaPos = null;
+  if (ultimoAbbattuto && ultimoAbbattuto.state === 'wipe') {
+    vHud.copy(ultimoAbbattuto.actor.group.position); vHud.y += HORSE_HEIGHT * 1.6; vHud.project(camera);
+    if (vHud.z < 1) notificaPos = { x: Math.min(0.9, Math.max(0.1, vHud.x * 0.5 + 0.5)), y: Math.min(0.8, Math.max(0.12, -vHud.y * 0.5 + 0.5)) };
+  }
   return {
+    notificaPos,
     inGara: game.state === 'racing' || game.state === 'bonus',
     kmh: Math.round(speed/60), tappa: k, tappe: TAPPE.length, nomeTappa: TAPPE[k].nome,
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),

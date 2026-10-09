@@ -109,7 +109,7 @@ export function creaHud(cv) {
   //   nastro  · una targhetta piccola al centro in alto, fra il pannello della tappa e il tachimetro
   //   lato    · un riquadro che entra da destra, sotto il tachimetro
   //   rivale  · niente fascia: la scritta salta fuori sopra il rivale abbattuto e sale svanendo
-  let notifica = null, stileNotifica = 'alto';
+  let notifica = null, stileNotifica = 'rivale';      // scelto il 9 ott 2026
   function lanciaNotifica(t, sotto, pos) {
     if (stileNotifica === 'centro') return lanciaBanner(t, sotto, 1.9);
     notifica = { testo: ascii(t), sotto: ascii(sotto || ''), t0: ora(), durata: stileNotifica === 'rivale' ? 1.1 : 1.5, pos };
@@ -199,7 +199,7 @@ export function creaHud(cv) {
       const l = Math.max(4, Math.round(12 * u)), g = Math.max(1, Math.round(3 * u));
       for (const { r, x, y } of separa(S.rivali, W, H, larg('TEMUJIN', T.s) + 10 * u, T.s + l + 14 * u)) {
         const yy = y - l - 10 * u;
-        if (r.ko) testo('KO', x, yy - T.s - 6 * u, T.s, GRIGIO, 'center');   // i rivali non hanno nome
+        if (r.ko && stileNotifica !== 'rivale') testo('KO', x, yy - T.s - 6 * u, T.s, GRIGIO, 'center');   // con lo stile «rivale» c'è già la scritta del takedown
         if (!r.ko) blocchi(x - (6 * l + 5 * g) / 2, yy, 6, Math.ceil(r.hp * 6), l, g, r.hp > 0.5 ? '#3fd66b' : r.hp > 0.25 ? GIALLO : ROSSO, '#000');
       }
       S.dietro.slice(0, 2).forEach((d, i) => {
@@ -346,7 +346,7 @@ export function creaHud(cv) {
       testo(n.testo, x + w / 2, y + pad + 8 * u, T.m, colore, 'center');
       if (n.sotto) testo(n.sotto, x + w / 2, y + pad + 8 * u + T.m + 12 * u, T.s, CIANO, 'center');
     } else if (stileNotifica === 'rivale') {
-      const p = n.pos || { x: 0.5, y: 0.4 };
+      const p = S.notificaPos || n.pos || { x: 0.5, y: 0.4 };   // segue il rivale mentre cade, se il gioco lo passa
       const sc = 1 + 0.35 * Math.max(0, 1 - eta / 0.15);                     // salta fuori più grande e si assesta
       const x = p.x * W, y = p.y * H - eta * 90 * u - T.l;
       const g = glifo(n.testo, T.l, colore);

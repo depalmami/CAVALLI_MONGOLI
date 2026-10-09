@@ -736,3 +736,12 @@ Si prosegue il piano grafico in WebGL.
   Va usato al posto di `http.server` mentre si sviluppa.
 - Rete di sicurezza in `apriScelta()`: se l'HUD caricato non ha `sceltaA`, sceglie come il pilota, NON ferma il
   gioco e lancia il banner «RICARICA LA PAGINA».
+
+### 9 ottobre 2026 — HUD nei colori della Mongolia, scritta del takedown sul rivale
+- Tavolozza unica in `3d/hud.js` (blu notte #041737 per i riquadri, rosso #a51f27, giallo Soyombo #dcb200,
+  vita rossa, nitro blu #5b95ea), scurita di un tono; i riquadri hanno la testata rossa col filo giallo come il
+  menu dei bonus; le schermate DOM ripetono gli stessi colori nel CSS.
+- La scritta del takedown copriva cavallo e strada (fascia grande al 42% dell'altezza). Proposte quattro varianti
+  (`?takedown=centro|alto|nastro|lato|rivale`): l'utente ha scelto **rivale** — «TAKEDOWN» salta fuori sopra il
+  rivale abbattuto, lo segue mentre cade (`notificaPos` da statoHud) e sale svanendo in ~1,1 s; dentro c'è
+  «+150 - BONUS FRA n» (niente più popup +150 né etichetta KO lì sopra). I banner rari (tappa, drop, KO) restano grandi.
