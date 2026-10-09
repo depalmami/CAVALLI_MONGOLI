@@ -3261,7 +3261,8 @@ const hud = (() => {
   return creaHud(cv);
 })();
 let combo = 0, comboT = -1e9, ultimoAbbattuto = null;   // ultimoAbbattuto: la scritta del takedown lo segue
-{ const t = new URLSearchParams(location.search).get('takedown'); if (t) hud.setNotifica(t); }   // prova gli stili: ?takedown=centro|alto|nastro|lato|rivale            // colpi a segno di fila (2,5 s al massimo fra uno e l'altro)
+{ const t = new URLSearchParams(location.search).get('takedown'); if (t) hud.setNotifica(t); }
+{ const t = new URLSearchParams(location.search).get('tachimetro'); if (t) hud.setTachimetro(t); }   // ?tachimetro=box|lancetta|segmenti|rally   // prova gli stili: ?takedown=centro|alto|nastro|lato|rivale            // colpi a segno di fila (2,5 s al massimo fra uno e l'altro)
 const vHud = new THREE.Vector3();
 function statoHud() {
   const k = tappaDi(position), rivali = [], dietro = [];

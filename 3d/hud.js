@@ -234,8 +234,8 @@ export function creaHud(cv) {
     }
 
     if (!show) {
-      // ── velocità (in alto a destra) ──
-      {
+      // ── velocità: il riquadro in alto a destra (stile «box») o il tachimetro in basso a destra ──
+      if (stileTachimetro === 'box') {
         const kmh = String(S.kmh), bpm = Math.round(mus.bpm) + ' BPM';
         const w = Math.max(larg('000', T.xl), larg(bpm, T.s)) + pad * 2, h = pad * 2 + T.s + riga - T.s + T.xl + riga;
         const x = W - M - w;
@@ -243,7 +243,7 @@ export function creaHud(cv) {
         testo(S.boost ? (lamp ? 'BOOST!' : '') : 'KM/H', x + pad, M + pad, T.s, S.boost ? CIANO : GIALLO);
         testo(kmh, x + w - pad, M + pad + riga, T.xl, BIANCO, 'right');
         testo(bpm, x + w - pad, M + pad + riga + T.xl + riga - T.s, T.s, mus.cassa > 0.5 ? GIALLO : GRIGIO, 'right');
-      }
+      } else tachimetro(S, W, H, u, T, M, lamp);
       // ── vita, nitro, arma, bottino (in basso a sinistra) ──
       {
         const lato = Math.max(8, Math.round(26 * u)), gap = Math.max(2, Math.round(8 * u)), et = larg('NITRO', T.s) + pad;
@@ -356,6 +356,90 @@ export function creaHud(cv) {
     ctx.globalAlpha = 1;
   }
 
+  // ── TACHIMETRO come quello di un'auto, a blocchi (8 bit), in basso a destra. Scala 0-300 km/h: 200 è la
+  // velocità massima, oltre si va solo col nitro (zona rossa). Tre stili, da scegliere:
+  //   lancetta · quadrante rotondo con tacche, numeri ogni 50 e lancetta rossa; cifre piccole sotto il perno
+  //   segmenti · arco di blocchi che si accendono blu → giallo → rosso, cifre grandi al centro
+  //   rally    · mezzo quadrante con lancetta sopra un riquadro con le cifre; arco interno del nitro
+  let stileTachimetro = 'lancetta';
+  const KMH_FONDO = 300, KMH_MAX = 200;
+  function tachimetro(S, W, H, u, T, M, lamp) {
+    const q = Math.max(3, Math.round(7 * u));                    // il "pixel" del disegno
+    const blocco = (x, y, c, k = 1) => { ctx.fillStyle = c; ctx.fillRect(Math.round(x / q) * q, Math.round(y / q) * q, q * k, q * k); };
+    const t = Math.min(1, Math.max(0, S.kmh / KMH_FONDO)), tMax = KMH_MAX / KMH_FONDO;
+    const mus = S.musica, bpm = Math.round(mus.bpm) + ' BPM';
+    const ang = (v, a0, a1) => a0 + (a1 - a0) * v;              // radianti, 0 = destra, positivo = in alto
+    const punto = (cx, cy, r, a) => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
+    const disco = (cx, cy, R, fondo) => {
+      for (let y = -R - q; y <= R + q; y += q) for (let x = -R - q; x <= R + q; x += q) {
+        const d = Math.hypot(x, y);
+        if (d <= R + q * 0.5) blocco(cx + x + q, cy + y + q, '#000');          // ombra a scalino
+      }
+      for (let y = -R; y <= R; y += q) for (let x = -R; x <= R; x += q) {
+        const d = Math.hypot(x, y);
+        if (d > R + q * 0.5) continue;
+        blocco(cx + x, cy + y, d > R - q * 1.2 ? BIANCO : d > R - q * 2.6 ? MN_ROSSO : fondo);
+      }
+    };
+    const lancetta = (cx, cy, r, a, c) => {
+      for (let k = 0; k <= r; k += q * 0.7) { const [x, y] = punto(cx, cy, k, a); blocco(x - q / 2, y - q / 2, k > r - q * 2 ? MN_ORO : c); }
+      blocco(cx - q, cy - q, MN_ORO, 2);
+    };
+    const colore = v => v > tMax ? ROSSO : v > tMax * 0.7 ? GIALLO : CIANO;
+    if (stileTachimetro === 'lancetta') {
+      const R = Math.round(175 * u), cx = W - M - R - q, cy = H - M - R - q, a0 = Math.PI * 7 / 6, a1 = -Math.PI / 6;
+      disco(cx, cy, R, MN_BLU_SCURO);
+      // zona rossa del nitro e tacche
+      for (let v = tMax; v <= 1.0001; v += 0.012) { const [x, y] = punto(cx, cy, R - q * 4, ang(v, a0, a1)); blocco(x, y, MN_ROSSO); }
+      for (let kmh = 0; kmh <= KMH_FONDO; kmh += 10) {
+        const v = kmh / KMH_FONDO, grande = kmh % 50 === 0, a = ang(v, a0, a1);
+        const [x, y] = punto(cx, cy, R - q * (grande ? 5.2 : 4.6), a);
+        blocco(x, y, kmh > KMH_MAX ? ROSSO : BIANCO, grande ? 2 : 1);
+        if (grande) { const [nx, ny] = punto(cx, cy, R - q * 9.5, a); testo(String(kmh), nx, ny - T.s / 2, T.s, kmh > KMH_MAX ? ROSSO : GIALLO, 'center'); }
+      }
+      lancetta(cx, cy, R - q * 6, ang(t, a0, a1), S.boost && lamp ? CIANO : ROSSO);
+      testo(String(S.kmh), cx, cy + R * 0.2, T.l, S.boost && lamp ? CIANO : BIANCO, 'center');
+      testo(S.boost ? 'BOOST!' : 'KM/H', cx, cy + R * 0.2 + T.l + 8 * u, T.s, S.boost ? CIANO : GIALLO, 'center');
+      testo(bpm, cx, cy + R * 0.66, T.s, mus.cassa > 0.5 ? GIALLO : GRIGIO, 'center');   // nella luce in basso del quadrante
+    } else if (stileTachimetro === 'segmenti') {
+      const R = Math.round(165 * u), cx = W - M - R - q, cy = H - M - R - q, a0 = Math.PI * 5 / 4, a1 = -Math.PI / 4;
+      disco(cx, cy, R, MN_BLU_SCURO);
+      const N = 30;
+      for (let i = 0; i < N; i++) {
+        const v = (i + 0.5) / N, acceso = v <= t, a = ang(v, a0, a1);
+        const c = acceso ? (S.boost && lamp ? BIANCO : colore(v)) : SPENTO;
+        for (let k = 0; k < 4; k++) { const [x, y] = punto(cx, cy, R - q * (3.6 + k), a); blocco(x, y, c); }
+      }
+      testo(String(S.kmh), cx, cy - T.xl * 0.62, T.xl, S.boost && lamp ? CIANO : BIANCO, 'center');
+      testo(S.boost ? 'BOOST!' : 'KM/H', cx, cy + T.xl * 0.5, T.s, S.boost ? CIANO : GIALLO, 'center');
+      testo(bpm, cx, cy + R * 0.55, T.s, mus.cassa > 0.5 ? GIALLO : GRIGIO, 'center');
+    } else if (stileTachimetro === 'rally') {
+      const R = Math.round(185 * u), bw = Math.round(R * 1.7), bh = Math.round(T.xl + T.s + 52 * u);
+      const cx = W - M - R - q * 2, by = H - M - bh, cy = by;                  // il centro del mezzo quadrante poggia sul riquadro
+      const a0 = Math.PI, a1 = 0;
+      // mezzo disco
+      for (let y = -R - q; y <= 0; y += q) for (let x = -R - q; x <= R + q; x += q) if (Math.hypot(x, y) <= R + q * 0.5) blocco(cx + x + q, cy + y + q, '#000');
+      for (let y = -R; y <= 0; y += q) for (let x = -R; x <= R; x += q) {
+        const d = Math.hypot(x, y); if (d > R + q * 0.5) continue;
+        blocco(cx + x, cy + y, d > R - q * 1.2 ? BIANCO : d > R - q * 2.6 ? MN_ROSSO : MN_BLU_SCURO);
+      }
+      for (let kmh = 0; kmh <= KMH_FONDO; kmh += 25) {
+        const v = kmh / KMH_FONDO, grande = kmh % 50 === 0, a = ang(v, a0, a1);
+        const [x, y] = punto(cx, cy, R - q * 4.4, a); blocco(x, y, kmh > KMH_MAX ? ROSSO : BIANCO, grande ? 2 : 1);
+        if (grande && kmh > 0 && kmh < KMH_FONDO) { const [nx, ny] = punto(cx, cy, R - q * 8.6, a); testo(String(kmh), nx, ny - T.s / 2, T.s, kmh > KMH_MAX ? ROSSO : GIALLO, 'center'); }
+      }
+      // arco interno: il nitro
+      const nN = 18;
+      for (let i = 0; i < nN; i++) { const v = (i + 0.5) / nN, [x, y] = punto(cx, cy, R * 0.42, ang(v, a0, a1)); blocco(x, y, v <= S.nitro ? CIANO : SPENTO); }
+      lancetta(cx, cy, R - q * 5.5, ang(t, a0, a1), S.boost && lamp ? CIANO : ROSSO);
+      // riquadro con le cifre sotto
+      scatola(cx - bw / 2, by, bw, bh, u);
+      testo(String(S.kmh), cx, by + 20 * u, T.xl, S.boost && lamp ? CIANO : BIANCO, 'center');
+      testo(S.boost ? 'BOOST!' : 'KM/H', cx - bw / 2 + 18 * u, by + bh - T.s - 14 * u, T.s, S.boost ? CIANO : GIALLO);
+      testo(bpm, cx + bw / 2 - 18 * u, by + bh - T.s - 14 * u, T.s, mus.cassa > 0.5 ? GIALLO : GRIGIO, 'right');
+    }
+  }
+
   function spettro(S, W, H, u, show) {
     const sp = S.musica.spettro, n = 32, colW = W / n, blocco = Math.max(3, Math.round(8 * u)), sep = Math.max(1, Math.round(2 * u));
     const maxB = show ? 10 : 5;
@@ -394,6 +478,7 @@ export function creaHud(cv) {
     banner: lanciaBanner,
     notifica: lanciaNotifica,
     setNotifica(st) { stileNotifica = st; },
+    setTachimetro(st) { stileTachimetro = st; },
     get stileNotifica() { return stileNotifica; },
     comboRotta() { rotta = ora(); },
     setModo(m) { modo = m; },
