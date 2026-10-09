@@ -18,9 +18,11 @@
 // simboli, quindi ogni testo passa da ascii().
 
 const FONT = '"Press Start 2P", monospace';
-const GIALLO = '#ffd23f', ROSSO = '#ff3b30', CIANO = '#3fd0ff', BIANCO = '#ffffff', SPENTO = '#2a2f45', GRIGIO = '#9aa3c0';
-// i colori della bandiera mongola, per i menu (scelta del bonus): blu, rosso, e il giallo del Soyombo per i dettagli
-const MN_BLU = '#0b3a8c', MN_BLU_SCURO = '#06204f', MN_ROSSO = '#c4272f', MN_ORO = '#f9cf02';
+// TAVOLOZZA: i colori della bandiera mongola, un po' scuriti (9 ott 2026) — blu per i riquadri, rosso e il
+// giallo del Soyombo per i dettagli. Tutto l'HUD e il menu dei bonus la usano; le schermate DOM la ripetono nel CSS.
+const MN_BLU = '#082c6b', MN_BLU_SCURO = '#041737', MN_ROSSO = '#a51f27', MN_ORO = '#dcb200';
+const GIALLO = '#e3b505', ROSSO = '#c0262e', CIANO = '#5b95ea', BIANCO = '#ffffff', SPENTO = '#1c2a52', GRIGIO = '#8fa0c8';
+const FONDO = 'rgba(4,23,55,.9)';                 // il pieno dei riquadri: blu notte
 
 // solo ASCII stampabile: accenti tolti, simboli sostituiti
 export function ascii(s) {
@@ -74,7 +76,11 @@ export function creaHud(cv) {
     x = Math.round(x); y = Math.round(y); w = Math.round(w); h = Math.round(h);
     const o = Math.max(2, Math.round(5 * u)), b = Math.max(2, Math.round(3 * u));
     ctx.fillStyle = '#000'; ctx.fillRect(x + o, y + o, w, h);
-    ctx.fillStyle = 'rgba(8,10,24,.86)'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = FONDO; ctx.fillRect(x, y, w, h);
+    // testata come nel menu dei bonus: una striscia rossa con il filo giallo sotto
+    const t = Math.max(3, Math.round(7 * u)), f = Math.max(1, Math.round(2 * u));
+    ctx.fillStyle = MN_ROSSO; ctx.fillRect(x, y, w, t);
+    ctx.fillStyle = MN_ORO; ctx.fillRect(x, y + t, w, f);
     ctx.strokeStyle = BIANCO; ctx.lineWidth = b; ctx.strokeRect(x + b / 2, y + b / 2, w - b, h - b);
   }
   function blocchi(x, y, n, pieni, lato, gap, colore, vuoto = SPENTO) {
@@ -97,6 +103,17 @@ export function creaHud(cv) {
 
   // ── eventi: banner, giudizio sul colpo, combo rotta ─────────────────────
   let banner = null, giudizio = null, rotta = 0;
+  // NOTIFICHE (il takedown): frequenti, quindi non devono coprire la strada. Quattro modi di mostrarle, da scegliere:
+  //   centro  · la fascia grande di prima (copre metà schermo)
+  //   alto    · la stessa fascia ma sottile, appena sotto i riquadri in alto
+  //   nastro  · una targhetta piccola al centro in alto, fra il pannello della tappa e il tachimetro
+  //   lato    · un riquadro che entra da destra, sotto il tachimetro
+  //   rivale  · niente fascia: la scritta salta fuori sopra il rivale abbattuto e sale svanendo
+  let notifica = null, stileNotifica = 'alto';
+  function lanciaNotifica(t, sotto, pos) {
+    if (stileNotifica === 'centro') return lanciaBanner(t, sotto, 1.9);
+    notifica = { testo: ascii(t), sotto: ascii(sotto || ''), t0: ora(), durata: stileNotifica === 'rivale' ? 1.1 : 1.5, pos };
+  }
   const ora = () => performance.now() / 1000;
   function lanciaBanner(t, sotto, durata = 1.9) { banner = { testo: ascii(t), sotto: ascii(sotto || ''), t0: ora(), durata }; }
   // il colpo è a tempo? scarto dal battito più vicino (la fase include già l'anticipo visivo)
@@ -140,7 +157,7 @@ export function creaHud(cv) {
       const cx = x0 + pad + (i % cols) * (cw + gap), cy = y0 + testa + pad + Math.floor(i / cols) * (ch + gap);
       const sel = i === C.indice, ok = op.ok;
       ctx.fillStyle = '#000'; ctx.fillRect(Math.round(cx + o), Math.round(cy + o), Math.round(cw), ch);
-      ctx.fillStyle = !ok ? '#1b2440' : sel ? MN_ROSSO : MN_BLU_SCURO;
+      ctx.fillStyle = !ok ? '#0d1530' : sel ? MN_ROSSO : MN_BLU_SCURO;
       ctx.fillRect(Math.round(cx), Math.round(cy), Math.round(cw), ch);
       ctx.strokeStyle = sel ? (lamp ? MN_ORO : BIANCO) : ok ? BIANCO : SPENTO; ctx.lineWidth = sel ? b * 1.6 : b;
       ctx.strokeRect(Math.round(cx) + b / 2, Math.round(cy) + b / 2, Math.round(cw) - b, ch - b);
@@ -275,7 +292,7 @@ export function creaHud(cv) {
       for (let i = 0; i < 4; i++) {
         const on = i === mus.inBattuta, x = x0 + i * (lato + gap);
         ctx.fillStyle = '#000'; ctx.fillRect(x + o, y0 + o, lato, lato);
-        ctx.fillStyle = on ? (i === 0 ? ROSSO : GIALLO) : 'rgba(8,10,24,.86)'; ctx.fillRect(x, y0, lato, lato);
+        ctx.fillStyle = on ? (i === 0 ? ROSSO : GIALLO) : FONDO; ctx.fillRect(x, y0, lato, lato);
         ctx.strokeStyle = BIANCO; ctx.lineWidth = b; ctx.strokeRect(x + b / 2, y0 + b / 2, lato - b, lato - b);
       }
       if (show) testo(Math.round(mus.bpm) + ' BPM', W / 2, y0 + lato + riga - T.s + 6 * u, T.s, BIANCO, 'center');
@@ -301,6 +318,42 @@ export function creaHud(cv) {
     }
 
     if (banner) disegnaBanner(S, W, H, u, T, lamp);
+    if (notifica && !show) disegnaNotifica(S, W, H, u, T, M, lamp);
+  }
+
+  function disegnaNotifica(S, W, H, u, T, M, lamp) {
+    const n = notifica, eta = ora() - n.t0;
+    if (eta > n.durata) { notifica = null; return; }
+    const fuori = Math.max(0, (eta - (n.durata - 0.25)) / 0.25);          // ultimo quarto di secondo: svanisce
+    const entra = Math.min(1, eta / 0.12), pad = Math.max(8, Math.round(18 * u)), b = Math.max(2, Math.round(3 * u));
+    const colore = Math.floor(eta / ((S.musica.periodo || 0.5) / 2)) % 2 ? GIALLO : BIANCO;
+    ctx.globalAlpha = 1 - fuori;
+    if (stileNotifica === 'alto') {
+      const alto = Math.round((T.l + T.s + 48 * u) * entra), y = Math.round(H * 0.19);
+      const f = Math.max(2, Math.round(5 * u));
+      ctx.fillStyle = MN_BLU_SCURO; ctx.fillRect(0, y, W, alto);
+      ctx.fillStyle = MN_ROSSO; ctx.fillRect(0, y, W, f); ctx.fillRect(0, y + alto - f, W, f);
+      if (entra >= 1) {
+        testo(n.testo, W / 2, y + 16 * u, T.l, colore, 'center');
+        if (n.sotto) testo(n.sotto, W / 2, y + 16 * u + T.l + 12 * u, T.s, CIANO, 'center');
+      }
+    } else if (stileNotifica === 'nastro' || stileNotifica === 'lato') {
+      const w = Math.max(larg(n.testo, T.m), larg(n.sotto, T.s)) + pad * 2, h = pad * 2 + T.m + (n.sotto ? T.s + 12 * u : 0) + 8 * u;
+      let x, y;
+      if (stileNotifica === 'nastro') { x = W / 2 - w / 2; y = M - (1 - entra) * (h + M); }
+      else { x = W - M - w + (1 - entra) * (w + M); y = H * 0.27; }
+      scatola(x, y, w, h, u);
+      testo(n.testo, x + w / 2, y + pad + 8 * u, T.m, colore, 'center');
+      if (n.sotto) testo(n.sotto, x + w / 2, y + pad + 8 * u + T.m + 12 * u, T.s, CIANO, 'center');
+    } else if (stileNotifica === 'rivale') {
+      const p = n.pos || { x: 0.5, y: 0.4 };
+      const sc = 1 + 0.35 * Math.max(0, 1 - eta / 0.15);                     // salta fuori più grande e si assesta
+      const x = p.x * W, y = p.y * H - eta * 90 * u - T.l;
+      const g = glifo(n.testo, T.l, colore);
+      ctx.drawImage(g.c, Math.round(x - (g.w / 2 + g.pad) * sc), Math.round(y - g.pad * sc), Math.round(g.c.width * sc), Math.round(g.c.height * sc));
+      if (n.sotto) testo(n.sotto, x, y + T.l * sc + 10 * u, T.s, CIANO, 'center');
+    }
+    ctx.globalAlpha = 1;
   }
 
   function spettro(S, W, H, u, show) {
@@ -327,8 +380,9 @@ export function creaHud(cv) {
     let size = T.xxl; while (size > 8 && larg(b.testo, size) > W * 0.9) size -= 8;
     const entra = Math.min(1, eta / 0.12), alto = Math.round((size + T.m + 90 * u) * entra), y = Math.round(H * 0.42 - alto / 2);
     const fascia = Math.max(3, Math.round(6 * u));
-    ctx.fillStyle = '#000'; ctx.fillRect(0, y, W, alto);
-    ctx.fillStyle = GIALLO; ctx.fillRect(0, y, W, fascia); ctx.fillRect(0, y + alto - fascia, W, fascia);
+    ctx.fillStyle = MN_BLU_SCURO; ctx.fillRect(0, y, W, alto);
+    ctx.fillStyle = MN_ROSSO; ctx.fillRect(0, y, W, fascia * 2); ctx.fillRect(0, y + alto - fascia * 2, W, fascia * 2);
+    ctx.fillStyle = MN_ORO; ctx.fillRect(0, y + fascia * 2, W, fascia / 2); ctx.fillRect(0, y + alto - fascia * 2.5, W, fascia / 2);
     if (entra < 1) return;
     const mezzo = Math.floor(eta / ((S.musica.periodo || 0.5) / 2)) % 2;      // cambia colore ogni mezzo battito
     testo(b.testo, W / 2, y + 30 * u, size, mezzo ? GIALLO : BIANCO, 'center');
@@ -338,6 +392,9 @@ export function creaHud(cv) {
   return {
     disegna, colpo, ascii, sceltaA,
     banner: lanciaBanner,
+    notifica: lanciaNotifica,
+    setNotifica(st) { stileNotifica = st; },
+    get stileNotifica() { return stileNotifica; },
     comboRotta() { rotta = ora(); },
     setModo(m) { modo = m; },
     get modo() { return modo; },
