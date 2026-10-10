@@ -745,3 +745,11 @@ Si prosegue il piano grafico in WebGL.
   (`?takedown=centro|alto|nastro|lato|rivale`): l'utente ha scelto **rivale** — «TAKEDOWN» salta fuori sopra il
   rivale abbattuto, lo segue mentre cade (`notificaPos` da statoHud) e sale svanendo in ~1,1 s; dentro c'è
   «+150 - BONUS FRA n» (niente più popup +150 né etichetta KO lì sopra). I banner rari (tappa, drop, KO) restano grandi.
+
+### 10 ottobre 2026 — Tachimetro a lancetta con il nitro
+- Scelto il tachimetro a lancetta (opzione 1 delle tre). Il riquadro della velocità in alto a destra e gli altri
+  stili (segmenti, rally, box) sono stati tolti dal codice. Il NITRO è un arco di 12 blocchi nel varco in basso del
+  quadrante (da 225° a 315°: la scala dei km/h occupa gli altri 240°); lampeggia quando è pieno, e col boost
+  la lancetta e le cifre diventano azzurre; sotto le cifre la scritta dice NITRO / NITRO PRONTO / BOOST!.
+- Il riquadro in basso a sinistra ora ha: VITA, arma, BONUS FRA n · KO TOT. Lo SCUDO non esiste ancora come
+  meccanica (c'è solo la parata, tasto I / LB): la riga sotto la vita è lasciata libera per quando si decide cosa fa.
