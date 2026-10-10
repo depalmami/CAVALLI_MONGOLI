@@ -22,6 +22,7 @@ const FONT = '"Press Start 2P", monospace';
 // giallo del Soyombo per i dettagli. Tutto l'HUD e il menu dei bonus la usano; le schermate DOM la ripetono nel CSS.
 const MN_BLU = '#082c6b', MN_BLU_SCURO = '#041737', MN_ROSSO = '#a51f27', MN_ORO = '#dcb200';
 const GIALLO = '#e3b505', ROSSO = '#c0262e', CIANO = '#5b95ea', BIANCO = '#ffffff', SPENTO = '#1c2a52', GRIGIO = '#8fa0c8';
+const ACQUA = '#8fdcf5';                          // lo scudo: il pluriball, azzurro chiaro
 const FONDO = 'rgba(4,23,55,.9)';                 // il pieno dei riquadri: blu notte
 
 // solo ASCII stampabile: accenti tolti, simboli sostituiti
@@ -235,24 +236,32 @@ export function creaHud(cv) {
 
     if (!show) {
       tachimetro(S, W, H, u, T, M, lamp);       // la velocità sta in basso a destra, col nitro (vedi sotto)
-      // ── vita, arma, bonus (in basso a sinistra). Il nitro è passato nel tachimetro, e sotto la vita resta una riga libera per lo scudo ──
+      // ── vita, scudo, arma, bonus (in basso a sinistra) ──
+      // Un blocco vale sempre la stessa vita (100/9 ≈ 11 punti): col bonus «vita max» la barra si ALLUNGA. Se diventasse
+      // troppo lunga i blocchi si stringono, ma il numero resta quello vero. Lo scudo (rotoli di pluriball) sta sotto.
       {
-        const lato = Math.max(8, Math.round(26 * u)), gap = Math.max(2, Math.round(8 * u)), et = larg('VITA', T.s) + pad;
+        const PUNTI = 100 / 9, nVita = Math.max(1, Math.round((S.vitaMax ?? 100) / PUNTI)), nScudo = Math.max(1, Math.round((S.scudoMax ?? 100) / PUNTI));
+        const gap = Math.max(2, Math.round(8 * u)), nBar = Math.max(nVita, nScudo), et = larg('SCUDO', T.s) + pad;
+        const latoMax = Math.max(8, Math.round(26 * u)), barMax = Math.round(640 * u);
+        const lato = Math.max(6, Math.min(latoMax, Math.floor((barMax - gap * (nBar - 1)) / nBar)));
         const arma = ascii(S.arma.nome) + (isFinite(S.arma.usi) ? ' X' + S.arma.usi : '');
         // il contatore scende: BONUS FRA 5, 4, 3, 2, 1 — poi riparte da 7, poi da 10… — e accanto i takedown totali
         const fra = 'BONUS FRA ', n = String(S.mancano ?? 0), tot = `   KO TOT ${S.takedown}`;
         const wBott = larg(fra, T.s) + larg(n, T.m) + larg(tot, T.s);
-        const w = Math.max(et + 9 * (lato + gap) - gap, larg(arma, T.s), wBott) + pad * 2;
+        const w = Math.max(et + nBar * (lato + gap) - gap, larg(arma, T.s), wBott) + pad * 2;
         const rr = Math.max(lato, T.s) + Math.max(8, Math.round(14 * u));
-        const h = pad * 2 + rr + riga + T.s + Math.round(4 * u);
+        const h = pad * 2 + rr * 2 + riga + T.s + Math.round(4 * u);
         const x = M, y = H - M - h;
         scatola(x, y, w, h, u);
         const ty = (lato - T.s) / 2;
         testo('VITA', x + pad, y + pad + ty, T.s, GIALLO);
-        blocchi(x + pad + et, y + pad, 9, Math.round(S.vita * 9), lato, gap, S.vita < 0.3 && lamp ? BIANCO : ROSSO);
-        testo(arma, x + pad, y + pad + rr, T.s, BIANCO);
+        blocchi(x + pad + et, y + pad, nVita, Math.round(S.vita * nVita), lato, gap, S.vita < 0.3 && lamp ? BIANCO : ROSSO);
+        const haScudo = (S.scudo ?? 0) > 0;
+        testo('SCUDO', x + pad, y + pad + rr + ty, T.s, haScudo ? ACQUA : GRIGIO);
+        blocchi(x + pad + et, y + pad + rr, nScudo, Math.ceil((S.scudo ?? 0) * nScudo - 1e-6), lato, gap, ACQUA);
+        testo(arma, x + pad, y + pad + rr * 2, T.s, BIANCO);
         {
-          const yb = y + pad + rr + riga, ultimo = (S.mancano ?? 0) <= 1;
+          const yb = y + pad + rr * 2 + riga, ultimo = (S.mancano ?? 0) <= 1;
           let xb = x + pad + testo(fra, x + pad, yb, T.s, GRIGIO);
           xb += testo(n, xb, yb - (T.m - T.s), T.m, ultimo && lamp ? BIANCO : GIALLO);
           testo(tot, xb, yb, T.s, GRIGIO);

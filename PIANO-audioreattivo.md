@@ -753,3 +753,15 @@ Si prosegue il piano grafico in WebGL.
   la lancetta e le cifre diventano azzurre; sotto le cifre la scritta dice NITRO / NITRO PRONTO / BOOST!.
 - Il riquadro in basso a sinistra ora ha: VITA, arma, BONUS FRA n · KO TOT. Lo SCUDO non esiste ancora come
   meccanica (c'è solo la parata, tasto I / LB): la riga sotto la vita è lasciata libera per quando si decide cosa fa.
+
+### 10 ottobre 2026 — Scudo (rotolo di pluriball) e barra vita che si allunga
+- **Scudo**: un rotolo di pluriball raccolto in pista dà `SCUDO_PER_ROTOLO` = 30 punti di scudo, tetto `SCUDO_MAX` = 100.
+  I colpi dei rivali consumano PRIMA lo scudo (`assorbiScudo`), poi la vita; non si ricarica da solo, si perde se si
+  muore. Se lo scudo assorbe tutto il colpo il popup dice «SCUDO!» e il lampo di danno è debole. Costanti da regolare.
+- **Il rotolo** (`rotoli`, `updateRotoli`): 35 lungo il viaggio (uno ogni 300.000 unità, ~3 per tappa), cilindro di
+  bolle azzurre con anima di cartone e due teste, coricato di traverso, che gira come un'insegna e su se stesso come un
+  rullo; si vede entro 90.000 unità e torna dopo 20 s; se lo scudo è già al massimo non si raccoglie. Il pluriball
+  doveva essere scuro e a doppia faccia: chiaro e trasparente sul cielo si vedeva solo il bordo.
+- **HUD**: sotto la vita c'è la riga SCUDO (blocchi azzurro chiaro); un blocco = 100/9 ≈ 11 punti. La barra VITA ora è
+  lunga quanto la vita massima (190 con tre «vita max» = 17 blocchi); oltre ~640 px di barra i blocchi si stringono.
+- Trappola di collaudo: `cm3d.setFreeRoam(false)` richiama `resetRun()` e rimette il gioco in briefing (niente HUD, cavallo fermo).
