@@ -78,6 +78,27 @@ export function creaMusica() {
   let scelta = 'auto';                // 'auto' | 'midi' | 'audio' | 'libero'
   let manoT = -1e9;                   // ultimo intervento a mano (tap/uno): l'audio non lo scavalca subito
   let ottava = 1;                     // ×2 / ÷2 sulla stima audio (errori d'ottava)
+  const rete = { ultimoClock: -1e9, ultimoAudio: -1e9, bpm: 0, beat: 0, level: 0, corre: false, offset: 0 };
+  function daRete(d) {
+    const t = ora();
+    if (!d || d.v !== 1) return;
+    if (d.type === 'clock' && Number.isFinite(d.bpm) && d.bpm >= 20 && d.bpm <= 300 &&
+        Number.isFinite(d.beat) && d.beat >= 0) {
+      const riparte = !rete.corre || t - rete.ultimoClock > 500 || d.beat < rete.beat - 0.5;
+      if (riparte) rete.offset = Math.max(ultimoEmesso + 1, Math.ceil(orologio.indice(t))) - Math.floor(d.beat);
+      rete.ultimoClock = t; rete.bpm = d.bpm; rete.beat = d.beat; rete.corre = !!d.playing;
+      if (rete.corre && (scelta === 'auto' || scelta === 'rete')) {
+        const beat = d.beat + rete.offset;
+        orologio.periodo = 60000 / d.bpm;
+        orologio.ancoraB = beat; orologio.ancoraT = t;
+        orologio.unoOffset = mod(rete.offset, 4); unoNoto = 'rete';
+      }
+    } else if (d.type === 'midi' && Array.isArray(d.bytes)) {
+      daMidi({ data: d.bytes, timeStamp: t });
+    } else if (d.type === 'audio' && Number.isFinite(d.level)) {
+      rete.ultimoAudio = t; rete.level = lim(d.level, 0, 1);
+    }
+  }
 
   // ── TAP ─────────────────────────────────────────────────────────────────
   let taps = [];
@@ -531,6 +552,16 @@ export function creaMusica() {
     } else if (audio.attivo && analyser && ctx.state === 'running') {
       analizza(dt);
       accDb += m.livelloDb; accDbN++;
+    } else if (t - rete.ultimoAudio < 500) {
+      const v = rete.level;
+      m.energia += (v - m.energia) * 0.3;
+      m.sub = m.bassi = m.medi = m.alti = m.energia;
+      m.brillanza = m.energia;
+      m.spettro.fill(m.energia);
+      m.livelloDb = 20 * Math.log10(Math.max(v, 0.000001));
+      m.segnale = v > 0.001;
+      silenzioT = m.segnale ? 0 : silenzioT + dt;
+      accDb += m.livelloDb; accDbN++;
     } else spegniAnalisi(dt);
 
     while (coda.length) applicaColpo(coda.shift(), t);
@@ -540,8 +571,9 @@ export function creaMusica() {
     // chi comanda l'orologio
     const midiVivo = t - midi.ultimoTick < 400 && midi.tT.length >= 6;
     const audioVivo = audio.attivo && silenzioT < 2 && audioStima.bpm > 0 && audioStima.conf >= CONF_MINIMA * 0.8;
-    const vuole = scelta === 'auto' ? (midiVivo ? 'midi' : audioVivo ? 'audio' : 'libero') : scelta;
-    m.fonte = (vuole === 'midi' && !midiVivo) || (vuole === 'audio' && !audioVivo) ? 'libero' : vuole;
+    const reteViva = rete.corre && t - rete.ultimoClock < 500;
+    const vuole = scelta === 'auto' ? (reteViva ? 'rete' : midiVivo ? 'midi' : audioVivo ? 'audio' : 'libero') : scelta;
+    m.fonte = (vuole === 'rete' && !reteViva) || (vuole === 'midi' && !midiVivo) || (vuole === 'audio' && !audioVivo) ? 'libero' : vuole;
 
     if (audio.attivo && t - audioStima.ultima > 500) {
       audioStima.ultima = t; stimaTempo();
@@ -590,12 +622,14 @@ export function creaMusica() {
       audio: { ...audio, contesto: ctx ? ctx.state : 'spento', bpm: audioStima.bpm, conf: audioStima.conf },
       midi: { attivo: midi.attivo, porte: midi.porte.slice(), errore: midi.errore, bpm: midi.bpm,
               clock: ora() - midi.ultimoTick < 400, corre: midi.corre },
+      rete: { clock: ora() - rete.ultimoClock < 500, audio: ora() - rete.ultimoAudio < 500,
+              bpm: rete.bpm, corre: rete.corre, level: rete.level },
     };
   }
 
   return Object.assign(m, {
     on, off, aggiorna, tap, uno, raddoppia: () => cambiaOttava(2), dimezza: () => cambiaOttava(0.5),
-    ascoltaIngresso, ascoltaFile, ferma: staccaSorgente, elencaIngressi, attivaMidi, stato, diag,
+    ascoltaIngresso, ascoltaFile, ferma: staccaSorgente, elencaIngressi, attivaMidi, daRete, stato, diag,
     setScelta(s) { scelta = s; },
     setTrimDb(db) { if (trim) trim.gain.value = 10 ** (db / 20); m._trimDb = db; },
     setAnticipo(ms) { m.anticipoMs = ms; },

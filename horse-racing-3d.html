@@ -320,6 +320,7 @@
 </div>
 
 <script type="module">
+<script src="/socket.io/socket.io.js"></script>
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -3063,6 +3064,7 @@ function luceDellaTappa(pos) {
   luceT.sole.copy(_cA.set(A[4])).lerp(_cB.set(B[4]), t);
   luceT.nebbia.copy(_cA.set(A[5])).lerp(_cB.set(B[5]), t);
   return luceT;
+if (window.io) window.io().on('music-lan', data => musica.daRete(data));
 }
 const NEBBIA_NOTTE = new THREE.Color(0x141a33), CIELO_GIORNO = new THREE.Color(0xcfe0ff), CIELO_NOTTE = new THREE.Color(0x5a70b0);   // luna
 let cieloAmbiente = { elev: 1e9, n: -1 };

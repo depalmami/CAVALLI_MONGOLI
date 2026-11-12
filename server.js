@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const dgram = require('dgram');
 
 const app = express();
 
@@ -21,6 +22,28 @@ try {
   server = http.createServer(app);
 }
 const io = new Server(server);
+// I device Max inviano piccoli datagrammi JSON sulla LAN. Non esponiamo
+// comandi di controllo: il ponte inoltra solo telemetria musicale validata.
+const MUSIC_PORT = Number(process.env.MUSIC_PORT) || 41234;
+const musicUdp = dgram.createSocket('udp4');
+let musicSender = null;
+musicUdp.on('message', (buffer, remote) => {
+  if (buffer.length > 2048) return;
+  let data;
+  try { data = JSON.parse(buffer.toString('utf8')); } catch { return; }
+  if (!data || data.v !== 1 || !['clock', 'midi', 'audio'].includes(data.type)) return;
+  if (data.type === 'clock' &&
+      (!Number.isFinite(data.bpm) || data.bpm < 20 || data.bpm > 300 ||
+       !Number.isFinite(data.beat) || data.beat < 0)) return;
+  if (data.type === 'midi' &&
+      (!Array.isArray(data.bytes) || data.bytes.length > 3 ||
+       data.bytes.some(b => !Number.isInteger(b) || b < 0 || b > 255))) return;
+  if (data.type === 'audio' && (!Number.isFinite(data.level) || data.level < 0 || data.level > 4)) return;
+  musicSender = remote.address;
+  io.emit('music-lan', data);
+});
+musicUdp.on('error', e => console.warn('[music UDP]', e.message));
+musicUdp.bind(MUSIC_PORT, '0.0.0.0', () => console.log(`Music UDP: ${MUSIC_PORT}`));
 
 // Log every HTTP request with IP, status code and User-Agent.
 // Mostrare lo status code aiuta a identificare al volo eventuali 404/500
@@ -83,7 +106,7 @@ app.get('/_lan_info', (req, res) => {
       if (net.family === 'IPv4' && !net.internal) ips.push(net.address);
     }
   }
-  res.json({ ips, port: PORT, proto });
+  res.json({ ips, port: PORT, proto, musicPort: MUSIC_PORT, musicSender });
 });
 
 // 2-peer signaling con single-occupant per ruolo

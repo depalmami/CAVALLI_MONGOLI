@@ -171,6 +171,7 @@ export function collegaPannelloMusica(musica) {
                  : '🎙 audio spento');
       if (a.contesto === 'suspended') parti.push('⚠️ clicca nella pagina per far partire l’audio');
       parti.push(mi.attivo ? `🎹 ${mi.clock ? 'clock ' + mi.bpm.toFixed(1) : 'nessun clock'}` : '🎹 MIDI spento');
+      parti.push(st.rete.clock ? `🌐 RETE ${st.rete.corre ? st.rete.bpm.toFixed(1) + ' BPM' : 'ferma'}${st.rete.audio ? ' · audio ' + Math.round(st.rete.level * 100) + '%' : ''}` : '🌐 rete assente');
       parti.push(st.unoNoto ? `uno: ${st.unoNoto}` : 'uno: da segnare (U)');
       $('mu-lettura').textContent = parti.join('  ·  ');
     }
