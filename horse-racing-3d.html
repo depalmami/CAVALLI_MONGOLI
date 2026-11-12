@@ -174,7 +174,8 @@
         <div>
           <div class="riga"><label for="mu-fonte">Tempo da</label>
             <select id="mu-fonte" style="width:auto; flex:1.4">
-              <option value="auto">Automatico (MIDI › audio › tap)</option>
+              <option value="auto">Automatico (rete › MIDI › audio › tap)</option>
+              <option value="rete">Solo clock da Live in rete</option>
               <option value="midi">Solo clock MIDI</option>
               <option value="audio">Solo analisi audio</option>
               <option value="libero">Libero (tap)</option>
@@ -204,7 +205,7 @@
             <button id="mu-d2">×½</button>
           </div>
           <div id="mu-stato" class="nota"></div>
-          <div class="nota">Stesso Mac di Ableton: l’ingresso è <b>BlackHole</b> (uscita di Live su BlackHole o
+          <div class="nota">Due Mac: carica i device Cavalli Bridge in Live e invia all’IP del Mac del gioco, porta UDP 41234. Lo stato RETE appare sopra. Stesso Mac di Ableton: l’ingresso è <b>BlackHole</b> (uscita di Live su BlackHole o
             su un dispositivo aggregato) e il MIDI è il <b>bus IAC</b> con <i>Sync</i> attivo.
             L’anticipo si regola al soundcheck finché lampo e click coincidono.</div>
         </div>
@@ -319,8 +320,8 @@
   </div>
 </div>
 
-<script type="module">
 <script src="/socket.io/socket.io.js"></script>
+<script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
@@ -341,6 +342,8 @@ import { creaForesta } from './3d/alberi.js';
 import { creaPaesaggio } from './3d/paesaggio.js';
 import { piazzaBranchi, creaFauna } from './3d/animali.js';
 import { creaAtmosfera } from './3d/atmosfera.js';
+import { creaBoss, BOSS } from './3d/boss.js';
+import { creaBirra, BIRRA } from './3d/birra.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -1929,6 +1932,7 @@ const SCUDO_PER_ROTOLO = 30, SCUDO_MAX = 100;
 let pScudo = 0;
 // quanto assorbe lo scudo e quanto passa alla vita: restituisce il danno che ARRIVA alla vita
 function assorbiScudo(danno) {
+  danno *= birra.danno;                      // BIRRA GRANDE in corso: -45% su tutto, rivali e Boss compresi
   const preso = Math.min(pScudo, danno);
   pScudo -= preso;
   return danno - preso;
@@ -1973,6 +1977,50 @@ function gapTo(oppPos) {
 }
 function addPopup(who, off, text, color) { popups.push({ who, off, text, color, age: 0, life: 1.1 }); }
 
+// IL BOSS (livello bonus, vedi 3d/boss.js): al combattimento si presenta come un rivale in più, lungo 12 metri.
+let spintaGioc = 0;                           // spinta laterale sul giocatore, data a poco a poco (come spintaLat dei rivali):
+                                              // un salto di playerX verrebbe letto come velocità e girerebbe il cavallo di 80°
+const boss = creaBoss({ scene, posToWorld, gapTo, interpWrap, MAX_SPEED, TRACK_LENGTH, ROAD_WIDTH,
+  // un colpo del Boss va a segno: restituisce true se il giocatore l'ha parato
+  colpisci({ danno, dir, spinta, parabile, nome }) {
+    if (parabile && blocking) {
+      critical = true; fendenti.parata(player, -dir); addPopup(null, 1500, 'PARATA!', '#8ff'); fermaImmagine(0.06);
+      return true;
+    }
+    const passa = assorbiScudo(danno);
+    pHealth -= passa; dmgFlash = passa > 0 ? 1 : 0.35; player.flashHit(); player.colpito(dir, 1.5);
+    spintaGioc += dir * spinta;
+    if (combo >= 3) hud.comboRotta();
+    combo = 0;
+    shake = Math.max(shake, 0.8); fermaImmagine(0.08);
+    addPopup(null, 1500, passa > 0 ? nome : 'SCUDO!', passa > 0 ? '#ff6b6b' : '#9fdcff');
+    const pp = player.group.position; hitSpark.burst(pp.x, pp.y + HORSE_HEIGHT, pp.z, 0xff4444, 16);
+    if (pHealth <= 0) { pHealth = 0; onPlayerDown(); }
+    return false;
+  },
+  evento(tipo, n) {
+    if (tipo === 'fase') { hud.banner('FASE ' + n, n === 2 ? 'ARRIVA LA SCORTA' : 'ADESSO E FURIOSO', 1.6); shake = 1; fermaImmagine(0.15); }
+    else if (tipo === 'abbattuto') {
+      hud.banner(BOSS.nome, 'ABBATTUTO!', 1.2); shake = 1; fermaImmagine(0.3);   // fascia breve: sotto c'è il crollo da guardare
+      for (const o of opponents) if (o.state === 'race') o.state = 'fuori';     // la scorta scappa
+    }
+    else if (tipo === 'fine') winBoss();
+  } });
+// LA BIRRA GRANDE (3d/birra.js): un bicchiere sui pattini che scappa lungo la pista; acchiappato dà velocità e meno danno.
+// Compare in una tappa su due (BIRRA.probabilita); ?birra=1 nell'indirizzo la fa comparire a ogni tappa, per provarla.
+const birra = creaBirra({ scene, posToWorld, gapTo, MAX_SPEED, TRACK_LENGTH, ROAD_WIDTH,
+  forzata: new URLSearchParams(location.search).has('birra'),
+  evento(tipo) {
+    if (tipo === 'avvista') hud.notifica('BIRRA GRANDE!', 'ACCHIAPPALA', { x: 0.5, y: 0.34 });
+    else if (tipo === 'preso') {
+      vHud.copy(player.group.position); vHud.y += HORSE_HEIGHT * 1.7; vHud.project(camera);
+      hud.notifica('BIRRA GRANDE!', 'PIU VELOCE - MENO DANNO', { x: vHud.x * 0.5 + 0.5, y: -vHud.y * 0.5 + 0.5 });
+      shake = Math.max(shake, 0.3); nitro = Math.min(MAX_NITRO, nitro + 15);
+    }
+  } });
+// i bersagli del giocatore: i rivali in pista e, nel livello bonus, il Boss
+const bersagli = () => boss.attaccabile ? [...opponents, boss.o] : opponents;
+
 function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   if (pAtkCd > 0) return;
   pAtkCd = curWeapon.ranged ? 0.42 : 0.26;
@@ -1983,10 +2031,12 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
   fendenti.colpo(player, side, curWeapon.ranged ? 'bow' : curWeapon.key);
   const latR = LAT_RANGE * (curWeapon.reach || 1);
   let best = null, bestAbs = 1e9;
-  for (const o of opponents) {
+  for (const o of bersagli()) {
     if (o.state !== 'race') continue;
     const g = gapTo(o.pos);
-    if (curWeapon.ranged) {
+    if (o.boss) {                             // è lungo: vale tutto il corpo, lo decide lui
+      if (!boss.aTiro(g, o.lat - playerX, side, latR, curWeapon.ranged)) continue;
+    } else if (curWeapon.ranged) {
       if (g < 0 || g > 18000) continue;       // arco: solo davanti, entro gittata
     } else {
       if (Math.abs(g) > ATK_RANGE) continue;
@@ -1998,10 +2048,11 @@ function playerAttack(side) {                 // side: -1 sinistra, +1 destra
     if (Math.abs(g) < bestAbs) { bestAbs = Math.abs(g); best = o; }
   }
   if (!best) return;
-  const dmg = (curWeapon.oneShot ? 999 : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
+  // la sciabola abbatte un rivale in un colpo; sul Boss vale doppio e basta
+  const dmg = (curWeapon.oneShot ? (best.boss ? curWeapon.dmg * 2 : 999) : curWeapon.dmg) * (critical ? 2 : 1) * strengthMul;
   critical = false;
   if (curWeapon.stun) best.atkCd = Math.max(best.atkCd, 2.4);   // la mazza stordisce
-  const label = curWeapon.oneShot ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null);
+  const label = curWeapon.oneShot && !best.boss ? 'DECAPITATO!' : (curWeapon.ranged ? '🏹' : null);
   if (curWeapon.ranged) {
     // la freccia deve ARRIVARE prima che il bersaglio reagisca
     const o = best;
@@ -2017,13 +2068,15 @@ function playerKick() {
   hud.colpo(musica);
   player.attacca(0);        // sgroppata: il calcio si vede anche a vuoto
   let best = null, bestAbs = 1e9;
-  for (const o of opponents) {
+  for (const o of bersagli()) {
     if (o.state !== 'race') continue;
-    const g = gapTo(o.pos); if (Math.abs(g) > ATK_RANGE) continue;
-    if (Math.abs(o.lat - playerX) > LAT_RANGE) continue;
+    const g = gapTo(o.pos);
+    if (o.boss) { if (!boss.aTiro(g, o.lat - playerX, 0, LAT_RANGE, false)) continue; }
+    else { if (Math.abs(g) > ATK_RANGE) continue; if (Math.abs(o.lat - playerX) > LAT_RANGE) continue; }
     if (Math.abs(g) < bestAbs) { bestAbs = Math.abs(g); best = o; }
   }
   if (!best) return;
+  if (best.boss) { hitOpponent(best, 10 * strengthMul, null); fermaImmagine(0.05); return; }   // il Boss non si butta fuori: il calcio gli fa solo male
   const dir = Math.sign(best.lat - playerX) || (Math.random() < 0.5 ? -1 : 1);  // spingi verso l'esterno
   // la spinta laterale si applica in ~0.15 s (vedi updateAI), non di colpo; la
   // regola "oltre il bordo = abbattuto" guarda comunque dove la spinta lo porta
@@ -2040,14 +2093,17 @@ function playerKick() {
 }
 function hitOpponent(o, dmg, label) {
   { const t = performance.now()/1000; combo = t - comboT < 2.5 ? combo + 1 : 1; comboT = t; }   // colpi di fila
-  o.health -= dmg; o.flash = 1; o.actor.flashHit();
+  // il Boss ha le sue fasi e non cade come un rivale: il danno lo conta lui (zero mentre ruggisce)
+  if (o.boss) { dmg = boss.ferisci(dmg); if (!dmg) { addPopup(o, 900, 'RUGGISCE!', '#9fdcff'); return; } }
+  else o.health -= dmg;
+  o.flash = 1; o.actor.flashHit();
   o.actor.colpito(Math.sign(o.lat - playerX) || 1, curWeapon.key === 'mace' ? 1.4 : 1);
   shake = Math.max(shake, 0.35);
   nitro = Math.min(MAX_NITRO, nitro + 4);          // l'aggressività carica il nitro
   addPopup(o, 900, label || ('-' + Math.round(dmg)), '#ffe08a');
   const op = o.actor.group.position;
   hitSpark.burst(op.x, op.y + HORSE_HEIGHT*1.0, op.z, curWeapon.color, 10);
-  if (o.health <= 0) wipe(o, 'takedown');
+  if (o.health <= 0 && !o.boss) wipe(o, 'takedown');
 }
 function wipe(o, cause) {
   if (o.state !== 'race') return;
@@ -2080,6 +2136,8 @@ function vitaRivale() {
 }
 function spawnRivali() {
   if (game.state !== 'racing' || game.dist < game.prossimoRivale) return;
+  // livello bonus: in fase 1 il Boss è solo; poi lo accompagnano uno e infine due predoni (boss.scorta)
+  if (game.type === 'boss' && opponents.filter(x => x.state !== 'fuori').length >= boss.scorta) return;
   const o = opponents.find(x => x.state === 'fuori');
   if (!o) return;                                             // tutti in pista: riprova al prossimo frame
   game.prossimoRivale = game.dist + RIVALE_OGNI * (0.8 + Math.random() * 0.4);
@@ -2424,6 +2482,12 @@ function updateAutopilot(dt) {
     gas = true; freno = false; apCommit = 0.8;
   }
 
+  // il Boss annuncia un colpo che non si para: il pilota si scansa
+  { const c = boss.consiglio(playerX); if (c && c.x != null) { bestX = c.x; apCommit = 0.4; if (c.freno) { gas = false; freno = true; } } }
+
+  // la Birra davanti: il pilota la insegue (solo se non c'è un pericolo vero)
+  { const cb = birra.corsiaPerPilota(); if (cb != null && !pericolo && !(boss.attivo)) { bestX = limit(cb, -AP.EDGE, AP.EDGE); apCommit = 0.2; } }
+
   apTargetX = bestX;
   guida(bestX, gas, freno);
 
@@ -2438,6 +2502,11 @@ function updateAutopilot(dt) {
     const g = Math.abs(gapTo(o.pos)), l = Math.abs(o.lat - playerX);
     if (g < ATK_RANGE*1.15 && l < LAT_RANGE*1.1) ap.parata = true;
     if (g < ATK_RANGE && l < LAT_RANGE && !bersaglio) bersaglio = o;
+  }
+  if (boss.attaccabile) {                     // il Boss: lo mena quando è a tiro, para il morso
+    if (!bersaglio && boss.aTiro(gapTo(boss.o.pos), boss.o.lat - playerX, 0, LAT_RANGE, false)) bersaglio = boss.o;
+    const c = boss.consiglio(playerX);
+    if (c && c.parata) ap.parata = true;
   }
   apAtkCd -= dt;
   if (bersaglio && apAtkCd <= 0) {
@@ -2457,12 +2526,16 @@ function updatePhysics(dt) {
   if (keyLeft())  playerX -= dx;
   if (keyRight()) playerX += dx;
   playerX -= dx * speedPct * curveAt(position) * CENTRIFUGAL;   // forza centrifuga vera quanto prima
+  if (spintaGioc) {                          // la botta di un colpo del Boss, smaltita in ~0,15 s
+    const d = Math.abs(spintaGioc) < 1e-3 ? spintaGioc : spintaGioc * Math.min(1, dt*9);
+    playerX += d; spintaGioc -= d;
+  }
 
   // BOOST/nitro: scatto sopra la velocità massima finché c'è nitro
   const boostActive = boosting && nitro > 0;
-  const cap = boostActive ? MAX_SPEED * 1.35 : MAX_SPEED;
+  const cap = MAX_SPEED * ((boostActive ? 1.35 : 1) + birra.piuVelocita);    // + BIRRA GRANDE
   if      (boostActive)  { speed = accel(speed, ACCEL*1.6, dt); nitro = Math.max(0, nitro - dt*32); if (nitro <= 0) boosting = false; }
-  else if (keyFaster())  speed = accel(speed, ACCEL, dt);
+  else if (keyFaster())  speed = accel(speed, ACCEL * birra.accelMul, dt);
   else if (keySlower())  speed = accel(speed, BRAKING, dt);
   else                   speed = accel(speed, DECEL, dt);
 
@@ -2489,6 +2562,10 @@ function updatePhysics(dt) {
   }
 
   updateAI(dt);                    // rivali: rubber-band, cambio corsia, contrattacco
+  if (game.type === 'boss') {      // il Boss: mosse e attacchi; il suo corpo fa muro e scosta chi ci entra
+    boss.passo(dt, { playerX, speed });
+    playerX = limit(playerX + boss.spinta * dt, -2.2, 2.2);
+  }
   if (shake > 0)   shake   = Math.max(0, shake   - dt*2.2);
   if (dmgFlash > 0) dmgFlash = Math.max(0, dmgFlash - dt*2.5);
   if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt*4);
@@ -2507,7 +2584,8 @@ function updateCamera(dt) {
   const p = player.basePos;
   const h = player.heading;
   const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
-  tmpB.copy(p).addScaledVector(fwd, -2300); tmpB.y += 1150;
+  const largo = boss.scena;            // 0…1 quando il Boss fa dietrofront e ci viene incontro: la camera arretra e sale per farcelo stare
+  tmpB.copy(p).addScaledVector(fwd, -2300 - 600*largo); tmpB.y += 1150 + 450*largo;
   camera.position.lerp(tmpB, 1 - Math.pow(0.0001, dt));
   tmpB.copy(p).addScaledVector(fwd, 1500); tmpB.y += 600;
   camera.lookAt(tmpB);
@@ -2651,6 +2729,7 @@ addEventListener('keydown', e => {
   if (k === 'g') { const el = $('live-bonus'); el.checked = !el.checked; live.setBonus(el.checked); }  // scritta lampeggiante
   if (k === 'h') { const el = $('live-3d');    el.checked = !el.checked; live.setMode3d(el.checked); } // scritta 2D/3D
   if (k === 'n') setFreeRoam(!freeRoam);   // modalità libera: via rivali e combattimento
+  if (k === 'c' && !freeRoam) startBoss(); // livello bonus: dritti dal Boss (0-4 sono già i livelli SMARMELLA)
   if (k === 'o') setPilota(!ap.on);        // pilota automatico: il cavallo corre da solo
   if (k === 'j' && !freeRoam) playerAttack(-1);   // attacca a sinistra
   if (k === 'l' && !freeRoam) playerAttack(1);    // attacca a destra
@@ -2659,6 +2738,7 @@ addEventListener('keydown', e => {
   if (k === 'r') {
     if (freeRoam) { position = prevPosition = 0; playerX = prevPlayerX = 0; speed = 0;
                     currentLapTime = 0; started = false; }
+    else if (game.type === 'boss') startBoss();
     else startEvent();                     // riavvia pulito l'evento corrente
   }
 });
@@ -2984,6 +3064,7 @@ const frecce = (() => {
 // Vive in 3d/musica.js; qui si crea e basta. Tutto ciò che va a tempo lo legge.
 //=========================================================================
 const musica = creaMusica();
+if (window.io) window.io().on('music-lan', data => musica.daRete(data));
 const pannelloMusica = collegaPannelloMusica(musica);
 const centralina = creaCentralina(musica);   // SMARMELLA 0…1: dalla musica ai parametri
 
@@ -3064,7 +3145,6 @@ function luceDellaTappa(pos) {
   luceT.sole.copy(_cA.set(A[4])).lerp(_cB.set(B[4]), t);
   luceT.nebbia.copy(_cA.set(A[5])).lerp(_cB.set(B[5]), t);
   return luceT;
-if (window.io) window.io().on('music-lan', data => musica.daRete(data));
 }
 const NEBBIA_NOTTE = new THREE.Color(0x141a33), CIELO_GIORNO = new THREE.Color(0xcfe0ff), CIELO_NOTTE = new THREE.Color(0x5a70b0);   // luna
 let cieloAmbiente = { elev: 1e9, n: -1 };
@@ -3351,7 +3431,10 @@ function statoHud() {
   return {
     notificaPos,
     inGara: game.state === 'racing' || game.state === 'bonus',
-    kmh: Math.round(speed/60), tappa: k, tappe: TAPPE.length, nomeTappa: TAPPE[k].nome,
+    kmh: Math.round(speed/60), tappa: k, tappe: TAPPE.length, nomeTappa: game.type === 'boss' ? 'LIVELLO BONUS' : TAPPE[k].nome,
+    birra: birra.attiva ? { t: birra.effetto / BIRRA.durata } : null,
+    boss: game.type === 'boss' && boss.attivo && !freeRoam
+      ? { nome: BOSS.nome, vita: boss.vita, fase: boss.fase, avviso: boss.avviso, stordito: boss.stordito, ruggisce: boss.ruggisce, diFronte: boss.diFronte } : null,
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
     obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
     vita: Math.max(0, pHealth) / MAX_HEALTH, vitaMax: MAX_HEALTH, scudo: pScudo / SCUDO_MAX, scudoMax: SCUDO_MAX, nitro: nitro / MAX_NITRO, boost: boosting,
@@ -3681,7 +3764,9 @@ function respawnRivals() {
   game.prossimoRivale = 18000;
 }
 function startEvent() {
+  boss.esci();
   const ev = eventFor(game.eventIndex);
+  birra.nuovoEvento(ev.dist);                 // forse, in questa tappa, comparirà la Birra
   Object.assign(game, { type: ev.type, target: ev.dist, need: ev.need, time: ev.time, timeLeft: ev.time,
                         dist: 0, killsThisEvent: 0, state: 'racing' });
   position = prevPosition = ev.inizio; playerX = prevPlayerX = 0; speed = 0; started = true;
@@ -3691,6 +3776,7 @@ function startEvent() {
 // obiettivo dell'evento per l'HUD: solo ASCII, il font a pixel non ha emoji né accenti
 function objectiveText() {
   const pct = Math.min(100, Math.round(game.dist / game.target * 100));
+  if (game.type === 'boss')     return `ABBATTILO PRIMA DEL FIUME ${pct}%`;
   if (game.type === 'takedown') return `ABBATTI ${game.killsThisEvent}/${game.need} ENTRO IL TRAGUARDO ${pct}%`;
   if (game.type === 'time')     return `TEMPO ${Math.max(0, game.timeLeft).toFixed(1)}S - TRAGUARDO ${pct}%`;
   if (game.type === 'survival') return `SOPRAVVIVI - TRAGUARDO ${pct}%`;
@@ -3700,6 +3786,10 @@ function checkGame() {
   if (game.state !== 'racing') return;
   if (freeRoam) {                      // nessun obiettivo, nessuna sconfitta: si gira e basta
     return;                            // l'HUD scrive «MODALITA LIBERA» da solo
+  }
+  if (game.type === 'boss') {          // si vince abbattendolo (lo dice lui: evento 'fine'); se si arriva in fondo, scappa
+    if (game.dist >= game.target && boss.vivo) loseBoss('Il coccodrillo si e tuffato nel fiume!');
+    return;
   }
   if (game.type === 'takedown') {
     // non si vince più al N-esimo takedown (con 2-3 colpi fortunati la tappa finiva subito): si corre fino in fondo
@@ -3727,7 +3817,60 @@ function renderArrivo() {
       <div><span>XP</span><b>${game.xp}</b></div>
     </div>
     <p class="nota">+10 XP PER L'ARRIVO - RESTANO PER IL PROSSIMO VIAGGIO</p>
+    <button class="big" id="b-boss">LIVELLO BONUS &gt;</button>
     <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
+  D('b-boss').onclick = () => startBoss();
+  D('b-restart').onclick = () => resetRun();
+}
+//=========================================================================
+// LIVELLO BONUS — il Boss. Non è una tappa del viaggio: si apre dopo Karakorum (bottone qui sopra), col tasto C
+// o con ?boss=1 nell'indirizzo. Si corre un tratto già esistente; il Boss esce dal fiume e, se si arriva in
+// fondo senza averlo abbattuto, ci si rituffa. Si vince solo abbattendolo.
+//=========================================================================
+// Tre tappe di strada (circa 5 minuti a tutta): col sorpasso e il faccia a faccia lo scontro dura sui due minuti
+const BOSS_TRATTO = { inizio: tappaInizio[7], fine: tappaInizio[10] };  // dalle Cascate di Ulaan Tsutgalan alle Rovine di Khar Balgas
+function startBoss() {
+  if (freeRoam) return;
+  scelta = null; applyUpgrades();
+  Object.assign(game, { type: 'boss', target: BOSS_TRATTO.fine - BOSS_TRATTO.inizio, need: 0, time: 0, timeLeft: 0,
+                        dist: 0, killsThisEvent: 0, state: 'racing' });
+  position = prevPosition = BOSS_TRATTO.inizio; playerX = prevPlayerX = 0; speed = 0; started = true; spintaGioc = 0;
+  pHealth = MAX_HEALTH;                       // all'ultimo scontro si arriva in forze
+  respawnRivals(); boss.entra(position); birra.azzera(); hideScreen();
+  hud.banner('LIVELLO BONUS', BOSS.nome, 3);
+}
+function winBoss() {
+  game.state = 'won'; score += 2000; game.xp += 15;
+  showScreen(`
+    <p class="occhiello">LIVELLO BONUS SUPERATO</p>
+    <h1>${hud.ascii(BOSS.nome)} ABBATTUTO</h1>
+    <div class="righe">
+      <div><span>PUNTI</span><b>${score}</b></div>
+      <div><span>TAKEDOWN</span><b>${kills}</b></div>
+      <div><span>VITA RIMASTA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
+      <div><span>XP</span><b>${game.xp}</b></div>
+    </div>
+    <p class="nota">+2000 PUNTI E +15 XP - L'XP RESTA PER IL PROSSIMO VIAGGIO</p>
+    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>
+    <button class="big" id="b-boss">RIGIOCA IL BOSS &gt;</button>`);
+  D('b-restart').onclick = () => resetRun();
+  D('b-boss').onclick = () => startBoss();
+}
+function loseBoss(reason) {
+  game.state = 'dead';
+  hud.banner('KO', BOSS.nome + ' HA VINTO', 3);
+  showScreen(`
+    <p class="occhiello">LIVELLO BONUS - ${hud.ascii(BOSS.nome)} AL ${Math.round(boss.vita * 100)}% DI VITA</p>
+    <h1>SCONFITTO</h1>
+    <h2>${hud.ascii(reason)}</h2>
+    <div class="righe">
+      <div><span>FASE</span><b>${boss.fase} DI 3</b></div>
+      <div><span>PUNTI</span><b>${score}</b></div>
+      <div><span>TAKEDOWN</span><b>${kills}</b></div>
+    </div>
+    <button class="big" id="b-boss">RIPROVA IL BOSS &gt;</button>
+    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
+  D('b-boss').onclick = () => startBoss();
   D('b-restart').onclick = () => resetRun();
 }
 // I BONUS: uno a scelta a ogni soglia di takedown (5, poi altri 7, 10, 15…). Testi solo ASCII: vanno nell'HUD a pixel.
@@ -3840,6 +3983,7 @@ function loseEvent(reason) {
   D('b-restart').onclick = () => resetRun();
 }
 function resetRun() {
+  boss.esci(); birra.azzera(); game.type = 'race';
   game.eventIndex = 0; scelta = null; bonusPresi = 0; sogliaPrec = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
   applyUpgrades(); pHealth = MAX_HEALTH; pScudo = 0; showBriefing();
 }
@@ -3852,6 +3996,7 @@ function setFreeRoam(on) {
   for (const o of opponents) o.actor.group.visible = !on;
   for (const p of pickups)   p.mesh.visible = !on && p.active;
   for (const r of rotoli)    r.gr.visible = false;
+  if (on) { boss.esci(); birra.azzera(); }
   if (on) {
     game.state = 'racing';
     pHealth = MAX_HEALTH;      // niente danni: la barra resta piena
@@ -3879,7 +4024,9 @@ function showBriefing() {
   D('b-go').onclick = () => startEvent();
 }
 function begin() {                          // primo avvio, a caricamento finito
-  applyUpgrades(); pHealth = MAX_HEALTH; pScudo = 0; showBriefing();
+  applyUpgrades(); pHealth = MAX_HEALTH; pScudo = 0;
+  if (new URLSearchParams(location.search).get('boss')) return startBoss();   // ?boss=1: dritti al livello bonus
+  showBriefing();
 }
 // ?spegni=nebbia,lucciole,… — per cercare a occhio un difetto di resa (es. solo in Safari): toglie dalla scena
 // i pezzi nominati. Nomi: nebbia lucciole fuochi montagne luna nuvole acqua erba polvere animali ovoo massi pali alberi
@@ -3898,7 +4045,7 @@ function begin() {                          // primo avvio, a caricamento finito
   for (const n of spegni) { if (pezzi[n]) { pezzi[n](); console.info('spento:', n); } else console.warn('spegni: nome sconosciuto', n); }
 }
 window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
-  eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player,
+  eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player, boss, BOSS, startBoss, BOSS_TRATTO, birra, BIRRA, assorbiScudo,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
@@ -3909,7 +4056,7 @@ window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { r
   teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
                            playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
 onKill = () => { game.killsThisEvent++; };
-onPlayerDown = () => loseEvent('Sei caduto in battaglia!');
+onPlayerDown = () => game.type === 'boss' ? loseBoss('Sei caduto in battaglia!') : loseEvent('Sei caduto in battaglia!');
 
 //=========================================================================
 // LOOP — fixed timestep + interpolazione (moto identico e fluido a 60/120/144Hz)
@@ -4020,6 +4167,9 @@ function frame(now) {
     o.actor.turn     += (oTurn  - o.actor.turn)     * kk;
     o.actor.update(dtG, oSp);
   }
+  boss.disegna(dtG, alpha);              // il Boss: i pezzi del costume seguono la strada, le gambe corrono
+  birra.aggiorna(dtG, { racing: game.state === 'racing' && !freeRoam && game.type !== 'boss', dist: game.dist, resta: game.target - game.dist,
+                        position, playerX, speed, giocatore: player.group.position });   // BIRRA GRANDE: pattina, si acchiappa
   updatePickups(frameDt);
   updateRotoli(frameDt);                // casse-arma: rotazione, bob, raccolta
   hitSpark.update(dtG);                  // scintille d'impatto sui colpi

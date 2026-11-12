@@ -55,3 +55,7 @@ __pycache__/
 # Tracce di prova generate da tools/orecchie/gen-tracce.js (si rigenerano)
 tools/orecchie/tracce/
 *.blend1
+
+# Sorgenti pesanti dei modelli 3D (gli OBJ del generatore sono da ~180 MB; GitHub rifiuta i file oltre 100 MB).
+# Restano solo sul Mac: nel repo ci sono i GLB per il gioco e i .blend leggeri, e gli script in tools/boss/ per rifarli.
+assets/models/*/src/

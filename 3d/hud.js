@@ -104,6 +104,7 @@ export function creaHud(cv) {
 
   // ── eventi: banner, giudizio sul colpo, combo rotta ─────────────────────
   let banner = null, giudizio = null, rotta = 0;
+  let bordoSx = 0;                                   // dove finisce il riquadro in alto a sinistra: la barra del Boss non ci va sopra
   // NOTIFICHE (il takedown): frequenti, quindi non devono coprire la strada. Quattro modi di mostrarle, da scegliere:
   //   centro  · la fascia grande di prima (copre metà schermo)
   //   alto    · la stessa fascia ma sottile, appena sotto i riquadri in alto
@@ -229,7 +230,7 @@ export function creaHud(cv) {
       }]);
       if (ob) righe.push([T.s, y => testo(ob, M + pad, y, T.s, CIANO)]);
       const h = pad * 2 + righe.reduce((a, r) => a + r[0], 0) + gr * (righe.length - 1);
-      scatola(M, M, w, h, u);
+      scatola(M, M, w, h, u); bordoSx = M + w;
       let y = M + pad;
       for (const [alt, f] of righe) { f(y); y += alt + gr; }
     }
@@ -265,6 +266,16 @@ export function creaHud(cv) {
           let xb = x + pad + testo(fra, x + pad, yb, T.s, GRIGIO);
           xb += testo(n, xb, yb - (T.m - T.s), T.m, ultimo && lamp ? BIANCO : GIALLO);
           testo(tot, xb, yb, T.s, GRIGIO);
+        }
+        // BIRRA GRANDE in corso: una targhetta sopra il riquadro della vita, con i secondi rimasti a blocchi
+        // (negli ultimi lampeggia). Il colore è quello della birra.
+        if (S.birra) {
+          const nb = 14, lb = Math.max(6, Math.round(14 * u)), gb = Math.max(2, Math.round(4 * u)), tit = 'BIRRA GRANDE';
+          const wb = Math.max(larg(tit, T.s), nb * (lb + gb) - gb) + pad * 2, hb = pad * 2 + T.s + Math.round(10 * u) + lb;
+          const yb2 = y - hb - Math.round(14 * u), poco = S.birra.t < 0.22;
+          scatola(x, yb2, wb, hb, u);
+          testo(tit, x + pad, yb2 + pad, T.s, poco && lamp ? BIANCO : GIALLO);
+          blocchi(x + pad, yb2 + pad + T.s + Math.round(10 * u), nb, Math.ceil(S.birra.t * nb - 1e-6), lb, gb, poco && lamp ? BIANCO : GIALLO);
         }
       }
       // ── combo (a destra, a metà): rimbalza sulla cassa ──
@@ -315,8 +326,40 @@ export function creaHud(cv) {
       blocchi(x + pad + larg(et, T.s), yb, 5, n, lato, gap, n >= 5 ? ROSSO : GIALLO);
     }
 
+    if (S.boss) disegnaBoss(S.boss, W, H, u, T, M, pad, lamp, show);
     if (banner) disegnaBanner(S, W, H, u, T, lamp);
     if (notifica && !show) disegnaNotifica(S, W, H, u, T, M, lamp);
+  }
+
+  // ── BOSS (livello bonus): in alto al centro il nome e la vita, tre tratti da otto blocchi, uno per fase.
+  // Quando annuncia un attacco la scritta compare DAL LATO DA CUI ARRIVA il colpo e dice cosa fare: PARA o SCHIVA.
+  function disegnaBoss(B, W, H, u, T, M, pad, lamp, show) {
+    const N = 24, lato = Math.max(6, Math.round(20 * u)), gap = Math.max(2, Math.round(5 * u)), stacco = Math.max(4, Math.round(14 * u));
+    const nome = ascii(B.nome), stato = B.ruggisce ? 'RUGGISCE' : B.stordito ? 'STORDITO!' : 'FASE ' + B.fase + '/3';
+    const wBar = N * (lato + gap) - gap + 2 * stacco, sotto = Math.max(6, Math.round(14 * u));
+    const w = Math.max(wBar, larg(nome, T.m) + larg('STORDITO!', T.s) + pad * 2) + pad * 2, h = pad * 2 + T.m + sotto + lato;
+    // al centro; se lo schermo è stretto si sposta a destra del riquadro della tappa invece di coprirlo
+    const x = Math.round(Math.max(W / 2 - w / 2, Math.min(bordoSx + 16 * u, W - M - w))), y = show ? M + Math.round(150 * u) : M;
+    scatola(x, y, w, h, u);
+    testo(nome, x + pad, y + pad, T.m, B.fase >= 3 && lamp ? ROSSO : BIANCO);
+    testo(stato, x + w - pad, y + pad + (T.m - T.s), T.s, B.stordito && lamp ? BIANCO : GIALLO, 'right');
+    const pieni = Math.ceil(B.vita * N - 1e-6), yb = y + pad + T.m + sotto, x0 = x + Math.round((w - wBar) / 2);
+    for (let i = 0; i < N; i++) {
+      ctx.fillStyle = i < pieni ? (B.vita < 1 / 3 && lamp ? BIANCO : ROSSO) : SPENTO;
+      ctx.fillRect(x0 + i * (lato + gap) + Math.floor(i / 8) * stacco, yb, lato, lato);
+    }
+    if (B.avviso && !show) {
+      const a = B.avviso, s = ascii(a.testo) + '!', veloce = ora() % 0.16 < 0.08, tr = Math.max(8, Math.round(26 * u));
+      // di lato sta dalla parte del colpo; di fronte (lato 0) sta al centro, sotto la barra, e si può anche schivare
+      const cx = W / 2 + a.lato * W * 0.24, cy = a.lato ? Math.round(H * 0.3) : y + h + Math.round(22 * u);
+      testo(s, cx, cy, T.l, veloce ? ROSSO : BIANCO, 'center');
+      testo(a.lato ? (a.parabile ? 'PARA' : 'SCHIVA') : 'PARA O CAMBIA CORSIA', cx, cy + T.l + Math.round(12 * u), T.s, GIALLO, 'center');
+      if (a.lato) {
+        const xf = cx + a.lato * (larg(s, T.l) / 2 + tr * 1.5), yf = cy + T.l / 2;
+        ctx.fillStyle = veloce ? ROSSO : BIANCO;                // la freccia punta verso il lato del pericolo
+        ctx.beginPath(); ctx.moveTo(xf + a.lato * tr, yf); ctx.lineTo(xf, yf - tr); ctx.lineTo(xf, yf + tr); ctx.closePath(); ctx.fill();
+      }
+    }
   }
 
   function disegnaNotifica(S, W, H, u, T, M, lamp) {
