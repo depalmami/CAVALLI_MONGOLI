@@ -239,10 +239,10 @@ export function creaHud(cv) {
       tachimetro(S, W, H, u, T, M, lamp);       // la velocità sta in basso a destra, col nitro (vedi sotto)
       // ── vita, scudo, arma, bonus (in basso a sinistra) ──
       // Un blocco vale sempre la stessa vita (100/9 ≈ 11 punti): col bonus «vita max» la barra si ALLUNGA. Se diventasse
-      // troppo lunga i blocchi si stringono, ma il numero resta quello vero. Lo scudo (rotoli di pluriball) sta sotto.
+      // troppo lunga i blocchi si stringono, ma il numero resta quello vero. La barra PLURIBALL (lo scudo, riempito dai rotoli di pluriball) sta sotto.
       {
         const PUNTI = 100 / 9, nVita = Math.max(1, Math.round((S.vitaMax ?? 100) / PUNTI)), nScudo = Math.max(1, Math.round((S.scudoMax ?? 100) / PUNTI));
-        const gap = Math.max(2, Math.round(8 * u)), nBar = Math.max(nVita, nScudo), et = larg('SCUDO', T.s) + pad;
+        const gap = Math.max(2, Math.round(8 * u)), nBar = Math.max(nVita, nScudo), et = larg('PLURIBALL', T.s) + pad;
         const latoMax = Math.max(8, Math.round(26 * u)), barMax = Math.round(640 * u);
         const lato = Math.max(6, Math.min(latoMax, Math.floor((barMax - gap * (nBar - 1)) / nBar)));
         const arma = ascii(S.arma.nome) + (isFinite(S.arma.usi) ? ' X' + S.arma.usi : '');
@@ -258,7 +258,7 @@ export function creaHud(cv) {
         testo('VITA', x + pad, y + pad + ty, T.s, GIALLO);
         blocchi(x + pad + et, y + pad, nVita, Math.round(S.vita * nVita), lato, gap, S.vita < 0.3 && lamp ? BIANCO : ROSSO);
         const haScudo = (S.scudo ?? 0) > 0;
-        testo('SCUDO', x + pad, y + pad + rr + ty, T.s, haScudo ? ACQUA : GRIGIO);
+        testo('PLURIBALL', x + pad, y + pad + rr + ty, T.s, haScudo ? ACQUA : GRIGIO);
         blocchi(x + pad + et, y + pad + rr, nScudo, Math.ceil((S.scudo ?? 0) * nScudo - 1e-6), lato, gap, ACQUA);
         testo(arma, x + pad, y + pad + rr * 2, T.s, BIANCO);
         {

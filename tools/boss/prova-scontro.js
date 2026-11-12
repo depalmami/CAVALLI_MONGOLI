@@ -57,7 +57,7 @@ const OUT = __dirname + '/', pausa = ms => new Promise(r => setTimeout(r, ms));
   const leggi = () => page.evaluate(() => { const b = cm3d.boss; return {
     stato: b.o.state, gap: Math.round(cm3d.gapTo(b.o.pos)), lat: +b.o.lat.toFixed(2), vita: Math.round(b.o.health), fase: b.fase,
     att: b.stato.att && (b.stato.att.tipo + '/' + b.stato.att.stadio), piano: b.stato.piano.tipo,
-    px: +cm3d.playerX.toFixed(2), kmh: Math.round(cm3d.speed / 60), hp: Math.round(cm3d.pHealth), scudo: Math.round(cm3d.pScudo),
+    px: +cm3d.playerX.toFixed(2), kmh: Math.round(cm3d.speed / 60), hp: Math.round(cm3d.pHealth),
     game: cm3d.game.state, kills: cm3d.kills, pct: Math.round(100 * cm3d.game.dist / cm3d.game.target), rivali: cm3d.opponents.filter(o => o.state !== 'fuori').length }; });
   const t0 = Date.now();
   let n = 0, ultimo = null;

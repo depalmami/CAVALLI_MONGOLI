@@ -26,7 +26,7 @@ const OUT = __dirname + '/', pausa = ms => new Promise(r => setTimeout(r, ms));
     if (preso && s.effetto === 0) fine = true;
   }
   // il danno: assorbiScudo(100) con e senza effetto
-  const danni = await page.evaluate(() => { const r = {}; cm3d.pScudo = 0; r.senza = cm3d.assorbiScudo(100); return r; });
+  const danni = await page.evaluate(() => { const r = {}; r.senza = cm3d.assorbiScudo(100); return r; });
   console.log('presa:', preso, '· velocità massima vista:', kmhMax, 'km/h · danno su 100 a effetto finito:', danni.senza);
   await page.evaluate(() => { cm3d.birra.dati; });
   console.log('--- errori (' + errori.length + ')'); errori.slice(0, 8).forEach(e => console.log(e));
