@@ -31,7 +31,10 @@ export const BOSS = {
   // TARATURA (10 nov 2026, misurata col giocatore di prova): con 1500 di vita uno che non sbaglia un colpo lo
   // abbatteva in 28 s. A pugni si fanno al massimo ~65 danni al secondo standogli sempre addosso; un umano la metà.
   // (11 nov 2026) Col sorpasso e il faccia a faccia si mena meno: a 2600 il pilota ci metteva 130 s e il 70% del tratto.
-  vita: 2200,                                   // 110 pugni; la sciabola ne vale 6 l'una
+  // (12 nov 2026) Il viaggio dura ~45 minuti e il Boss è il gran finale: a 2200 il pilota lo abbatteva in 88 s, ora
+  // deve durare sui 4 minuti (il tratto, allungato col tracciato, è di ~10 minuti a tutta: c'è margine). A 5500 il
+  // pilota ci metteva 186 s.
+  vita: 6500,                                   // 325 pugni; la sciabola ne vale 6 l'una
   danni: { morso: 18, coda: 15, sbandata: 12, fauci: 20 },
   attesa: { 1: [3.0, 1.2], 2: [2.4, 1.0], 3: [1.7, 0.8] },   // secondi fra un attacco e l'altro: [minimo, casuale in più]
   scorta: { 1: 0, 2: 1, 3: 2 },                 // quanti predoni lo accompagnano, per fase

@@ -430,7 +430,12 @@ const ROAD = {
 //
 // Il seme è fisso: il tracciato è sempre lo stesso, non cambia a ogni ricarica.
 //=========================================================================
-const CAPITOLI = 20;                  // ~52000 segmenti, giro di ~15 minuti
+// (12 nov 2026) Erano 20 capitoli: 52000 segmenti, 14,5 minuti a tutta per le 12 tappe, ~20 col gioco vero. Il
+// viaggio deve durare ~45 minuti col Boss: a 48 sono ~35 minuti a tutta, ~38 col pilota automatico (che ci mette
+// l'8-12% in più del tempo a tutta), più le schermate fra le tappe e i ~4 minuti del Boss. Le tappe, il rilievo, i
+// suoli, le luci e il tratto del Boss sono frazioni del tracciato: si allungano da soli. Misurare con
+// tools/durata/misura-durata.js (dà anche la distanza minima fra tratti non vicini).
+const CAPITOLI = 48;
 const SEME = 12345;
 
 {
@@ -793,7 +798,7 @@ const grassTex   = loadPBR('assets/textures/Grass004/Grass004_1K-JPG');
 const PRE = 24;   // multiplo di PASSO: i quad restano allineati ai segmenti
 const ext = [];
 for (let i = PRE; i > 0; i--) ext.push({ x: 0, y: pts[0].y, z: -i * SEGMENT_LENGTH, heading: 0 });
-ext.push(...pts);
+for (const p of pts) ext.push(p);   // non push(...pts): oltre ~120000 punti gli argomenti sforano lo stack
 
 // PASSO: la geometria dei nastri viene campionata ogni 3 segmenti invece che a
 // ognuno. A 600 unità di corda su un raggio minimo di 16667 l'errore è 2.7 unità
@@ -3706,7 +3711,8 @@ function eventFor(i) {
   // un evento = una tappa del viaggio: parte dove finisce la precedente
   const k = Math.min(i, TAPPE.length - 1);
   const inizio = tappaInizio[k], dist = tappaInizio[k+1] - inizio;
-  const need = 3 + Math.floor(i/2), time = dist / (MAX_SPEED*0.72);
+  // abbattimenti: le tappe sono lunghe più del doppio di prima (12 nov 2026), e i rivali da incontrare pure
+  const need = 2 * (3 + Math.floor(i/2)), time = dist / (MAX_SPEED*0.72);
   const title = { race:'🏁 GARA', takedown:'⚔️ RAZZIA', survival:'🛡️ SOPRAVVIVENZA', time:'⏱️ CONTRO IL TEMPO' }[type];
   const desc = { race:'Taglia il traguardo davanti a tutti.', takedown:'Abbatti '+need+' rivali prima del traguardo.',
                  survival:'Arriva vivo al traguardo: i rivali sono più aggressivi.', time:'Raggiungi il traguardo prima che scada il tempo.' }[type];
@@ -3782,7 +3788,7 @@ function renderArrivo() {
 // o con ?boss=1 nell'indirizzo. Si corre un tratto già esistente; il Boss esce dal fiume e, se si arriva in
 // fondo senza averlo abbattuto, ci si rituffa. Si vince solo abbattendolo.
 //=========================================================================
-// Tre tappe di strada (circa 5 minuti a tutta): col sorpasso e il faccia a faccia lo scontro dura sui due minuti
+// Tre tappe di strada (circa 10 minuti a tutta col tracciato lungo): lo scontro dura sui 4 minuti, c'è margine
 const BOSS_TRATTO = { inizio: tappaInizio[7], fine: tappaInizio[10] };  // dalle Cascate di Ulaan Tsutgalan alle Rovine di Khar Balgas
 function startBoss() {
   if (freeRoam) return;
