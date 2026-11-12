@@ -1,0 +1,123 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Copertina — bozze</title>
+<!-- Compone i titoli sopra una scena scattata dal gioco (tools/copertina/scatta.js).
+     uso: bozze.html?stile=cabinato|arco|bandiera&scena=tramonto-eroico[&sotto=TESTO][&via=TESTO]
+     Stessi colori e stesso font dell'HUD (3d/hud.js): è la prova generale della schermata titolo in gioco. -->
+<style>
+  @font-face { font-family:'Press Start 2P'; src:url('../../vendor/font/PressStart2P.woff2') format('woff2'); font-display:block; }
+  html, body { margin:0; background:#000; }
+  canvas { display:block; width:1920px; height:1080px; }
+</style>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const Q = new URLSearchParams(location.search);
+const STILE = Q.get('stile') || 'cabinato', SCENA = Q.get('scena') || 'tramonto-eroico';
+const TITOLO = ['CAVALLI', 'MONGOLI'];
+const SOTTO = Q.get('sotto') ?? 'CORSA A KARAKORUM';        // sottotitolo: provvisorio, lo decide la band
+const VIA = Q.get('via') ?? 'START & GALOPPA';              // la frase del bottone del 2D
+// tavolozza dell'HUD: la bandiera mongola un po' scurita
+const MN_BLU = '#082c6b', MN_BLU_SCURO = '#041737', MN_ROSSO = '#a51f27', MN_ORO = '#dcb200', ORO_CHIARO = '#ffe066', BIANCO = '#fff';
+const PIXEL = '"Press Start 2P", monospace';
+const W = 1920, H = 1080, cv = document.getElementById('c'), x = cv.getContext('2d');
+
+const immagine = src => new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = src; });
+
+// ── scritte a pixel: contorno a scalino, ombra a scalino, faccia a due toni ──────────────────────────
+function scritta(t, cx, y, px, o = {}) {
+  const { colore = BIANCO, alto = null, bordo = MN_BLU_SCURO, sp = px / 8, ombra = null, dx = sp * 1.25, allinea = 'center' } = o;
+  x.font = px + 'px ' + PIXEL; x.textBaseline = 'top'; x.textAlign = allinea;
+  const giro = (ox, oy, c) => { x.fillStyle = c; for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) if (i || j) x.fillText(t, cx + ox + i * sp, y + oy + j * sp); };
+  if (ombra) { giro(dx, dx, bordo); x.fillStyle = ombra; x.fillText(t, cx + dx, y + dx); }
+  if (bordo) giro(0, 0, bordo);
+  x.fillStyle = colore; x.fillText(t, cx, y);
+  if (alto) {                                             // metà alta più chiara: il «lucido» delle scritte da sala giochi
+    x.save(); x.beginPath(); x.rect(0, y, W, Math.round(px * 0.5 / sp) * sp); x.clip();
+    x.fillStyle = alto; x.fillText(t, cx, y); x.restore();
+  }
+  return x.measureText(t).width;
+}
+// riquadro dell'HUD: pieno, bordo bianco spesso, ombra a scalino
+function riquadro(rx, ry, rw, rh, fondo, b = 6, om = 8) {
+  x.fillStyle = 'rgba(0,0,0,.55)'; x.fillRect(rx + om, ry + om, rw, rh);
+  x.fillStyle = BIANCO; x.fillRect(rx, ry, rw, rh);
+  x.fillStyle = fondo; x.fillRect(rx + b, ry + b, rw - 2 * b, rh - 2 * b);
+}
+function targa(t, cx, y, px, fondo, colore = BIANCO, mx = px * 1.2, my = px * 0.8) {
+  x.font = px + 'px ' + PIXEL; const w = x.measureText(t).width + 2 * mx, h = px + 2 * my;
+  riquadro(Math.round(cx - w / 2), y, Math.round(w), Math.round(h), fondo);
+  x.fillStyle = colore; x.textAlign = 'center'; x.textBaseline = 'top'; x.fillText(t, cx, y + my + px * 0.06);
+  return h;
+}
+function velo(y0, y1, c0, c1) { const g = x.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, c0); g.addColorStop(1, c1); x.fillStyle = g; x.fillRect(0, Math.min(y0, y1), W, Math.abs(y1 - y0)); }
+
+// ── A · CABINATO: il linguaggio dell'HUD, da sala giochi ────────────────────────────────────────────
+function cabinato(img) {
+  x.drawImage(img, 0, 0, W, H);
+  velo(0, 420, 'rgba(4,23,55,.62)', 'rgba(4,23,55,0)'); velo(H, H - 220, 'rgba(4,23,55,.6)', 'rgba(4,23,55,0)');
+  scritta(TITOLO.join(' '), W / 2, 84, 112, { colore: MN_ORO, alto: ORO_CHIARO, ombra: MN_ROSSO, sp: 8, dx: 14 });
+  if (SOTTO) targa(SOTTO, W / 2, 252, 32, MN_BLU);
+  if (VIA) targa(VIA, W / 2, 976, 32, MN_ROSSO);
+  scritta('12 TAPPE', 48, 1016, 16, { colore: BIANCO, allinea: 'left', sp: 2 });
+  scritta('1 GIOCATORE', W - 48, 1016, 16, { colore: BIANCO, allinea: 'right', sp: 2 });
+}
+
+// ── B · ARCO: la scritta storica della band (2D), ad arco, nei colori nuovi ─────────────────────────
+function arco(img) {
+  x.drawImage(img, 0, 0, W, H);
+  velo(0, 380, 'rgba(4,23,55,.45)', 'rgba(4,23,55,0)');
+  const testo = TITOLO.join(' '), px = 190, font = `italic 900 ${px}px "Arial Black", Impact, sans-serif`;
+  x.font = font; x.textBaseline = 'alphabetic'; x.textAlign = 'center';
+  const larg = [...testo].map(ch => x.measureText(ch).width * 0.93), tot = larg.reduce((a, b) => a + b, 0);
+  const k = Math.min(1, 1580 / tot);                     // stringe se non ci sta
+  let cur = W / 2 - tot * k / 2;
+  const lettere = [...testo].map((ch, i) => { const w = larg[i] * k, cx = cur + w / 2; cur += w; const u = (cx - W / 2) / (W / 2);
+    return { ch, cx, u, y: 222 + 84 * u * u, rot: 0.2 * u, sc: k * (1 + 0.22 * u * u) }; });
+  const passata = (dx, dy, fai) => { for (const l of lettere) { x.save(); x.translate(l.cx + dx, l.y + dy); x.rotate(l.rot); x.scale(l.sc * 0.86, l.sc); fai(l.ch); x.restore(); } };
+  x.lineJoin = 'round';
+  passata(16, 18, ch => { x.strokeStyle = MN_BLU_SCURO; x.lineWidth = 30; x.strokeText(ch, 0, 0); });            // alone scuro
+  for (let d = 16; d >= 1; d--) passata(d, d * 1.1, ch => { x.fillStyle = d > 12 ? '#5d0f15' : MN_ROSSO; x.fillText(ch, 0, 0); });   // spessore rosso
+  passata(0, 0, ch => { x.strokeStyle = MN_BLU_SCURO; x.lineWidth = 16; x.strokeText(ch, 0, 0); });
+  passata(0, 0, ch => { x.strokeStyle = MN_ORO; x.lineWidth = 6; x.strokeText(ch, 0, 0); x.fillStyle = BIANCO; x.fillText(ch, 0, 0); });
+  // il bottone giallo del 2D
+  if (VIA) {
+    const bw = 620, bh = 92, bx = W / 2 - bw / 2, by = 962;
+    x.fillStyle = 'rgba(0,0,0,.45)'; x.beginPath(); x.roundRect(bx + 6, by + 10, bw, bh, 46); x.fill();
+    const g = x.createLinearGradient(0, by, 0, by + bh); g.addColorStop(0, ORO_CHIARO); g.addColorStop(1, MN_ORO);
+    x.fillStyle = g; x.strokeStyle = BIANCO; x.lineWidth = 6; x.beginPath(); x.roundRect(bx, by, bw, bh, 46); x.fill(); x.stroke();
+    x.font = '900 46px "Arial Black", Impact, sans-serif'; x.fillStyle = MN_BLU_SCURO; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(VIA, W / 2, by + bh / 2 + 3);
+  }
+}
+
+// ── C · BANDIERA: pannello coi tre teli della bandiera, la scena a fianco ───────────────────────────
+function bandiera(img) {
+  const P = 540;                                          // larghezza del pannello
+  x.drawImage(img, 170, 0, W, H); x.drawImage(img, 0, 0, 200, H, 0, 0, 170, H);   // la scena scorre a destra: gli attori restano fuori dal pannello
+  velo(H, H - 160, 'rgba(4,23,55,.5)', 'rgba(4,23,55,0)');
+  x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(P, 0, 14, H);
+  const t = P / 3; x.fillStyle = MN_ROSSO; x.fillRect(0, 0, P, H); x.fillStyle = MN_BLU; x.fillRect(t, 0, t, H);
+  x.fillStyle = BIANCO; x.fillRect(P - 8, 0, 8, H);
+  // sole e mezzaluna a pixel, in oro (griglia 15x17, ingrandita)
+  const u = 9, ox = Math.round(P / 2 - 7.5 * u), oy = 120;
+  x.fillStyle = MN_ORO;
+  for (let j = 0; j < 17; j++) for (let i = 0; i < 15; i++) {
+    const sole = Math.hypot(i - 7, j - 4) <= 4.3;
+    const luna = Math.hypot(i - 7, j - 9) <= 7.3 && Math.hypot(i - 7, j - 7) > 6.6 && j > 9;
+    if (sole || luna) x.fillRect(ox + i * u, oy + j * u, u, u);
+  }
+  scritta(TITOLO[0], P / 2, 356, 64, { colore: BIANCO, ombra: '#000', sp: 8, dx: 8, bordo: MN_BLU_SCURO });
+  scritta(TITOLO[1], P / 2, 452, 64, { colore: MN_ORO, alto: ORO_CHIARO, ombra: '#000', sp: 8, dx: 8, bordo: MN_BLU_SCURO });
+  if (SOTTO) { const r = SOTTO.split(' '), m = Math.ceil(r.length / 2);
+    scritta(r.slice(0, m).join(' '), P / 2, 588, 24, { colore: BIANCO, sp: 3 }); scritta(r.slice(m).join(' '), P / 2, 628, 24, { colore: BIANCO, sp: 3 }); }
+  if (VIA) targa(VIA, P / 2, 880, 24, MN_ORO, MN_BLU_SCURO, 26, 22);
+  scritta('12 TAPPE - 1 GIOCATORE', P / 2, 1000, 16, { colore: BIANCO, sp: 2 });
+}
+
+(async () => {
+  await document.fonts.load('32px ' + PIXEL); await document.fonts.load('italic 900 100px "Arial Black"');
+  const img = await immagine('scene/' + SCENA + '.jpg');
+  x.imageSmoothingQuality = 'high';
+  ({ cabinato, arco, bandiera }[STILE] || cabinato)(img);
+  window.pronto = true;
+})();
+</script>
