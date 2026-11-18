@@ -193,7 +193,9 @@ export function creaPluriball({ scene, posToWorld, gapTo, TRACK_LENGTH, HORSE_HE
       A.y += 800 + Math.sin(r.t * 2.2) * 130;                               // galleggia
       r.gr.position.copy(A);
       r.gr.rotation.y += dt * 1.1;                                          // gira come un'insegna...
-      r.rullo.rotation.z += dt * 2.2;                                       // ...e su se stesso, come un rullo (l'asse del rotolo è Z)
+      // ...e su se stesso sull'asse VERTICALE (Y), non su quello lungo del modello (Z, orizzontale): girando su Z si
+      // vedrebbe spinnare il rotolo visto di taglio, quasi fermo da chi guarda lungo la pista (12 nov 2026, bug segnalato)
+      r.rullo.rotation.y += dt * 2.2;
       r.alone.scale.setScalar(PLURIBALL.lungo * 2.0 * (1 + 0.06 * Math.sin(r.t * 5)));
       if (r.preso >= 0) {                                                   // preso: vola verso il giocatore e rimpicciolisce
         r.preso += dt; const u = Math.min(1, r.preso / 0.4), e = u * u * (3 - 2 * u);

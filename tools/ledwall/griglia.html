@@ -1,0 +1,61 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Griglia ledwall</title>
+<!-- GRIGLIA DI TARATURA DEL LEDWALL (14 nov 2026). Il controller (NovaStar) si presenta al Mac come uno schermo
+     1920x1080 ma sul muro mette solo una parte del segnale, e non si sa quale. Questa pagina, a schermo intero sullo
+     schermo del ledwall, disegna una griglia in PIXEL VERI con le coordinate scritte: dalla foto del muro si legge
+     quali numeri stanno sui bordi, cioè x, y, larghezza e altezza da mettere in «Uscita esatta» nella consolle.
+     Clic o F: schermo intero. -->
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; cursor: none; }
+  canvas { display: block; position: absolute; left: 0; top: 0; }
+  #velo { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column;
+          color: #fff; font: 700 34px/1.4 Arial, sans-serif; background: rgba(0,0,0,.85); cursor: pointer; text-align: center; }
+  #velo small { font-size: 20px; opacity: .75; }
+</style>
+<canvas id="c"></canvas>
+<div id="velo">Trascina questa finestra sullo schermo del ledwall<br>poi clicca qui per lo schermo intero<br><small>F per entrare/uscire</small></div>
+<script>
+const c = document.getElementById('c'), x = c.getContext('2d'), velo = document.getElementById('velo');
+function disegna() {
+  const r = devicePixelRatio || 1, W = Math.round(innerWidth * r), H = Math.round(innerHeight * r);
+  c.width = W; c.height = H; c.style.width = innerWidth + 'px'; c.style.height = innerHeight + 'px';
+  x.fillStyle = '#111'; x.fillRect(0, 0, W, H);
+  // righe ogni 32 px (deboli), 128 (forti) con le coordinate
+  for (let p = 0; p <= Math.max(W, H); p += 32) {
+    const forte = p % 128 === 0;
+    x.strokeStyle = forte ? '#5a8cff' : '#2a3350'; x.lineWidth = forte ? 2 : 1;
+    if (p <= W) { x.beginPath(); x.moveTo(p + .5, 0); x.lineTo(p + .5, H); x.stroke(); }
+    if (p <= H) { x.beginPath(); x.moveTo(0, p + .5); x.lineTo(W, p + .5); x.stroke(); }
+  }
+  x.font = 'bold 22px Menlo, monospace'; x.textBaseline = 'top';
+  for (let px = 0; px < W; px += 128) for (let py = 0; py < H; py += 128) {
+    x.fillStyle = '#ffffff'; x.fillText(px + ',' + py, px + 12, py + 12);
+  }
+  // rettangoli di riferimento: le misure dei preset di render
+  const rett = [[768, 512, '#ffd400'], [1024, 640, '#33ff66'], [1152, 768, '#ff66ff']];
+  for (const [w, h, col] of rett) {
+    x.strokeStyle = col; x.lineWidth = 4; x.strokeRect(2, 2, w - 4, h - 4);
+    x.fillStyle = col; x.font = 'bold 26px Menlo, monospace'; x.fillText(w + 'x' + h, w - 190, h - 36);
+  }
+  // bordo dell'intero schermo, rosso
+  x.strokeStyle = '#ff2a2a'; x.lineWidth = 8; x.strokeRect(4, 4, W - 8, H - 8);
+  // croce al centro e cosa vede il browser
+  x.strokeStyle = '#fff'; x.lineWidth = 3;
+  x.beginPath(); x.moveTo(W / 2 - 60, H / 2); x.lineTo(W / 2 + 60, H / 2); x.moveTo(W / 2, H / 2 - 60); x.lineTo(W / 2, H / 2 + 60); x.stroke();
+  x.fillStyle = 'rgba(0,0,0,.75)'; x.fillRect(W / 2 - 330, H / 2 + 80, 660, 110);
+  x.fillStyle = '#fff'; x.font = 'bold 28px Menlo, monospace'; x.textAlign = 'center';
+  x.fillText('schermo ' + screen.width + 'x' + screen.height + '  dpr ' + r, W / 2, H / 2 + 92);
+  x.fillText('tela ' + W + 'x' + H + (document.fullscreenElement ? '  (schermo intero)' : '  (IN FINESTRA)'), W / 2, H / 2 + 136);
+  x.textAlign = 'left';
+}
+function pieno() {
+  const el = document.documentElement;
+  (document.fullscreenElement ? document.exitFullscreen() : el.requestFullscreen()).catch(() => {});
+}
+velo.addEventListener('click', () => { velo.style.display = 'none'; pieno(); });
+addEventListener('keydown', e => { if (e.key === 'f' || e.key === 'F') { velo.style.display = 'none'; pieno(); } });
+addEventListener('resize', disegna);
+document.addEventListener('fullscreenchange', disegna);
+disegna();
+</script>

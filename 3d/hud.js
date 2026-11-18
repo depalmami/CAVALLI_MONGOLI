@@ -43,6 +43,18 @@ export function creaHud(cv) {
     document.fonts.load('16px ' + FONT).then(() => { fontPronto = true; cache.clear(); }, () => { fontPronto = true; });
   } else fontPronto = true;
 
+  // ── icone delle armi (pixel art 32x32, tools/armi/disegna-icone.js) ─────────
+  // Si caricano alla prima richiesta; finché non sono pronte, o se il file manca, la funzione dà null e l'HUD scrive solo il nome.
+  const icone = {};
+  // `px` 16 = la versione piccola ridisegnata a mano (arma-<k>-16.png), altrimenti quella a 32 (che a 64 si usa raddoppiata)
+  function icona(k, px = 32) {
+    if (!k) return null;
+    const nome = k + (px === 16 ? '-16' : '');
+    let i = icone[nome];
+    if (!i) { i = icone[nome] = new Image(); i.onerror = () => { i.rotta = true; }; i.src = 'assets/hud/arma-' + nome + '.png'; }
+    return i.complete && i.naturalWidth && !i.rotta ? i : null;
+  }
+
   // ── scritte pre-disegnate ───────────────────────────────────────────────
   function glifo(s, size, colore) {
     const k = size + '|' + colore + '|' + s;
@@ -131,6 +143,8 @@ export function creaHud(cv) {
     disegnaHud(S, W, H);
     if (S.scelta && fontPronto) disegnaScelta(S.scelta, S, W, H);   // il menu dei bonus si vede in ogni modo, anche PULITO
     else rettScelta = [];
+    if (S.schermata && fontPronto) disegnaSchermata(S.schermata, S, W, H);   // il KO: anche lui in ogni modo
+    else rettSchermata = [];
   }
 
   // ── SCELTA DEL BONUS: a schermo, a 8 bit, nei colori della Mongolia ─────────
@@ -176,6 +190,118 @@ export function creaHud(cv) {
   // clic sulla tela (coordinate 0..1): quale casella
   function sceltaA(xn, yn) {
     const r = rettScelta.find(r => xn >= r.x && xn <= r.x + r.w && yn >= r.y && yn <= r.y + r.h);
+    return r ? r.i : -1;
+  }
+
+  // ── SCHERMATE (13 nov 2026): briefing, negozio, KO, arrivo, Boss. Sulla tela e non nel DOM, così arrivano in
+  // proiezione (le schermate DOM al secondo schermo non arrivano mai). Si vedono in ogni modo, anche PULITO.
+  // C = { titolo, occhiello, motto, motivo, righe: [[etichetta, valore]], note: [testi],
+  //       opzioni: [{ nome, sotto, ok, riga }], indice, aiuto, sfondo }   — bottoni con la stessa `riga` stanno
+  //       affiancati, senza `riga` ognuno ha la sua fila. `sfondo` (un <img> già in caricamento, lo passa la
+  //       pagina: l'HUD non sa i percorsi degli asset) copre tutta la tela: solo i bottoni e l'aiuto restano,
+  //       niente pannello (è la copertina vera, i titoli (13 nov 2026) sono il primo caso).
+  let rettSchermata = [];
+  function disegnaCover(img, W, H) {                // disegna `img` a riempire W×H, ritagliando il resto (CSS cover)
+    const ir = img.naturalWidth / img.naturalHeight, cr = W / H;
+    let sw, sh, sx, sy;
+    if (ir > cr) { sh = img.naturalHeight; sw = sh * cr; sx = (img.naturalWidth - sw) / 2; sy = 0; }
+    else { sw = img.naturalWidth; sh = sw / cr; sx = 0; sy = (img.naturalHeight - sh) / 2; }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  }
+  function disegnaSchermata(C, S, W, H) {
+    const u = H / 1080, px = n => Math.max(8, Math.round(n * u / 8) * 8), sp = n => Math.round(n * u);
+    const T = { s: px(16), m: px(24), xl: px(56) };
+    const lamp = S.musica.fase < 0.5, o = Math.max(2, Math.round(6 * u)), b = Math.max(2, Math.round(4 * u));
+    // il corpo più grande (a passi di 8, per restare nitido) che sta in `max`
+    const corpo = (t, size, max) => { while (size > 8 && larg(t, size) > max) size = Math.max(8, size - 8); return size; };
+    const scrivi = (t, x, y, size, colore, max) => { t = ascii(t); const c = corpo(t, size, max); testo(t, x, y + (size - c) / 2, c, colore, 'center'); };
+    const conSfondo = C.sfondo && C.sfondo.complete && C.sfondo.naturalWidth;
+    if (conSfondo) {                                 // copertina vera: solo i bottoni, in basso, sopra l'immagine
+      disegnaCover(C.sfondo, W, H);
+      const bh = Math.round(T.m + sp(36)), gap2 = sp(16);
+      const gruppi2 = []; C.opzioni.forEach((op, i) => { const g = op.riga ?? i; (gruppi2[g] = gruppi2[g] || []).push({ ...op, i }); });
+      const G2 = gruppi2.filter(Boolean);
+      const pw2 = Math.min(W * 0.7, 900 * u), x02 = W / 2 - pw2 / 2, aiuto2 = sp(50);
+      const fasciaY = H - sp(24) - G2.length * (bh + gap2) - aiuto2;
+      ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(0, fasciaY, W, H - fasciaY);
+      let y2 = H - sp(24) - aiuto2 - G2.length * (bh + gap2) + gap2;
+      rettSchermata = [];
+      for (const g of G2) {
+        const w = (pw2 - gap2 * (g.length - 1)) / g.length;
+        g.forEach((op, k) => {
+          const bx = Math.round(x02 + k * (w + gap2)), bw = Math.round(w), sel = op.i === C.indice, ok = op.ok !== false;
+          ctx.fillStyle = '#000'; ctx.fillRect(bx + o, y2 + o, bw, bh);
+          ctx.fillStyle = !ok ? '#0d1530' : sel ? MN_ROSSO : MN_BLU_SCURO; ctx.fillRect(bx, y2, bw, bh);
+          ctx.strokeStyle = !ok ? SPENTO : sel && lamp ? MN_ORO : BIANCO; ctx.lineWidth = sel ? b * 1.6 : b;
+          ctx.strokeRect(bx + b / 2, y2 + b / 2, bw - b, bh - b);
+          scrivi(op.nome, bx + bw / 2, y2 + (bh - T.m) / 2, T.m, !ok ? GRIGIO : sel ? MN_ORO : BIANCO, bw - sp(16));
+          rettSchermata.push({ x: bx / W, y: y2 / H, w: bw / W, h: bh / H, i: op.i });
+        });
+        y2 += bh + gap2;
+      }
+      scrivi(C.aiuto, W / 2, H - sp(24) - T.s, T.s, BIANCO, W * 0.85);
+      return;
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, W, H);
+    const pw = Math.min(W * 0.86, 1400 * u), pad = sp(30), gap = sp(18), largo = pw - pad * 2;
+    const testa = Math.round(T.xl + sp(44));
+    const linee = [];                                                     // [testo, corpo, colore, spazio dopo]
+    if (C.occhiello) linee.push([C.occhiello, T.s, MN_ORO, sp(18)]);
+    if (C.motto)     linee.push([C.motto, T.s, GRIGIO, sp(18)]);
+    if (C.motivo)    linee.push([C.motivo, T.m, BIANCO, sp(30)]);
+    const R = C.righe || [], perFila = Math.max(1, Math.min(3, R.length)), file = Math.ceil(R.length / 3);
+    const rw = (largo - gap * (perFila - 1)) / perFila, rh = Math.round(T.s + T.m + sp(40));
+    const note = C.note || [];
+    const gruppi = [];
+    C.opzioni.forEach((op, i) => { const g = op.riga ?? i; (gruppi[g] = gruppi[g] || []).push({ ...op, i }); });   // senza `riga`: uno sotto l'altro
+    const G = gruppi.filter(Boolean);
+    const alto = g => Math.round(T.m + sp(36) + (g.some(x => x.sotto) ? T.s + sp(10) : 0));
+    let ph = testa + pad + pad + T.s;
+    for (const l of linee) ph += l[1] + l[3];
+    if (R.length) ph += file * (rh + gap) - gap + sp(28);
+    ph += note.length * (T.s + sp(18)) + (note.length ? sp(10) : 0);
+    for (const g of G) ph += alto(g) + gap;
+    const x0 = Math.round(W / 2 - pw / 2), y0 = Math.max(0, Math.round(H / 2 - ph / 2));
+    ctx.fillStyle = '#000'; ctx.fillRect(x0 + o, y0 + o, pw, ph);
+    ctx.fillStyle = MN_BLU; ctx.fillRect(x0, y0, pw, ph);
+    ctx.fillStyle = MN_ROSSO; ctx.fillRect(x0, y0, pw, testa);
+    ctx.fillStyle = MN_ORO; ctx.fillRect(x0, y0 + testa - b, pw, b);
+    ctx.strokeStyle = BIANCO; ctx.lineWidth = b; ctx.strokeRect(x0 + b / 2, y0 + b / 2, pw - b, ph - b);
+    scrivi(C.titolo, W / 2, y0 + (testa - T.xl) / 2, T.xl, lamp ? MN_ORO : BIANCO, largo);
+    let y = y0 + testa + pad;
+    for (const [t, c, col, dopo] of linee) { scrivi(t, W / 2, y, c, col, largo); y += c + dopo; }
+    R.forEach(([k, v], i) => {
+      const fila = Math.floor(i / 3), quanti = Math.min(3, R.length - fila * 3), w = (largo - gap * (quanti - 1)) / quanti;
+      const rx = Math.round(x0 + pad + (i % 3) * (w + gap)), ry = Math.round(y + fila * (rh + gap));
+      ctx.fillStyle = MN_BLU_SCURO; ctx.fillRect(rx, ry, Math.round(w), rh);
+      ctx.strokeStyle = BIANCO; ctx.lineWidth = b; ctx.strokeRect(rx + b / 2, ry + b / 2, Math.round(w) - b, rh - b);
+      scrivi(k, rx + w / 2, ry + sp(14), T.s, GRIGIO, w - sp(20));
+      scrivi(String(v), rx + w / 2, ry + sp(14) + T.s + sp(12), T.m, BIANCO, w - sp(20));
+    });
+    if (R.length) y += file * (rh + gap) - gap + sp(28);
+    for (const t of note) { scrivi(t, W / 2, y, T.s, MN_ORO, largo); y += T.s + sp(18); }
+    if (note.length) y += sp(10);
+    rettSchermata = [];
+    for (const g of G) {
+      const h = alto(g), w = (largo - gap * (g.length - 1)) / g.length;
+      g.forEach((op, k) => {
+        const bx = Math.round(x0 + pad + k * (w + gap)), bw = Math.round(w), sel = op.i === C.indice, ok = op.ok !== false;
+        ctx.fillStyle = '#000'; ctx.fillRect(bx + o, y + o, bw, h);
+        ctx.fillStyle = !ok ? '#0d1530' : sel ? MN_ROSSO : MN_BLU_SCURO; ctx.fillRect(bx, y, bw, h);
+        ctx.strokeStyle = !ok ? SPENTO : sel && lamp ? MN_ORO : BIANCO; ctx.lineWidth = sel ? b * 1.6 : b;
+        ctx.strokeRect(bx + b / 2, y + b / 2, bw - b, h - b);
+        const ty = y + (h - T.m - (op.sotto ? T.s + sp(10) : 0)) / 2;
+        scrivi(op.nome, bx + bw / 2, ty, T.m, !ok ? GRIGIO : sel ? MN_ORO : BIANCO, bw - sp(16));
+        if (op.sotto) scrivi(op.sotto, bx + bw / 2, ty + T.m + sp(10), T.s, !ok ? SPENTO : sel ? BIANCO : GRIGIO, bw - sp(16));
+        rettSchermata.push({ x: bx / W, y: y / H, w: bw / W, h: h / H, i: op.i });
+      });
+      y += h + gap;
+    }
+    scrivi(C.aiuto, W / 2, y, T.s, BIANCO, largo);
+  }
+  // clic sulla tela (coordinate 0..1): quale opzione della schermata
+  function schermataA(xn, yn) {
+    const r = rettSchermata.find(r => xn >= r.x && xn <= r.x + r.w && yn >= r.y && yn <= r.y + r.h);
     return r ? r.i : -1;
   }
 
@@ -249,8 +375,12 @@ export function creaHud(cv) {
         // il contatore scende: BONUS FRA 5, 4, 3, 2, 1 — poi riparte da 7, poi da 10… — e accanto i takedown totali
         const fra = 'BONUS FRA ', n = String(S.mancano ?? 0), tot = `   KO TOT ${S.takedown}`;
         const wBott = larg(fra, T.s) + larg(n, T.m) + larg(tot, T.s);
-        const w = Math.max(et + nBar * (lato + gap) - gap, larg(arma, T.s), wBott) + pad * 2;
         const rr = Math.max(lato, T.s) + Math.max(8, Math.round(14 * u));
+        // l'icona dell'arma (assets/hud/arma-<chiave>.png, 32x32): a 1x, 2x o 0.5x, mai a scale che impastano i pixel; se il file
+        // manca o non è ancora arrivato, resta il solo nome
+        const dimIc = rr >= 64 ? 64 : rr >= 32 ? 32 : 16, img = icona(S.arma.chiave, dimIc === 16 ? 16 : 32);
+        const ic = img ? dimIc : 0, gi = ic ? Math.max(6, Math.round(10 * u)) : 0;
+        const w = Math.max(et + nBar * (lato + gap) - gap, larg(arma, T.s) + ic + gi, wBott) + pad * 2;
         const h = pad * 2 + rr * 2 + riga + T.s + Math.round(4 * u);
         const x = M, y = H - M - h;
         scatola(x, y, w, h, u);
@@ -260,9 +390,12 @@ export function creaHud(cv) {
         const haScudo = (S.scudo ?? 0) > 0;
         testo('PLURIBALL', x + pad, y + pad + rr + ty, T.s, haScudo ? ACQUA : GRIGIO);
         blocchi(x + pad + et, y + pad + rr, nScudo, Math.ceil((S.scudo ?? 0) * nScudo - 1e-6), lato, gap, ACQUA);
-        testo(arma, x + pad, y + pad + rr * 2, T.s, BIANCO);
+        const ya = y + pad + rr * 2;
+        // l'icona si centra sulla scritta (la riga non cambia altezza: sopra c'è il vuoto sotto la barra dello scudo)
+        if (ic) ctx.drawImage(img, Math.round(x + pad), Math.round(ya + (T.s - ic) / 2), ic, ic);
+        testo(arma, x + pad + ic + gi, ya, T.s, BIANCO);
         {
-          const yb = y + pad + rr * 2 + riga, ultimo = (S.mancano ?? 0) <= 1;
+          const yb = ya + riga, ultimo = (S.mancano ?? 0) <= 1;
           let xb = x + pad + testo(fra, x + pad, yb, T.s, GRIGIO);
           xb += testo(n, xb, yb - (T.m - T.s), T.m, ultimo && lamp ? BIANCO : GIALLO);
           testo(tot, xb, yb, T.s, GRIGIO);
@@ -479,7 +612,7 @@ export function creaHud(cv) {
   }
 
   return {
-    disegna, colpo, ascii, sceltaA,
+    disegna, colpo, ascii, sceltaA, schermataA,
     banner: lanciaBanner,
     notifica: lanciaNotifica,
     setNotifica(st) { stileNotifica = st; },

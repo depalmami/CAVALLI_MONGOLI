@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cavalli Mongoli 3D — Prototipo (Opzione A/B)</title>
+<title>Cavalli Mongoli 3D</title>
 <link rel="icon" href="data:,">
 <style>
   /* font a pixel dell'HUD Cabinato: lo stesso del 2D, vendorato (licenza SIL OFL) */
@@ -236,7 +236,7 @@
       <div class="nota">Col pilota il cavallo corre, para e attacca da solo: serve per stare
         alla musica invece che al gioco.</div>
       <div class="nota">🎮 Pad: stick/croce sterza · RT gas · LT freno · X/B attacca ·
-        Y calcio · LB parata · RB boost · START pilota.</div>
+        Y calcio · LB parata · RB boost · MENU pausa.</div>
       <div class="nota">⌨️ Tastiera: ↑↓ gas · ←→ sterza · <b>J/L</b> attacca · <b>K</b> calcio · <b>I</b> parata ·
         <b>Shift</b> boost · <b>N</b> libera · <b>O</b> pilota · <b>T</b> tempo · <b>U</b> uno ·
         <b>0–4</b> smarmella · <b>V</b> HUD · <b>R</b> riparti</div>
@@ -253,9 +253,10 @@
       </select>
       <select id="proj-res">
         <option value="auto">Render: come l'anteprima</option>
+        <option value="768x512">Render: 768×512 (ledwall, pixel 1:1)</option>
+        <option value="1024x640">Render: 1024×640 (16:10)</option>
         <option value="1152x768">Render: 1152×768 (banda centrale 3:2)</option>
         <option value="1920x1080">Render: 1920×1080 (Full HD)</option>
-        <option value="768x512">Render: 768×512 (ledwall, pixel 1:1)</option>
       </select>
       <div class="bottoni">
         <button id="proj-open">▶︎ Apri proiezione</button>
@@ -269,15 +270,34 @@
         </select></div>
       <div id="proj-stato" class="nota">spenta</div>
       <div class="nota">In proiezione va <b>solo il gioco</b>: mai i pannelli, mai questa console.</div>
+      <label class="spunta"><input type="checkbox" id="out-fissa-on"> Uscita esatta (ledwall: pixel per pixel)</label>
+      <div id="out-fissa-campi" style="display:none">
+        <div class="riga"><span>Pixel</span>
+          <input type="text" id="out-fissa-w" inputmode="numeric" pattern="[0-9]*" placeholder="larghezza" style="width:6em">
+          <span>×</span>
+          <input type="text" id="out-fissa-h" inputmode="numeric" pattern="[0-9]*" placeholder="altezza" style="width:6em"></div>
+        <div class="riga"><span>Da x, y</span>
+          <input type="text" id="out-fissa-x" inputmode="numeric" pattern="[0-9]*" value="0" style="width:6em">
+          <span>,</span>
+          <input type="text" id="out-fissa-y" inputmode="numeric" pattern="[0-9]*" value="0" style="width:6em"></div>
+      </div>
+      <div class="nota">Per i ledwall: il loro controller mostra solo i propri pixel veri, presi dall'angolo in
+        alto a sinistra del segnale del Mac. Se sul muro vedi solo un pezzo del gioco ingrandito, spunta qui e
+        scrivi i pixel del muro (es. 1024 × 640): il gioco si mette in quell'angolo, pixel per pixel.</div>
+      <div>🎨 Saturazione del proiettore/ledwall: <span class="val" id="proj-sat-val">100%</span>
+        <input type="range" id="proj-sat" min="0" max="200" step="5" value="100"></div>
+      <div class="nota">Non è lo show: resta uguale a SMARMELLA 0. Regolala per il device di uscita della serata.</div>
     </div>
 
     <!-- ══ SHOW ══ -->
     <div class="card">
       <h2>✨ Show live — a tempo</h2>
+      <label class="spunta"><input type="checkbox" id="live-on" checked> 🎬 Show live attivo</label>
       <div class="bottoni">
         <button id="btn-tap">🎉 Tap tempo (T)</button>
         <span id="party-info" class="nota" style="align-self:center">spento</span>
       </div>
+      <div id="live-controlli">
       <label class="spunta"><input type="checkbox" id="live-flash"> ⚡ Flash strobo <span class="tasto">F</span></label>
       <label class="spunta"><input type="checkbox" id="live-bonus"> 💬 Scritta lampeggiante <span class="tasto">G</span></label>
       <input type="text" id="live-text" value="CAVALLI MONGOLI" maxlength="24" placeholder="Testo dello show…">
@@ -294,6 +314,9 @@
         <input type="range" id="live-int" min="0" max="200" step="10" value="120"></div>
       <div>Intensità festa: <span class="val" id="gain-val">600%</span>
         <input type="range" id="party-gain" min="0" max="1500" step="25" value="600"></div>
+      </div>
+      <div class="nota">Spento: niente festa sul battito (alberi e lampi di luce), niente flash, niente scritta. Il tap
+        tempo resta, perché serve anche al resto.</div>
     </div>
 
     <!-- ══ BANDE ══ -->
@@ -308,14 +331,6 @@
       <div class="nota">Si vede solo con la proiezione in modalità <b>Matrice</b>.</div>
     </div>
 
-    <!-- ══ RESA ══ -->
-    <div class="card">
-      <h2>🎬 Resa</h2>
-      <div class="bottoni">
-        <button id="btn-sprite" class="active">Opzione A — Sprite</button>
-        <button id="btn-model">Opzione B — Modello 3D</button>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -335,6 +350,7 @@ import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 import { creaMusica } from './3d/musica.js';
 import { collegaPannelloMusica } from './3d/pannello-musica.js';
 import { PassoSmarmella } from './3d/smarmella.js';
+import { creaCalibrazione } from './3d/calibrazione.js';
 import { creaCentralina } from './3d/centralina.js';
 import { creaHud } from './3d/hud.js';
 import { creaMondo } from './3d/mondo.js';
@@ -345,6 +361,7 @@ import { creaAtmosfera } from './3d/atmosfera.js';
 import { creaBoss, BOSS } from './3d/boss.js';
 import { creaBirra, BIRRA } from './3d/birra.js';
 import { creaPluriball, PLURIBALL } from './3d/pluriball.js';
+import { creaArmi, caricaCassa, vestiCassa, caricaFreccia, vestiFreccia } from './3d/armi.js';
 
 //=========================================================================
 // COSTANTI — stesse unità del gioco originale (javascript-racer)
@@ -575,14 +592,19 @@ const curveAt = (position) => {
 //=========================================================================
 // SCENA
 //=========================================================================
-const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('scene'), antialias: true });
+// antialias:false (14 nov 2026, meno carico): il composer finisce sempre con un passaggio a tutto schermo (vedi
+// più sotto) che scrive dritto sulla tela del renderer — un quadrato che riempie lo schermo non ha bordi da
+// smussare, quindi l'antialiasing del contesto base non serviva a nulla, costava solo un framebuffer in più.
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('scene'), antialias: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;   // resa cinematografica (S-curve)
 renderer.toneMappingExposure = 0.85;
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;     // ombre morbide
+// PCFShadowMap (14 nov 2026, meno carico: era Soft): legge molti meno texel a bordo ombra per fotogramma;
+// restano morbide comunque (bias/normalBias già tarati sotto per non far vedere i gradini)
+renderer.shadowMap.type = THREE.PCFShadowMap;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 80, 600000);
@@ -694,7 +716,8 @@ scene.add(sun, sun.target);
 // POST-PROCESSING: bloom dorato sulle alte luci (sole, riga di partenza, riflessi)
 // pipeline moderna: RenderPass (HDR lineare) → bloom → OutputPass (tone map + sRGB)
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
-  innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }   // 4× MSAA dentro al composer
+  innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 2 }   // MSAA dentro al composer (14 nov 2026:
+  // era 4×, costoso in banda; a 2× i bordi dei modelli restano decenti e il bloom/i post-effetti li smussano comunque)
 ));
 composer.addPass(new RenderPass(scene, camera));
 // strength contenuta + soglia alta: solo le ALTE LUCI HDR (sole, cielo, riga via) fioriscono, non i mezzitoni
@@ -705,6 +728,10 @@ composer.addPass(new OutputPass());
 // la pipeline torna quella di sopra, pixel per pixel (vedi 3d/smarmella.js)
 const smarmella = new PassoSmarmella();
 composer.addPass(smarmella);
+// CALIBRAZIONE (13 nov 2026): saturazione per adattare l'uscita al proiettore/ledwall della serata, sempre
+// attiva (anche a SMARMELLA 0), slider nella consolle — vedi 3d/calibrazione.js
+const calibrazione = creaCalibrazione();
+composer.addPass(calibrazione.pass);
 // la luce "di serie": party e centralina la MOLTIPLICANO, non la sovrascrivono,
 // così due effetti insieme non si pestano e a riposo si torna esattamente qui
 const LUCE0 = { sole: sun.intensity, cielo: hemi.intensity, espo: renderer.toneMappingExposure, bloom: bloom.strength };
@@ -743,11 +770,20 @@ function ridimensiona() {
   box.style.maxWidth = pieno ? 'none' : Math.round(tetto * W/H) + 'px';
   camera.aspect = W/H;
   camera.updateProjectionMatrix();
+  // (14 nov 2026, meno carico sulla scheda video) una risoluzione scelta apposta (ledwall/proiettore) È già il
+  // pixel vero che arriva in proiezione: renderizzare più fitto col pixelRatio del Mac (fino a 2 su Retina)
+  // costerebbe 4× la scheda video senza che nessuno lo veda mai (il blit verso la proiezione è 1 a 1). Resta
+  // nitido ( = pixelRatio del device) solo in automatico, quando a guardare l'anteprima è chi sta in consolle.
+  renderer.setPixelRatio(vista.nativa ? 1 : Math.min(devicePixelRatio, 2));
   renderer.setSize(W, H, false);        // false: la misura CSS la decidiamo qui sotto
   composer.setSize(W, H);
   bloom.setSize(W, H);
   let cw = bw, ch = Math.max(120, Math.round(bw * H/W)), cx = 0, cy = 0;
-  if (pieno) {                                   // la più grande che entra, centrata (bande nere ai lati o sopra/sotto)
+  const u = pieno && proiezione.uscitaFissa;
+  if (u) {                                       // ledwall: l'uscita esatta vale anche qui, pixel per pixel nel suo angolo
+    const r = devicePixelRatio || 1;             // (prima «Pieno» allargava il gioco su tutto il segnale: sul muro solo un pezzo)
+    cw = u.w / r; ch = u.h / r; cx = u.x / r; cy = u.y / r;
+  } else if (pieno) {                            // la più grande che entra, centrata (bande nere ai lati o sopra/sotto)
     cw = Math.min(innerWidth, innerHeight * W/H); ch = cw * H/W;
     cx = (innerWidth - cw) / 2; cy = (innerHeight - ch) / 2;
   }
@@ -793,6 +829,10 @@ function loadPBR(base) {
 }
 const asphaltTex = loadPBR('assets/textures/Asphalt014/Asphalt014_1K-JPG');
 const grassTex   = loadPBR('assets/textures/Grass004/Grass004_1K-JPG');
+// LA COPERTINA (13 nov 2026): l'immagine vera dei titoli, disegnata da hud.js (disegnaSchermata) coprendo tutta
+// la tela — quindi arriva anche in proiezione, come tutto il resto dell'HUD. Un <img> qualunque va bene: canvas
+// 2D lo disegna appena ha caricato, senza passare da three.js.
+const imgTitoli = new Image(); imgTitoli.src = 'assets/titoli/copertina.jpg';
 
 // coda di pista piatta prima del via, così dietro la partenza non c'è il vuoto
 const PRE = 24;   // multiplo di PASSO: i quad restano allineati ai segmenti
@@ -1132,20 +1172,40 @@ const terrain = (() => {
     if (h[c] > tetto) h[c] = tetto;
   }
 
-  // --- 5b. LETTO DEI FIUMI: si scava sotto il pelo dell'acqua, con le rive in salita ---
+  // --- 5b. LETTO DEI FIUMI: si scava sotto il pelo dell'acqua, con le rive che risalgono fino a INCONTRARE
+  // davvero il pelo esattamente dove finisce il nastro d'acqua di 3d/paesaggio.js — "bordo" qui sotto deve
+  // combaciare col suo `m = f.mezza * 1.3`, il punto dove l'alpha dell'acqua arriva a 0. Prima si limitava ad
+  // ABBASSARE il terreno naturale (mai ad alzarlo): dove la collina sotto era già più bassa del pelo (un fiume
+  // che a quella distanza dalla strada corre su un terreno mosso, una valle) l'acqua restava un piano piatto
+  // sospeso sul vuoto — il "sembra appoggiata sopra, come fosse staccata dal terreno" segnalato dall'utente;
+  // misurato fino a 6000+ unità di distacco in alcuni punti del fiume dell'Onon. Ora FORZA (non solo abbassa)
+  // il profilo dal centro fino al bordo del nastro, qualunque fosse il terreno sotto, e oltre sfuma verso il
+  // terreno naturale su altri TRANS_RIVA: niente più baratri né argini sospesi. Due passate: la prima trova,
+  // per ogni cella, la stazione del fiume più vicina (le stazioni si susseguono ogni 2 segmenti e i loro
+  // raggi si accavallano: scrivere "chi tocca per ultimo vince" farebbe una scaletta nelle curve); la seconda
+  // scrive l'altezza usando quella distanza, leggendo ancora il terreno naturale (non ancora toccato) per la sfumatura.
+  const PROFONDO_RIVA = 500, ALZA_RIVA = 150, TRANS_RIVA = 4000;
+  const meglRiva = new Float32Array(h.length).fill(Infinity), bordoRiva = new Float32Array(h.length), peloRiva = new Float32Array(h.length);
   for (let sg = 0; sg < N - 1; sg += 2) {
     const f = fiumeAl(sg); if (!f) continue;
     const a = pts[sg], rx = -Math.cos(a.heading), rz = Math.sin(a.heading);
-    const cx = a.x + rx * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lat * ROAD_WIDTH, R = f.mezza + 3500;
+    const cx = a.x + rx * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lat * ROAD_WIDTH;
+    const bordo = f.mezza * 1.3, R = bordo + TRANS_RIVA + CELL;
     const ia = Math.max(0, Math.floor((cx - R - x0) / CELL)), ib = Math.min(nx - 1, Math.ceil((cx + R - x0) / CELL));
     const ja = Math.max(0, Math.floor((cz - R - z0) / CELL)), jb = Math.min(nz - 1, Math.ceil((cz + R - z0) / CELL));
     for (let j = ja; j <= jb; j++) for (let i = ia; i <= ib; i++) {
       const d = Math.hypot(x0 + i * CELL - cx, z0 + j * CELL - cz);
       if (d > R) continue;
-      const letto = f.y - 450 + Math.max(0, d - f.mezza * 0.75) * 0.5;
       const c = j * nx + i;
-      if (h[c] > letto) h[c] = letto;
+      if (d < meglRiva[c]) { meglRiva[c] = d; bordoRiva[c] = bordo; peloRiva[c] = f.y; }
     }
+  }
+  for (let c = 0; c < h.length; c++) {
+    const d = meglRiva[c]; if (d === Infinity) continue;
+    const bordo = bordoRiva[c], y = peloRiva[c], mezza = bordo / 1.3, piatto = mezza * 0.75;
+    if (d <= piatto) h[c] = y - PROFONDO_RIVA;
+    else if (d <= bordo) h[c] = y - PROFONDO_RIVA + (d - piatto) * (PROFONDO_RIVA + ALZA_RIVA) / (bordo - piatto);
+    else { const t = Math.min(1, (d - bordo) / TRANS_RIVA), s = t * t * (3 - 2 * t); h[c] = (y + ALZA_RIVA) * (1 - s) + h[c] * s; }
   }
 
   // --- 6. CLAMP: invariante "il terreno non supera mai la sede stradale" ---
@@ -1620,6 +1680,7 @@ class HorseActor {
     this.atk = null;                            // colpo in corso { t, dir, peso }: 0 → 1 in ATK_DUR
     this.hit = null;                            // reazione in corso { t, dir, forza }, t in secondi
     this.testaColpo = 0;                        // piega extra di collo e testa durante colpi e reazioni
+    this.swingC = 0; this.swingDir = 0;         // il colpo in corso (curvaColpo, lato): lo legge l'arma in mano (3d/armi.js)
     // caduta del rivale abbattuto: molla sotto-smorzata sull'angolo di rollio del
     // gruppo, così quando tocca terra rimbalza invece di fermarsi di colpo
     this.cadT = 0; this.cadDir = 1; this.cadAng = 0; this.cadV = 0;
@@ -1786,13 +1847,14 @@ class HorseActor {
     const yawX   = -(aC*aDir*0.20 + rC*rDir*0.12*rForza);
     const pitchX = aDir === 0 && this.atk ? aC*0.28 : Math.max(0, aC)*0.10*aPeso;
     this.testaColpo = aC*aDir*0.9 + rC*rDir*0.6*rForza;
+    this.swingC = aC; this.swingDir = aDir;
 
     if (this.hitFlash > 0) {
       this.hitFlash = Math.max(0, this.hitFlash - dt*2.5);
       if (this.mode === 'sprite') {
         this.spriteMat.color.copy(this.tint).lerp(new THREE.Color(0xff2020), this.hitFlash);
       } else if (this.model) {
-        this.model.traverse(o => { if (o.isMesh) {
+        this.model.traverse(o => { if (o.isMesh && o.material.emissive) {   // l'arma in mano è nel modello: se il suo materiale non ha emissive (GLB con Basic) si salta
           o.material.emissive.setRGB(this.hitFlash, 0, 0);
           o.material.emissiveIntensity = this.hitFlash * 1.6;
         } });
@@ -1949,6 +2011,16 @@ function costoBonus(n) {                       // takedown che servono per il bo
   return c[n];
 }
 let bonusPresi = 0, sogliaPrec = 0;                      // bonusPresi = bonus già scelti in questo viaggio
+// IL PROGRESSO A INIZIO TAPPA (13 nov 2026): punti, takedown, bonus arma già scelti e l'arma in mano, presi
+// all'inizio della tappa (o del Boss) in corso. Riavviando quella tappa si torna a questi valori, scartando quanto
+// guadagnato nel tentativo appena interrotto; un NUOVO VIAGGIO li azzera invece del tutto (resetRun).
+let tappaBase = null;
+function registraBase() { tappaBase = { score, kills, bonusPresi, sogliaPrec, arma: { ...curWeapon } }; }
+function ripristinaBase() {
+  if (!tappaBase) return;
+  ({ score, kills, bonusPresi, sogliaPrec } = tappaBase);
+  curWeapon = { ...tappaBase.arma };
+}
 const sogliaBonus = () => sogliaPrec + costoBonus(bonusPresi);
 let blocking = false, critical = false, boosting = false;
 // MODALITÀ LIBERA (tasto N): spegne tutta la parte Road Redemption — rivali,
@@ -2019,6 +2091,8 @@ const birra = creaBirra({ scene, posToWorld, gapTo, MAX_SPEED, TRACK_LENGTH, ROA
       shake = Math.max(shake, 0.3); nitro = Math.min(MAX_NITRO, nitro + 15);
     }
   } });
+// LE ARMI IN MANO (3d/armi.js): l'arma equipaggiata si vede nella mano del protagonista (il braccio destro, vicino al muso)
+const armi = creaArmi();
 // IL PLURIBALL (3d/pluriball.js): rotoli di pluriball lungo la pista riempiono la BARRA PLURIBALL (lo scudo); finché c'è
 // il protagonista è avvolto nel pluriball, e i colpi consumano prima la barra.
 const pluriball = creaPluriball({ scene, posToWorld, gapTo, TRACK_LENGTH, HORSE_HEIGHT,
@@ -2230,12 +2304,14 @@ const pickups = [];
   const count = Math.max(4, Math.round(TRACK_LENGTH / PICKUP_SPACING) - 1);
   for (let i = 0; i < count; i++) {
     const key = KEYS[i % KEYS.length], w = WEAPONS[key];
-    const m = new THREE.Mesh(boxG, new THREE.MeshStandardMaterial(
+    // un gruppo: all'inizio il cubo luminoso, poi (a caricamento finito) la cassa di cartone di assets/models/armi/cassa.glb
+    const m = new THREE.Group(), cubo = new THREE.Mesh(boxG, new THREE.MeshStandardMaterial(
       { color: w.color, emissive: w.color, emissiveIntensity: 0.7, metalness: 0.3, roughness: 0.4 }));
-    m.castShadow = true; scene.add(m);
-    pickups.push({ key, mesh: m, pos: ((i+1) * (TRACK_LENGTH/(count+1))) % TRACK_LENGTH,
+    cubo.castShadow = true; m.add(cubo); scene.add(m);
+    pickups.push({ key, mesh: m, color: w.color, pos: ((i+1) * (TRACK_LENGTH/(count+1))) % TRACK_LENGTH,
                    lat: Math.random()*1.2 - 0.6, active: true, respawnT: 0 });
   }
+  caricaCassa().then(c => { if (c) for (const p of pickups) vestiCassa(p.mesh, c, p.color, 520); });
 }
 function updatePickups(dt) {
   if (freeRoam) return;                // casse-arma nascoste: sono meccanica di combattimento
@@ -2290,6 +2366,7 @@ const gamepad = (() => {
     pad.parata = premuto(g, B.LB);
     pad.boost  = premuto(g, B.RB);
     const scatto = b => { const ora = premuto(g, b), era = prima[b]; prima[b] = ora; return ora && !era; };
+    if (scatto(B.START)) { apriMenu(); return; }    // il tasto MENU: pausa e menu (il pilota non si accende più da qui)
     if (game.state === 'bonus') {                    // menu dei bonus: croce per scegliere, A per confermare
       if (scatto(B.SX)) muoviScelta(-1);
       if (scatto(B.DX)) muoviScelta(1);
@@ -2298,10 +2375,17 @@ const gamepad = (() => {
       if (scatto(B.A)) confermaScelta();
       return;
     }
+    if (pannello) {                                  // le schermate: croce per scegliere, A per confermare
+      if (scatto(B.SX)) muoviPannello(-1);
+      if (scatto(B.SU)) muoviPannello(-1);
+      if (scatto(B.DX)) muoviPannello(1);
+      if (scatto(B.GIU)) muoviPannello(1);
+      if (scatto(B.A)) scegliPannello();
+      return;
+    }
     if (scatto(B.X))     playerAttack(-1);
     if (scatto(B.B))     playerAttack(1);
     if (scatto(B.Y))     playerKick();
-    if (scatto(B.START)) setPilota(!ap.on);
   }
   return { leggi };
 })();
@@ -2323,12 +2407,21 @@ const AP = {
   EDGE_W:1.5, EDGE_SOFT:0.78, DRIFT_W:4.0, DRIFT_T:1.0,
   TTC_LIFT:0.80, TTC_BRAKE:0.30, COMMIT:0.30, STUCK_T:0.60,
   LARG:0.62,        // larghezza laterale di due cavalli affiancati, in unità playerX
+  // STERZO PROPORZIONALE (18 nov 2026). Prima il pilota sterzava come una tastiera, tutto
+  // o niente: ogni correzione era una sterzata piena, cioè 26,6° di imbardata a velocità
+  // piena, e cambiava sterzo 9 volte al secondo. Misurato: muso storto di 10° in media,
+  // oltre 10° per il 37% del tempo — il cavallo sembrava correre sempre "di lato".
+  // Ora chiede una velocità laterale proporzionale alla distanza dalla corsia, con un
+  // tetto calmo quando non c'è niente da schivare, e annulla da sé la deriva della curva.
+  KP:3.0,           // 1/s: velocità laterale voluta per unità di distanza dalla corsia
+  KP_SVELTO:8.0,    // idem quando bisogna schivare davvero
+  CALMO:0.45,       // tetto della velocità laterale senza pericolo (frazione dello sterzo pieno)
 };
 let apTargetX = 0, apCommit = 0, apStuck = 0, apAtkCd = 0;
 
 function setPilota(on) {
   ap.on = on;
-  ap.sx = ap.dx = ap.gas = ap.freno = false;
+  ap.sx = ap.dx = ap.gas = ap.freno = false; ap.sterzo = 0;
   apTargetX = 0; apCommit = 0; apStuck = 0;
   const c = document.getElementById('ap-on');   if (c) c.checked = on;
   const b = document.getElementById('btn-pilota'); if (b) b.classList.toggle('active', on);
@@ -2352,23 +2445,34 @@ function updateAutopilot(dt) {
     wsum += w;
   }
   curveAhead = wsum ? curveAhead/wsum : 0;
-  const lineX = limit(curveAhead * (0.34 + 0.30*spdPct), -AP.EDGE, AP.EDGE);
+  // Si stringe solo quanto serve: la deriva si mangia la frazione spdPct·curve·CENTRIFUGAL
+  // dello sterzo. Prima la linea era proporzionale alla curva e satura già a curve ≈ 1,4,
+  // cioè in quasi ogni curva il cavallo traversava la strada fino al bordo interno e poi
+  // tornava: con le curve doppie della steppa era un continuo andirivieni di sbieco.
+  // Fino a ~0,6 dello sterzo la corsia si tiene comodi; da lì si entra stretti, del tutto
+  // dove la centrifuga vince (curve > 3,3 a tutta, il 6–7% della pista).
+  const mangia = Math.abs(curveAhead) * spdPct * CENTRIFUGAL;
+  const lineX = Math.sign(curveAhead) * AP.EDGE * smooth(0.6, 1.0, mangia);
   // la deriva vale curve*CENTRIFUGAL*spdPct volte lo sterzo: sopra 1 non è più
   // recuperabile, quindi nelle curve vere bisogna ENTRARE già stretti
   const driftAhead = -2 * spdPct * spdPct * curveAhead * CENTRIFUGAL;
   const pushX = Math.max(0, Math.abs(driftAhead) - latRate) * Math.sign(driftAhead || 1) * AP.DRIFT_T;
 
-  const guida = (target, gas, freno) => {
-    const passo = latRate * dt;
-    const err = target - (playerX + driftRate*dt);
-    ap.sx = err < -passo*0.35;  ap.dx = err > passo*0.35;
+  // sterzo analogico in [-1, 1]: velocità laterale voluta proporzionale all'errore,
+  // poi si toglie la deriva della curva (playerX' = latRate·sterzo + driftRate)
+  const guida = (target, gas, freno, svelto) => {
+    const err  = target - playerX;
+    const vmax = latRate * (svelto ? 1 : AP.CALMO);
+    const v    = limit(err * (svelto ? AP.KP_SVELTO : AP.KP), -vmax, vmax);
+    ap.sterzo  = latRate > 1e-3 ? limit((v - driftRate) / latRate, -1, 1) : 0;
+    ap.sx = ap.dx = false;
     ap.gas = gas; ap.freno = freno;
   };
 
   // --- 2. fuori pista: rientrare è la sola priorità ---
   if (Math.abs(playerX) > AP.RECOVER) {
     apTargetX = Math.sign(playerX) * 0.55; apCommit = 0;
-    guida(apTargetX, true, false);
+    guida(apTargetX, true, false, true);
     return;
   }
 
@@ -2440,8 +2544,10 @@ function updateAutopilot(dt) {
     gas = true; freno = false; apCommit = 0.8;
   }
 
+  // si sterza svelti solo se c'è da schivare: siamo in rotta su qualcuno, o incastrati
+  let svelto = rischio(playerX) > 0.05 || apStuck > AP.STUCK_T;
   // il Boss annuncia un colpo che non si para: il pilota si scansa
-  { const c = boss.consiglio(playerX); if (c && c.x != null) { bestX = c.x; apCommit = 0.4; if (c.freno) { gas = false; freno = true; } } }
+  { const c = boss.consiglio(playerX); if (c && c.x != null) { bestX = c.x; apCommit = 0.4; svelto = true; if (c.freno) { gas = false; freno = true; } } }
 
   // la Birra davanti: il pilota la insegue (solo se non c'è un pericolo vero)
   { const cb = birra.corsiaPerPilota(); if (cb != null && !pericolo && !(boss.attivo)) { bestX = limit(cb, -AP.EDGE, AP.EDGE); apCommit = 0.2; } }
@@ -2449,7 +2555,7 @@ function updateAutopilot(dt) {
   { const cp = pluriball.corsiaPerPilota(); if (cp != null && !pericolo && !(boss.attivo)) { bestX = limit(cp, -AP.EDGE, AP.EDGE); apCommit = 0.2; } }
 
   apTargetX = bestX;
-  guida(bestX, gas, freno);
+  guida(bestX, gas, freno, svelto);
 
   // --- 8. combatte da solo ---
   // Senza difesa lo show a mani libere dura 7 secondi: misurato. I rivali hanno
@@ -2485,6 +2591,7 @@ function updatePhysics(dt) {
 
   if (keyLeft())  playerX -= dx;
   if (keyRight()) playerX += dx;
+  if (ap.on) playerX += dx * (ap.sterzo || 0);                  // lo sterzo analogico del pilota automatico
   playerX -= dx * speedPct * curveAt(position) * CENTRIFUGAL;   // forza centrifuga vera quanto prima
   if (spintaGioc) {                          // la botta di un colpo del Boss, smaltita in ~0,15 s
     const d = Math.abs(spintaGioc) < 1e-3 ? spintaGioc : spintaGioc * Math.min(1, dt*9);
@@ -2545,7 +2652,9 @@ function updateCamera(dt) {
   const h = player.heading;
   const fwd = tmpA.set(Math.sin(h), 0, Math.cos(h));
   const largo = boss.scena;            // 0…1 quando il Boss fa dietrofront e ci viene incontro: la camera arretra e sale per farcelo stare
-  tmpB.copy(p).addScaledVector(fwd, -2300 - 600*largo); tmpB.y += 1150 + 450*largo;
+  // (13 nov 2026) più vicina al dietro del cavallo, su richiesta: non in prima persona (resta dietro e sopra la
+  // groppa, non sopra la sella), ma più addosso di prima (era -2300/+1150); poi rialzata ancora un po' (era +950).
+  tmpB.copy(p).addScaledVector(fwd, -1500 - 600*largo); tmpB.y += 1300 + 450*largo;
   camera.position.lerp(tmpB, 1 - Math.pow(0.0001, dt));
   tmpB.copy(p).addScaledVector(fwd, 1500); tmpB.y += 600;
   camera.lookAt(tmpB);
@@ -2555,18 +2664,16 @@ function updateCamera(dt) {
 // UI
 //=========================================================================
 const $ = id => document.getElementById(id);
-let renderMode = 'sprite';
+// (13 nov 2026) Niente più scelta A/B: si gioca sempre col modello 3D (l'opzione B). Gli sprite restano solo come
+// ripiego se il modello non si carica, perché lo show non resti senza cavalli.
+let renderMode = 'model';
 
 function setMode(mode) {
   if (mode === 'model'  && !modelTemplate) return;    // GLB non disponibile
   if (mode === 'sprite' && !spritesOK)     return;    // sprite non caricati
   renderMode = mode;
   allActors.forEach(a => { a.initModel(); a.setMode(mode); });
-  $('btn-sprite').classList.toggle('active', mode === 'sprite');
-  $('btn-model').classList.toggle('active', mode === 'model');
 }
-$('btn-sprite').onclick = () => setMode('sprite');
-$('btn-model').onclick  = () => setMode('model');
 $('free-on').onchange   = e => setFreeRoam(e.target.checked);
 // — PROIEZIONE —
 $('ap-on').onchange      = e => setPilota(e.target.checked);
@@ -2581,6 +2688,21 @@ $('proj-res').onchange   = e => {
   vista.nativa = v === 'auto' ? null : { w:+v.split('x')[0], h:+v.split('x')[1] };
   ridimensiona();
 };
+// USCITA ESATTA — per i ledwall: il gioco pixel per pixel nell'angolo del segnale che il controller mostra
+// davvero (vedi il commento in `proiezione`)
+function aggiornaUscitaFissa() {
+  const on = $('out-fissa-on').checked;
+  $('out-fissa-campi').style.display = on ? '' : 'none';
+  const n = id => parseInt($(id).value, 10) || 0;
+  const w = n('out-fissa-w'), h = n('out-fissa-h');
+  proiezione.setUscitaFissa(on ? w : 0, on ? h : 0, Math.max(0, n('out-fissa-x')), Math.max(0, n('out-fissa-y')));
+  ridimensiona();                                // vale anche per «Pieno» della consolle portata sul ledwall
+}
+$('out-fissa-on').onchange = aggiornaUscitaFissa;
+$('out-fissa-w').oninput   = aggiornaUscitaFissa;
+$('out-fissa-h').oninput   = aggiornaUscitaFissa;
+$('out-fissa-x').oninput   = aggiornaUscitaFissa;
+$('out-fissa-y').oninput   = aggiornaUscitaFissa;
 // — TESTO LATERALE DELLE BANDE —
 $('side-on').onchange    = e => proiezione.setLato('on', e.target.checked);
 $('side-text').oninput   = e => proiezione.setLato('testo', e.target.value);
@@ -2602,8 +2724,8 @@ $('party-gain').oninput = e => {           // slider intensità: 100% = base, 60
 //=========================================================================
 const preferenze = (() => {
   const CHIAVE = 'cm3d.console.v1';
-  const CAMPI = ['live-flash','live-bonus','live-text','live-palette','live-cycle','live-3d','live-int',
-                 'ap-on','proj-mode','proj-res','hud-modo',
+  const CAMPI = ['live-on','live-flash','live-bonus','live-text','live-palette','live-cycle','live-3d','live-int',
+                 'ap-on','proj-mode','proj-res','proj-sat','hud-modo','out-fissa-on','out-fissa-w','out-fissa-h','out-fissa-x','out-fissa-y',
                  'side-on','side-text','side-speed','side-size','party-gain',
                  'sm-macro','sm-auto','sm-limita'];
   let rinvio = null;
@@ -2666,6 +2788,11 @@ function pannelloSmarmella(now) {           // 10 volte al secondo: nome, percen
 }
 
 // SHOW LIVE — flash strobo + scritta lampeggiante (sincronizzati al tap tempo)
+$('live-on').onchange      = e => {          // l'interruttore generale dello show
+  const on = e.target.checked;
+  live.setAttivo(on); party.setShow(on);
+  const c = $('live-controlli'); c.style.opacity = on ? '' : '.4'; c.style.pointerEvents = on ? '' : 'none';
+};
 $('live-flash').onchange   = e => live.setFlash(e.target.checked);
 $('live-bonus').onchange   = e => live.setBonus(e.target.checked);
 $('live-text').oninput     = e => live.setText(e.target.value);
@@ -2673,6 +2800,7 @@ $('live-palette').onchange = e => live.setPalette(e.target.value);
 $('live-cycle').onchange   = e => live.setCycle(e.target.checked);
 $('live-3d').onchange       = e => live.setMode3d(e.target.checked);
 $('live-int').oninput      = e => { live.setIntensity(+e.target.value/100); $('live-int-val').textContent = e.target.value + '%'; };
+$('proj-sat').oninput      = e => { calibrazione.setSaturazione(+e.target.value/100); $('proj-sat-val').textContent = e.target.value + '%'; };
 addEventListener('keydown', e => {
   if (staScrivendo(e)) return;
   const k = e.key.toLowerCase();
@@ -2682,7 +2810,6 @@ addEventListener('keydown', e => {
     el.value = modi[(modi.indexOf(el.value) + 1) % modi.length]; el.dispatchEvent(new Event('change')); preferenze.salva();
   }
   if (k.length === 1 && k >= '0' && k <= '4') sceltaLivello(+k);   // SMARMELLA: 0 Diretta … 4 APRI TUTTO
-  if (k === 'b') setMode(renderMode === 'sprite' ? 'model' : 'sprite');
   if (k === 't') party.tap();        // tap tempo
   if (k === 'p') party.toggle();     // distorsione alberi+luce
   if (k === 'f') { const el = $('live-flash'); el.checked = !el.checked; live.setFlash(el.checked); }  // flash strobo
@@ -2698,8 +2825,8 @@ addEventListener('keydown', e => {
   if (k === 'r') {
     if (freeRoam) { position = prevPosition = 0; playerX = prevPlayerX = 0; speed = 0;
                     currentLapTime = 0; started = false; }
-    else if (game.type === 'boss') startBoss();
-    else startEvent();                     // riavvia pulito l'evento corrente
+    else if (game.type === 'boss') riprovaBoss();
+    else { ripristinaBase(); startEvent(); }   // riavvia pulito l'evento corrente, col progresso di inizio tappa
   }
 });
 
@@ -2984,11 +3111,13 @@ const frecce = (() => {
   const sciaGeo = new THREE.PlaneGeometry(70, 1600); sciaGeo.rotateX(Math.PI/2); sciaGeo.translate(0, 0, -800);
   const POOL = 8, voli = [];
   for (let i = 0; i < POOL; i++) {
-    const g = new THREE.Group();
-    g.add(new THREE.Mesh(asta, matAsta), new THREE.Mesh(punta, matPunta), new THREE.Mesh(sciaGeo, matScia));
+    const g = new THREE.Group(), ma = new THREE.Mesh(asta, matAsta), mp = new THREE.Mesh(punta, matPunta);
+    g.add(ma, mp, new THREE.Mesh(sciaGeo, matScia));
     g.visible = false; scene.add(g);
-    voli.push({ g, t: 0, dur: 1, da: null, a: null, arrivo: null });
+    voli.push({ g, ma, mp, t: 0, dur: 1, da: null, a: null, arrivo: null });
   }
+  // la freccia vera (assets/models/armi/freccia.glb) prende il posto di cilindro e cono quando è caricata; la scia luminosa resta
+  caricaFreccia().then(f => { if (f) for (const v of voli) { v.g.remove(v.ma, v.mp); vestiFreccia(v.g, f, 1100, 1.3); } });
   let cursore = 0;
   const A = new THREE.Vector3(), B = new THREE.Vector3(), P = new THREE.Vector3();
   function scocca(da, a, arrivo) {
@@ -3016,7 +3145,7 @@ const frecce = (() => {
       v.g.lookAt(P.x + B.x, P.y + B.y, P.z + B.z);
     }
   }
-  return { scocca, update };
+  return { scocca, update, voli };
 })();
 
 //=========================================================================
@@ -3034,16 +3163,16 @@ const centralina = creaCentralina(musica);   // SMARMELLA 0…1: dalla musica ai
 // moduli di prima (live, text3d) e tiene la molla e l'interruttore (P).
 //=========================================================================
 const party = (() => {
-  let fxOn = false;
+  let fxOn = false, showOn = true;      // showOn: l'interruttore «Show live attivo» della console
   const luce = { sole: 1, cielo: 1, espo: 1, bloom: 1 };   // moltiplicatori: li applica applicaLuce()
   let s = 0, v = 0;                      // s,v = molla (offset elastico)
   let gain = 6;                          // intensità (1 = base; 6 ≈ +500%), regolata dallo slider
   const beatCbs = [];                    // callback eseguite ad ogni beat (flash/scritte live)
   const $i = document.getElementById('party-info');
-  function setHud() { if ($i) $i.textContent = `🎉 ${musica.bpm.toFixed(1)} BPM · ${musica.fonte}${fxOn ? '' : ' · alberi off'}`; }
+  function setHud() { if ($i) $i.textContent = `🎉 ${musica.bpm.toFixed(1)} BPM · ${musica.fonte}${!showOn ? ' · show spento' : fxOn ? '' : ' · alberi off'}`; }
   // a ogni battito: notifica i sottoscrittori (flash/testo) e, se la distorsione è attiva, SCATTO a molla
   // il colpo di luce del party è un lampo a tutto schermo: passa dal limitatore (se negato, solo un sussulto)
-  musica.on('battito', () => { for (const f of beatCbs) f(); if (fxOn) { s = centralina.chiediLampo(performance.now()) ? 1 : 0.25; v = 0; } });
+  musica.on('battito', () => { for (const f of beatCbs) f(); if (fxOn && showOn) { s = centralina.chiediLampo(performance.now()) ? 1 : 0.25; v = 0; } });
   function tap() { musica.tap(); fxOn = true; setHud(); }
   function toggle() { fxOn = !fxOn; setHud(); }   // P: accende/spegne SOLO la distorsione alberi+luce
   let hudT = 0;
@@ -3065,7 +3194,7 @@ const party = (() => {
     luce.espo  = Math.min(1.6, Math.max(0.45, 1 + ls*0.05));
     luce.bloom = 1 + Math.max(0, s*gain)*0.9;
   }
-  return { tap, toggle, update, luce, setGain(g) { gain = g; },
+  return { tap, toggle, update, luce, setGain(g) { gain = g; }, setShow(b) { showOn = b; setHud(); },
            onBeat(fn) { beatCbs.push(fn); }, bpmNow: () => musica.bpm, periodNow: () => musica.periodo,
            isClock: () => true };
 })();
@@ -3147,7 +3276,12 @@ function applicaLuce() {
   _suoloTerra.copy(tintaPista(Math.floor(position / SEGMENT_LENGTH), 1)).multiply(_terraBruna);
   dust.tingi(_suoloTerra, _luceTerra);
   renderer.toneMappingExposure = T.espo * L.espo * v['luce.esposizione'] * (1 - 0.15 * n);
-  bloom.strength = Math.min(2.0, LUCE0.bloom * L.bloom * v['luce.bloom']);   // il tetto di sempre: oltre è nebbia bianca
+  // IL TETTO DEL BLOOM (13 nov 2026, segnalato dall'utente: «un unico grande flash bianco»). A party e SMARMELLA
+  // sparati al massimo (gain 1500%, APRI TUTTO, energia a 1) il prodotto sale fino a ~8: anche col tetto di prima
+  // (2.0) restava un lampo bianco che mangiava tutto, cavallo e strada compresi — misurato (vedi luceDebug più sotto)
+  // e verificato a vista: a 2.0 la scena era illeggibile, a 1.1 si rivede tutto (cavallo, strada, HUD) col colore
+  // comunque acceso. Il tetto NON tocca il riposo (bloom.strength = LUCE0.bloom = 0.22 a party spento).
+  bloom.strength = Math.min(1.1, LUCE0.bloom * L.bloom * v['luce.bloom']);
 }
 
 //=========================================================================
@@ -3223,11 +3357,12 @@ const live = (() => {
   let flashOn = false, flashUntil = 0;
   let bonusOn = false, bonusStart = 0, bonusText = 'CAVALLI MONGOLI';
   let paletteKey = 'gold', cycle = false, intensity = 1.2, pal = PALETTES.gold;
-  let mode3d = false, lastBeatMs = -9999;
+  let mode3d = false, lastBeatMs = -9999, attivo = true;   // attivo: l'interruttore «Show live attivo»
   function resolvePal() { pal = paletteKey === 'random' ? randPal() : (PALETTES[paletteKey] || PALETTES.gold); text3d.setPalette(pal); }
 
   // ad ogni beat: colpo di strobo + (se attivo) cambio colore + impulso glow 3D
   party.onBeat(() => {
+    if (!attivo) return;
     lastBeatMs = performance.now();
     if (flashOn && centralina.chiediLampo(lastBeatMs)) flashUntil = lastBeatMs + 80;   // ≤ 3 lampi al secondo
     if (bonusOn && cycle) { pal = randPal(); text3d.setPalette(pal); }
@@ -3235,8 +3370,8 @@ const live = (() => {
 
   function update(now) {
     resize();
-    const flashing = now < flashUntil;
-    if (!bonusOn && !flashing) { if (dirty) { ctx.clearRect(0,0,W,H); dirty = false; } return; }
+    const flashing = attivo && now < flashUntil;
+    if (!attivo || (!bonusOn && !flashing)) { if (dirty) { ctx.clearRect(0,0,W,H); dirty = false; } return; }
     ctx.clearRect(0,0,W,H); dirty = true;
 
     // FLASH strobo full-screen
@@ -3290,6 +3425,7 @@ const live = (() => {
     update,
     palette() { return pal; },       // il testo laterale delle bande usa la stessa palette
     setFlash(b) { flashOn = b; },
+    setAttivo(b) { attivo = b; if (!b) { flashUntil = 0; text3d.show(false); } else if (bonusOn) bonusStart = performance.now(); },
     setBonus(b) { bonusOn = b; if (b) { bonusStart = performance.now(); resolvePal(); } else text3d.show(false); },
     setText(t) { bonusText = (t || '').toUpperCase() || 'CAVALLI MONGOLI'; text3d.setText(bonusText); },
     setPalette(key) { paletteKey = key; resolvePal(); },
@@ -3398,7 +3534,7 @@ function statoHud() {
     km: Math.max(0, (FINE_VIAGGIO - position) * UNITA_KM),
     obiettivo: freeRoam ? 'MODALITA LIBERA' : objectiveText(),
     vita: Math.max(0, pHealth) / MAX_HEALTH, vitaMax: MAX_HEALTH, scudo: pluriball.scudo / PLURIBALL.max, scudoMax: PLURIBALL.max, nitro: nitro / MAX_NITRO, boost: boosting,
-    arma: { nome: curWeapon.name, usi: curWeapon.uses }, mancano: sogliaBonus() - kills, scelta: statoScelta(), takedown: kills, punti: score,
+    arma: { nome: curWeapon.name, usi: curWeapon.uses, chiave: curWeapon.key }, mancano: sogliaBonus() - kills, scelta: statoScelta(), schermata: statoPannello(), takedown: kills, punti: score,
     combo, comboT, rivali, dietro, musica, smarmella: centralina.liscia,
   };
 }
@@ -3439,6 +3575,14 @@ const proiezione = (() => {
   const CENTRO = { x:576, w:1152 };
 
   let win = null, ctx = null, out = null, dettagli = null, indice = null;
+  // USCITA ESATTA (14 nov 2026). Il controller di un ledwall (NovaStar e simili) si presenta al Mac come uno
+  // schermo normale (di solito 1920x1080), ma sul muro mette SOLO i suoi pixel veri, presi uno a uno da un
+  // angolo del segnale, di norma quello in alto a sinistra. Stendendo il gioco su tutta la finestra, sul muro
+  // si vedeva l'angolo in alto a sinistra ingrandito (foto dell'utente: titolo tagliato a «CAVALLI», 1024x640
+  // veri dentro un 1920x1080). Con `uscitaFissa` la tela ha quei pixel e sta in quell'angolo, pixel per
+  // pixel, senza stirarsi sulla finestra; x,y la spostano se il controller prende i pixel da un altro punto.
+  // `fitOra` è sempre l'ultimo `fit()` creato da `controlliFinestra`.
+  let uscitaFissa = null, fitOra = null;
   let modo = 'mirror';
   const lato = { on:false, testo:'CAVALLI MONGOLI', vel:60, corpo:64, off:0, righe:null, ultimo:0 };
 
@@ -3617,13 +3761,22 @@ const proiezione = (() => {
       tMis = setTimeout(() => { lettura.className = ''; }, 2500);
     }
     function fit() {
-      out.width  = win.innerWidth  || fallbackW || 1280;
-      out.height = win.innerHeight || fallbackH || 720;
+      out.width  = uscitaFissa ? uscitaFissa.w : (win.innerWidth  || fallbackW || 1280);
+      out.height = uscitaFissa ? uscitaFissa.h : (win.innerHeight || fallbackH || 720);
+      // uscita esatta: la tela NON si stira più sulla finestra (100vw x 100vh), occupa i suoi pixel veri a
+      // partire da x,y. Si divide per devicePixelRatio perché il CSS conta in punti, il pannello in pixel.
+      const st = out.style, r = win.devicePixelRatio || 1;
+      if (uscitaFissa) {
+        st.position = 'absolute'; st.left = uscitaFissa.x / r + 'px'; st.top = uscitaFissa.y / r + 'px';
+        st.width = uscitaFissa.w / r + 'px'; st.height = uscitaFissa.h / r + 'px';
+      } else { st.position = st.left = st.top = st.width = st.height = ''; }
       misura();
       stato(velo.style.display !== 'none'
         ? 'proiezione aperta — clicca sulla finestra per lo schermo intero (F per entrare/uscire)'
-        : 'proiezione attiva — ' + out.width + '×' + out.height + (d.fullscreenElement ? ' (schermo intero)' : ''));
+        : 'proiezione attiva — ' + out.width + '×' + out.height + (d.fullscreenElement ? ' (schermo intero)' : '')
+          + (uscitaFissa ? ' [uscita fissa]' : ''));
     }
+    fitOra = fit;
     function schermoIntero() {
       const nascondi = () => { velo.style.display = 'none'; };
       try {
@@ -3686,6 +3839,8 @@ const proiezione = (() => {
     setSchermo(i) { indice = i; },
     setHud(b) { conHud = b; },
     setLato(k, v) { lato[k] = v; if (k === 'testo') lato.righe = null; },
+    setUscitaFissa(w, h, x = 0, y = 0) { uscitaFissa = w > 0 && h > 0 ? { w, h, x, y } : null; if (fitOra) fitOra(); },
+    get uscitaFissa() { return uscitaFissa; },
   };
 })();
 
@@ -3697,7 +3852,6 @@ const game = { state: 'boot', eventIndex: 0, dist: 0, prossimoRivale: 0, target:
 const $screen = document.getElementById('screen');
 const $sbox   = document.getElementById('screen-box');
 const D = id => document.getElementById(id);
-function showScreen(html) { $sbox.innerHTML = html; $screen.style.display = 'flex'; }
 function hideScreen() { $screen.style.display = 'none'; }
 
 function applyUpgrades() {
@@ -3725,6 +3879,8 @@ function respawnRivals() {
   game.prossimoRivale = 18000;
 }
 function startEvent() {
+  annullaRipartenza();
+  registraBase();
   boss.esci();
   const ev = eventFor(game.eventIndex);
   birra.nuovoEvento(ev.dist);                 // forse, in questa tappa, comparirà la Birra
@@ -3769,19 +3925,12 @@ function winEvent() {
 }
 function renderArrivo() {
   game.xp += 10;                                    // il viaggio completo vale un bonus
-  showScreen(`
-    <p class="occhiello">VIAGGIO COMPIUTO - ${TAPPE.length} TAPPE - ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} KM DI STEPPA</p>
-    <h1>KARAKORUM</h1>
-    <div class="righe">
-      <div><span>PUNTI</span><b>${score}</b></div>
-      <div><span>TAKEDOWN</span><b>${kills}</b></div>
-      <div><span>XP</span><b>${game.xp}</b></div>
-    </div>
-    <p class="nota">+10 XP PER L'ARRIVO - RESTANO PER IL PROSSIMO VIAGGIO</p>
-    <button class="big" id="b-boss">LIVELLO BONUS &gt;</button>
-    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
-  D('b-boss').onclick = () => startBoss();
-  D('b-restart').onclick = () => resetRun();
+  apriPannello({ titolo: 'KARAKORUM',
+                 occhiello: `VIAGGIO COMPIUTO - ${TAPPE.length} TAPPE - ${(FINE_VIAGGIO*UNITA_KM).toFixed(0)} KM DI STEPPA`,
+                 righe: [['PUNTI', score], ['TAKEDOWN', kills], ['XP', game.xp]],
+                 note: ["+10 XP PER L'ARRIVO - RESTANO PER IL PROSSIMO VIAGGIO"] },
+               [{ nome: 'LIVELLO BONUS >', fai: startBoss }, { nome: 'NUOVO VIAGGIO >', fai: resetRun }],
+               conPilota('IL PILOTA VA AL LIVELLO BONUS'));
 }
 //=========================================================================
 // LIVELLO BONUS — il Boss. Non è una tappa del viaggio: si apre dopo Karakorum (bottone qui sopra), col tasto C
@@ -3792,6 +3941,8 @@ function renderArrivo() {
 const BOSS_TRATTO = { inizio: tappaInizio[7], fine: tappaInizio[10] };  // dalle Cascate di Ulaan Tsutgalan alle Rovine di Khar Balgas
 function startBoss() {
   if (freeRoam) return;
+  annullaRipartenza();
+  registraBase();
   scelta = null; applyUpgrades();
   Object.assign(game, { type: 'boss', target: BOSS_TRATTO.fine - BOSS_TRATTO.inizio, need: 0, time: 0, timeLeft: 0,
                         dist: 0, killsThisEvent: 0, state: 'racing' });
@@ -3802,37 +3953,18 @@ function startBoss() {
 }
 function winBoss() {
   game.state = 'won'; score += 2000; game.xp += 15;
-  showScreen(`
-    <p class="occhiello">LIVELLO BONUS SUPERATO</p>
-    <h1>${hud.ascii(BOSS.nome)} ABBATTUTO</h1>
-    <div class="righe">
-      <div><span>PUNTI</span><b>${score}</b></div>
-      <div><span>TAKEDOWN</span><b>${kills}</b></div>
-      <div><span>VITA RIMASTA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
-      <div><span>XP</span><b>${game.xp}</b></div>
-    </div>
-    <p class="nota">+2000 PUNTI E +15 XP - L'XP RESTA PER IL PROSSIMO VIAGGIO</p>
-    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>
-    <button class="big" id="b-boss">RIGIOCA IL BOSS &gt;</button>`);
-  D('b-restart').onclick = () => resetRun();
-  D('b-boss').onclick = () => startBoss();
+  apriPannello({ titolo: BOSS.nome + ' ABBATTUTO', occhiello: 'LIVELLO BONUS SUPERATO',
+                 righe: [['PUNTI', score], ['TAKEDOWN', kills], ['VITA RIMASTA', Math.round(pHealth) + '/' + MAX_HEALTH], ['XP', game.xp]],
+                 note: ["+2000 PUNTI E +15 XP - L'XP RESTA PER IL PROSSIMO VIAGGIO"] },
+               [{ nome: 'NUOVO VIAGGIO >', fai: resetRun }, { nome: 'RIGIOCA IL BOSS >', fai: startBoss }]);
 }
 function loseBoss(reason) {
   game.state = 'dead';
-  hud.banner('KO', BOSS.nome + ' HA VINTO', 3);
-  showScreen(`
-    <p class="occhiello">LIVELLO BONUS - ${hud.ascii(BOSS.nome)} AL ${Math.round(boss.vita * 100)}% DI VITA</p>
-    <h1>SCONFITTO</h1>
-    <h2>${hud.ascii(reason)}</h2>
-    <div class="righe">
-      <div><span>FASE</span><b>${boss.fase} DI 3</b></div>
-      <div><span>PUNTI</span><b>${score}</b></div>
-      <div><span>TAKEDOWN</span><b>${kills}</b></div>
-    </div>
-    <button class="big" id="b-boss">RIPROVA IL BOSS &gt;</button>
-    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
-  D('b-boss').onclick = () => startBoss();
-  D('b-restart').onclick = () => resetRun();
+  apriPannello({ titolo: 'SCONFITTO', motivo: reason,
+                 occhiello: `LIVELLO BONUS - ${BOSS.nome} AL ${Math.round(boss.vita * 100)}% DI VITA`,
+                 righe: [['FASE', boss.fase + ' DI 3'], ['PUNTI', score], ['TAKEDOWN', kills]] },
+               [{ nome: 'RIPROVA IL BOSS >', fai: riprovaBoss }, { nome: 'NUOVO VIAGGIO >', fai: resetRun }],
+               { secondi: RIPARTI_DOPO, testo: 'SI RIPROVA IL BOSS', opzione: 0 });
 }
 // I BONUS: uno a scelta a ogni soglia di takedown (5, poi altri 7, 10, 15…). Testi solo ASCII: vanno nell'HUD a pixel.
 const BONUS = [
@@ -3885,11 +4017,26 @@ function statoScelta() {
            sotto: `TAKEDOWN ${kills} - IL PROSSIMO BONUS FRA ${costoBonus(bonusPresi)}`,
            aiuto: ap.on ? 'PILOTA AUTOMATICO: SCEGLIE DA SOLO' : 'FRECCE + INVIO - PAD: CROCE + A - CLIC' };
 }
+addEventListener('keydown', e => {          // Esc: il menu di pausa
+  if (e.key === 'Escape' && !staScrivendo(e)) { apriMenu(); e.preventDefault(); }
+});
+addEventListener('keydown', e => {          // le schermate (briefing, negozio, KO, arrivo, Boss)
+  if (!pannello || staScrivendo(e)) return;
+  const d = { arrowleft: -1, arrowright: 1, arrowup: -1, arrowdown: 1 }[e.key.toLowerCase()];
+  if (d) { muoviPannello(d); e.preventDefault(); }
+  else if (e.key === 'Enter' || e.key === ' ') { scegliPannello(); e.preventDefault(); }
+});
 addEventListener('keydown', e => {
   if (game.state !== 'bonus' || staScrivendo(e)) return;
   const d = { arrowleft: -1, arrowright: 1, arrowup: -3, arrowdown: 3 }[e.key.toLowerCase()];
   if (d) { muoviScelta(d); e.preventDefault(); }
   else if (e.key === 'Enter' || e.key === ' ') { confermaScelta(); e.preventDefault(); }
+});
+document.getElementById('gioco').addEventListener('click', e => {
+  if (!pannello) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  const i = hud.schermataA((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  if (i >= 0) { pannello.indice = i; scegliPannello(i); }
 });
 document.getElementById('gioco').addEventListener('click', e => {
   if (game.state !== 'bonus') return;
@@ -3898,54 +4045,130 @@ document.getElementById('gioco').addEventListener('click', e => {
   if (i >= 0) { scelta.indice = i; confermaScelta(i); }
 });
 
-function renderShop() {
+function renderShop(indice) {
   const nx = eventFor(game.eventIndex + 1);
-  showScreen(`
-    <p class="occhiello">TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} SUPERATA</p>
-    <h1>${hud.ascii(eventFor(game.eventIndex).tappa.nome)}</h1>
-    <div class="righe">
-      <div><span>PUNTI</span><b>${score}</b></div>
-      <div><span>TAKEDOWN</span><b>${kills}</b></div>
-      <div><span>BONUS FRA</span><b>${sogliaBonus() - kills}</b></div>
-      <div><span>VITA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
-      <div><span>ARMA</span><b>${hud.ascii(curWeapon.name)}</b></div>
-      <div><span>XP</span><b>${game.xp}</b></div>
-    </div>
-    <p class="nota">POTENZIAMENTI PERMANENTI (COSTANO XP)</p>
-    <div class="shopgrid">
-      <button id="b-str">+ FORZA<small>2 XP</small></button>
-      <button id="b-hp">+ VITA MAX<small>3 XP</small></button>
-      <button id="b-nt">+ NITRO MAX<small>2 XP</small></button>
-    </div>
-    <p class="nota">PROSSIMA: <b>${hud.ascii(nx.tappa.nome)}</b> - ${hud.ascii(nx.desc)}</p>
-    <button class="big" id="b-next">VIA! &gt;</button>`);
-  D('b-str').disabled   = game.xp < 2;
-  D('b-hp').disabled    = game.xp < 3;
-  D('b-nt').disabled    = game.xp < 2;
-  D('b-str').onclick   = () => { game.xp -= 2; game.up.strength++; applyUpgrades(); renderShop(); };
-  D('b-hp').onclick    = () => { game.xp -= 3; game.up.health++; applyUpgrades(); pHealth += 30; renderShop(); };
-  D('b-nt').onclick    = () => { game.xp -= 2; game.up.nitro++; applyUpgrades(); renderShop(); };
-  D('b-next').onclick  = () => { game.eventIndex++; startEvent(); };
+  const compra = (xp, fai, i) => () => { game.xp -= xp; fai(); applyUpgrades(); renderShop(i); };
+  const pot = [
+    { nome: '+ FORZA',     sotto: '2 XP', ok: game.xp >= 2, riga: 0, fai: compra(2, () => game.up.strength++, 0) },
+    { nome: '+ VITA MAX',  sotto: '3 XP', ok: game.xp >= 3, riga: 0, fai: compra(3, () => { game.up.health++; pHealth += 30; }, 1) },
+    { nome: '+ NITRO MAX', sotto: '2 XP', ok: game.xp >= 2, riga: 0, fai: compra(2, () => game.up.nitro++, 2) },
+  ];
+  apriPannello({ titolo: eventFor(game.eventIndex).tappa.nome, occhiello: `TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} SUPERATA`,
+                 righe: [['PUNTI', score], ['TAKEDOWN', kills], ['BONUS FRA', sogliaBonus() - kills],
+                         ['VITA', Math.round(pHealth) + '/' + MAX_HEALTH], ['ARMA', curWeapon.name], ['XP', game.xp]],
+                 note: ['POTENZIAMENTI PERMANENTI (COSTANO XP)', 'PROSSIMA: ' + nx.tappa.nome + ' - ' + nx.desc] },
+               [...pot, { nome: 'VIA! >', riga: 1, fai: () => { game.eventIndex++; startEvent(); } }],
+               conPilota('IL PILOTA RIPARTE', 3), indice ?? 3);
+}
+// KO o tempo scaduto (13 nov 2026). Prima il viaggio finiva qui e si ripartiva dalla tappa 1 col bottone del pannello:
+// col viaggio da 45 minuti era troppo, e in proiezione la schermata non arriva, quindi restava un fotogramma fermo
+// finché qualcuno non cliccava. Ora si riprova la stessa tappa, e se nessuno tocca niente si riparte da soli.
+const RIPARTI_DOPO = 15;                              // secondi
+// LE SCHERMATE (13 nov 2026): briefing, negozio fra le tappe, KO, arrivo a Karakorum, Boss vinto o perso. Si
+// disegnano sulla tela dell'HUD (hud.js, disegnaSchermata) e NON nel DOM: le schermate DOM in proiezione non
+// arrivano, e al secondo schermo restava un fotogramma fermo. Si sceglie con frecce + Invio, pad (croce + A) o clic.
+// `auto` fa partire da sola un'opzione allo scadere: il KO sempre, le altre col pilota automatico (lo show non si ferma).
+let pannello = null, rinvioPannello = null;
+const PILOTA_AVANTI = 8;                              // secondi prima che il pilota automatico vada avanti da solo
+function annullaRipartenza() { clearTimeout(rinvioPannello); rinvioPannello = null; pannello = null; }
+// dati: { titolo, occhiello, motto, motivo, righe: [[etichetta, valore]], note: [testi] }
+// opzioni: [{ nome, sotto, fai, ok, riga }]; auto: { secondi, testo, opzione } (o null)
+function apriPannello(dati, opzioni, auto = null, indice = 0) {
+  annullaRipartenza(); hideScreen();
+  pannello = { ...dati, opzioni, indice, auto, scade: auto ? performance.now() + auto.secondi * 1000 : 0 };
+  if (auto) rinvioPannello = setTimeout(() => { if (pannello && pannello.auto === auto) scegliPannello(auto.opzione || 0); }, auto.secondi * 1000);
+  if (!opzioni[indice] || opzioni[indice].ok === false) muoviPannello(1);
+}
+const conPilota = (testo, opzione = 0) => ap.on ? { secondi: PILOTA_AVANTI, testo, opzione } : null;
+function scegliPannello(i = pannello && pannello.indice) {
+  if (!pannello) return;
+  const op = pannello.opzioni[i];
+  if (!op || op.ok === false) return;
+  annullaRipartenza(); op.fai();
+}
+function muoviPannello(d) {
+  if (!pannello) return;
+  const n = pannello.opzioni.length;
+  for (let k = 1; k <= n; k++) {                     // salta i bottoni spenti
+    const i = ((pannello.indice + d * k) % n + n) % n;
+    if (pannello.opzioni[i].ok !== false) { pannello.indice = i; return; }
+  }
+}
+function statoPannello() {
+  if (!pannello) return null;
+  const note = [...(pannello.note || [])];
+  if (pannello.auto) note.push(pannello.auto.testo + ' FRA ' + Math.max(0, Math.ceil((pannello.scade - performance.now()) / 1000)) + ' S');
+  return { titolo: pannello.titolo, occhiello: pannello.occhiello, motto: pannello.motto, motivo: pannello.motivo, righe: pannello.righe, note,
+           opzioni: pannello.opzioni.map(o => ({ nome: o.nome, sotto: o.sotto, ok: o.ok, riga: o.riga })), indice: pannello.indice,
+           aiuto: pannello.aiuto || 'FRECCE + INVIO - PAD: CROCE + A - CLIC', sfondo: pannello.sfondo };
+}
+// IL MENU (13 nov 2026): tasto MENU del pad (quello con le tre righe) o Esc. Mette in pausa e offre riprendi, riavvia
+// la tappa (o il Boss), riavvia il viaggio, torna ai titoli. Prima lo stesso tasto accendeva il pilota automatico:
+// ora il pilota si accende solo da tastiera (O) o dal pannello di regia.
+let primaDelMenu = null;                              // lo stato e la schermata da rimettere quando si riprende
+function apriMenu() {
+  if (freeRoam || game.state === 'bonus' || game.state === 'titoli') return;
+  if (pannello && pannello.menu) return riprendi();
+  primaDelMenu = { stato: game.state, pannello };
+  if (game.state === 'racing') game.state = 'pausa';
+  const boss_ = game.type === 'boss', ev = eventFor(game.eventIndex);
+  const opzioni = [{ nome: 'RIPRENDI >', fai: riprendi }];
+  if (primaDelMenu.stato !== 'briefing') opzioni.push({ nome: boss_ ? 'RIAVVIA IL BOSS >' : 'RIAVVIA LA TAPPA >', fai: boss_ ? riprovaBoss : riprovaTappa });
+  opzioni.push({ nome: 'RIAVVIA IL VIAGGIO >', fai: resetRun }, { nome: 'TORNA AI TITOLI >', fai: mostraTitoli });
+  apriPannello({ titolo: 'PAUSA', menu: true, aiuto: 'MENU O ESC PER RIPRENDERE',
+                 occhiello: boss_ ? 'LIVELLO BONUS - ' + BOSS.nome : `TAPPA ${ev.indice + 1} DI ${TAPPE.length} - ${ev.tappa.nome}`,
+                 righe: [['VITA', Math.round(pHealth) + '/' + MAX_HEALTH], ['PUNTI', score], ['XP', game.xp]] }, opzioni);
+  pannello.menu = true;
+}
+function riprendi() {
+  const p = primaDelMenu; primaDelMenu = null;
+  annullaRipartenza();
+  if (!p) return;
+  game.state = p.stato === 'racing' ? 'racing' : p.stato;
+  if (p.pannello) {                                   // c'era una schermata (briefing, negozio, KO): torna com'era
+    const v = p.pannello;
+    apriPannello(v, v.opzioni, v.auto, v.indice);
+  }
+}
+// I TITOLI: la prima schermata, e quella a cui si torna dal menu. Per ora è il pannello dell'HUD col nome del gioco
+// (la copertina vera è ancora da fare, vedi tools/copertina).
+function mostraTitoli() {
+  primaDelMenu = null;
+  game.state = 'titoli';
+  const opzioni = [];
+  if (game.eventIndex > 0) {
+    opzioni.push({ nome: 'CONTINUA - TAPPA ' + (game.eventIndex + 1) + ' >', fai: showBriefing });
+    opzioni.push({ nome: 'NUOVO VIAGGIO >', fai: resetRun });
+  } else {
+    opzioni.push({ nome: 'PREMI PER INIZIARE >', fai: showBriefing });
+  }
+  opzioni.push({ nome: 'LIVELLO BONUS >', fai: startBoss });
+  apriPannello({ sfondo: imgTitoli }, opzioni, conPilota('IL PILOTA PARTE'));
+}
+function riprovaTappa() {
+  annullaRipartenza();
+  ripristinaBase();
+  pHealth = MAX_HEALTH;          // la barra PLURIBALL no: scende solo coi colpi (al KO è già vuota, col tempo scaduto resta)
+  startEvent();
+}
+function riprovaBoss() {         // come riprovaTappa, ma per il livello bonus
+  annullaRipartenza();
+  ripristinaBase();
+  startBoss();
 }
 function loseEvent(reason) {
   game.state = 'dead';
-  hud.banner('KO', 'VIAGGIO INTERROTTO', 3);
-  showScreen(`
-    <p class="occhiello">TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} - ${Math.round(100*position/FINE_VIAGGIO)}% DELLA STRADA</p>
-    <h1>VIAGGIO INTERROTTO</h1>
-    <h2>${hud.ascii(reason)}</h2>
-    <div class="righe">
-      <div><span>CADUTO A</span><b>${hud.ascii(eventFor(game.eventIndex).tappa.nome)}</b></div>
-      <div><span>PUNTI</span><b>${score}</b></div>
-      <div><span>TAKEDOWN</span><b>${kills}</b></div>
-    </div>
-    <p class="nota">XP ACCUMULATO: <b>${game.xp}</b> - RESTA PER IL PROSSIMO VIAGGIO</p>
-    <button class="big" id="b-restart">NUOVO VIAGGIO &gt;</button>`);
-  D('b-restart').onclick = () => resetRun();
+  apriPannello({ titolo: 'KO', motivo: reason,
+                 occhiello: `TAPPA ${game.eventIndex + 1} DI ${TAPPE.length} - ${Math.round(100*position/FINE_VIAGGIO)}% DELLA STRADA`,
+                 righe: [['CADUTO A', eventFor(game.eventIndex).tappa.nome], ['PUNTI', score], ['TAKEDOWN', kills]] },
+               [{ nome: 'RIPROVA LA TAPPA >', fai: riprovaTappa }, { nome: 'NUOVO VIAGGIO >', fai: resetRun }],
+               { secondi: RIPARTI_DOPO, testo: 'SI RIPARTE DA QUESTA TAPPA', opzione: 0 });
 }
 function resetRun() {
+  annullaRipartenza();
   boss.esci(); birra.azzera(); game.type = 'race';
   game.eventIndex = 0; scelta = null; bonusPresi = 0; sogliaPrec = 0; score = 0; kills = 0; nitro = 0; equipWeapon('fists');
+  tappaBase = null; game.up = { strength: 0, health: 0, nitro: 0 };   // i potenziamenti (XP) sono per questo viaggio, non restano
   applyUpgrades(); pHealth = MAX_HEALTH; pluriball.azzera(); showBriefing();
 }
 // MODALITÀ LIBERA — spegne la parte Road Redemption e lascia solo la guida.
@@ -3960,7 +4183,7 @@ function setFreeRoam(on) {
   if (on) {
     game.state = 'racing';
     pHealth = MAX_HEALTH;      // niente danni: la barra resta piena
-    hideScreen();
+    annullaRipartenza(); hideScreen();
   } else {
     resetRun();                // si torna al gioco normale da un briefing pulito
   }
@@ -3969,24 +4192,16 @@ function showBriefing() {
   game.state = 'briefing';
   const ev = eventFor(game.eventIndex);
   const tipo = { race:'GARA', takedown:'RAZZIA', survival:'SOPRAVVIVENZA', time:'CONTRO IL TEMPO' }[ev.type];
-  showScreen(`
-    <p class="occhiello">TAPPA ${ev.indice + 1} DI ${TAPPE.length}</p>
-    <h1>${hud.ascii(ev.tappa.nome)}</h1>
-    <p class="motto">${hud.ascii(ev.tappa.motto)}</p>
-    <h2><b>${tipo}</b> - ${hud.ascii(ev.desc)}</h2>
-    <div class="righe">
-      <div><span>STRADA</span><b>${(ev.dist*UNITA_KM).toFixed(1)} KM</b></div>
-      <div><span>VITA</span><b>${Math.round(pHealth)}/${MAX_HEALTH}</b></div>
-      <div><span>XP</span><b>${game.xp}</b></div>
-    </div>
-    <p class="nota">J/L ATTACCA - K CALCIO - I PARATA - SHIFT BOOST<br>BONUS A SCELTA OGNI 5, 7, 10, 15... TAKEDOWN</p>
-    <button class="big" id="b-go">VIA! &gt;</button>`);
-  D('b-go').onclick = () => startEvent();
+  apriPannello({ titolo: ev.tappa.nome, occhiello: `TAPPA ${ev.indice + 1} DI ${TAPPE.length}`, motto: ev.tappa.motto,
+                 motivo: tipo + ' - ' + ev.desc,
+                 righe: [['STRADA', (ev.dist*UNITA_KM).toFixed(1) + ' KM'], ['VITA', Math.round(pHealth) + '/' + MAX_HEALTH], ['XP', game.xp]],
+                 note: ['J/L ATTACCA - K CALCIO - I PARATA - SHIFT BOOST', 'BONUS A SCELTA OGNI 5, 7, 10, 15... TAKEDOWN'] },
+               [{ nome: 'VIA! >', fai: startEvent }], conPilota('IL PILOTA PARTE'));
 }
 function begin() {                          // primo avvio, a caricamento finito
   applyUpgrades(); pHealth = MAX_HEALTH; pluriball.azzera();
   if (new URLSearchParams(location.search).get('boss')) return startBoss();   // ?boss=1: dritti al livello bonus
-  showBriefing();
+  mostraTitoli();
 }
 // ?spegni=nebbia,lucciole,… — per cercare a occhio un difetto di resa (es. solo in Safari): toglie dalla scena
 // i pezzi nominati. Nomi: nebbia lucciole fuochi montagne luna nuvole acqua erba polvere animali ovoo massi pali alberi
@@ -4005,13 +4220,24 @@ function begin() {                          // primo avvio, a caricamento finito
   for (const n of spegni) { if (pezzi[n]) { pezzi[n](); console.info('spento:', n); } else console.warn('spegni: nome sconosciuto', n); }
 }
 window.cm3d = { atmosfera, fauna, dust, paesaggio, fiumeAl, get renderMode() { return renderMode; }, setMode, musica, party, centralina, smarmella, sceltaLivello, hud, statoHud, startEvent, mondo, ritmoCavalli, game, TRACK_LENGTH, MAX_SPEED, ACCEL, ATK_RANGE, LAT_RANGE, opponents, popups,
-  eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player, boss, BOSS, startBoss, BOSS_TRATTO, birra, BIRRA, pluriball, PLURIBALL, assorbiScudo,
+  eventFor, gapTo, playerAttack, playerKick, camera, HORSE_HEIGHT, player, boss, BOSS, startBoss, BOSS_TRATTO, birra, BIRRA, pluriball, PLURIBALL, assorbiScudo, armi, pickups,
   setFreeRoam, get freeRoam(){return freeRoam}, setPilota, ap, pad, proiezione, preferenze,
   fendenti, frecce, fermaImmagine, wipe, fendentiArchi: () => fendenti.__archi || [],
   segments, pts, posToWorld, groundAt, roadDist, terrain, trees, TREE_CLEARANCE, TAPPE, tappaInizio, FINE_VIAGGIO,
   VERGE_DROP, VERGE_OUT, BANK_OUT, SEGMENT_LENGTH, ROAD_WIDTH, N,
-  get speed(){return speed}, get pHealth(){return pHealth}, applyUpgrades, get playerX(){return playerX},
-  get kills(){return kills}, get score(){return score}, get bonusPresi(){return bonusPresi}, get scelta(){return scelta}, confermaScelta, muoviScelta, costoBonus, vitaRivale,
+  get speed(){return speed}, get pHealth(){return pHealth}, set pHealth(v){ pHealth = v; },
+  // per i test: un colpo che va a segno sul giocatore, come quelli dei rivali e del Boss (scudo, lampo, KO)
+  ferisci(danno, dir = 1) { const passa = assorbiScudo(danno); pHealth -= passa; dmgFlash = passa > 0 ? 1 : 0.35; player.flashHit(); player.colpito(dir, 1.5);
+                            if (pHealth <= 0) { pHealth = 0; onPlayerDown(); } },
+  applyUpgrades, get playerX(){return playerX},
+  // per i test: quanto sono "aperte" luce/bloom/esposizione in questo istante (vedi applicaLuce)
+  get luceDebug(){ return { sole: sun.intensity, cielo: hemi.intensity, espo: renderer.toneMappingExposure, bloom: bloom.strength }; },
+  // per i test: quanto costa il fotogramma alla scheda video (chiamate di disegno, triangoli, texture in VRAM)
+  get rendererInfo(){ const r = renderer.info; return { calls: r.render.calls, triangoli: r.render.triangles, geometrie: r.memory.geometries,
+                       texture: r.memory.textures, pixelRatio: renderer.getPixelRatio(), W: renderer.domElement.width, H: renderer.domElement.height }; },
+  get kills(){return kills}, set kills(v){ kills = v; }, get score(){return score}, set score(v){ score = v; },
+  get bonusPresi(){return bonusPresi}, set bonusPresi(v){ bonusPresi = v; }, get tappaBase(){return tappaBase; }, get curWeapon(){return curWeapon;}, equipWeapon,
+  get scelta(){return scelta}, confermaScelta, muoviScelta, get pannello(){return pannello}, scegliPannello, muoviPannello, apriMenu, mostraTitoli, costoBonus, vitaRivale,
   // teleport per ispezione headless: piazza il giocatore a un punto della pista
   teleport(pos, lat = 0) { position = prevPosition = ((pos % TRACK_LENGTH)+TRACK_LENGTH)%TRACK_LENGTH;
                            playerX = prevPlayerX = lat; speed = 0; } };  // handle debug/test (headless)
@@ -4064,7 +4290,7 @@ function frame(now) {
       updatePhysics(FIXED_DT);
       acc -= FIXED_DT;
     }
-  } else { acc = 0; }
+  } else { acc = 0; if (dmgFlash > 0) dmgFlash = Math.max(0, dmgFlash - frameDt*2.5); }
   if (scelta && ap.on && now - scelta.t0 > 2000) { scelta.indice = sceltaPilota(); confermaScelta(); }
   checkGame();
   const alpha = acc / FIXED_DT;                        // frazione tra stato precedente e corrente
@@ -4131,6 +4357,7 @@ function frame(now) {
   birra.aggiorna(dtG, { racing: game.state === 'racing' && !freeRoam && game.type !== 'boss', dist: game.dist, resta: game.target - game.dist,
                         position, playerX, speed, giocatore: player.group.position });   // BIRRA GRANDE: pattina, si acchiappa
   pluriball.aggiorna(frameDt, { racing: !freeRoam, playerX, giocatore: player.group.position, player });   // PLURIBALL: rotoli da raccogliere, bolla attorno al protagonista
+  armi.aggiorna(player, curWeapon.key);  // l'arma equipaggiata nella mano del protagonista, col fendente in corso
   updatePickups(frameDt);
   hitSpark.update(dtG);                  // scintille d'impatto sui colpi
   fendenti.update(dtG);                  // scie dei colpi, onde del calcio, anelli di parata
@@ -4153,7 +4380,7 @@ function frame(now) {
                        giorno: giornoAttuale, nebbia: scene.fog.color });
   applicaLuce();
   pannelloSmarmella(now);
-  gamepad.leggi();                       // pad: sterzo, gas, attacchi, START = pilota
+  gamepad.leggi();                       // pad: sterzo, gas, attacchi, MENU = pausa
 
   updateCamera(frameDt);
   // FOV dinamico: si allarga con la velocità → forte senso di velocità
@@ -4212,17 +4439,9 @@ Promise.all([framesReady, modelReady]).then(([sOK, mOK]) => {
       : 'Né gli sprite (<code>images/horses/</code>) né il modello 3D (CDN) si sono caricati. Controlla che il server serva la cartella del progetto e che ci sia connessione internet, poi ricarica. In alternativa ' + serverHint + '.') + '</div>';
     return;
   }
-  if (sOK) {
-    allActors.forEach(a => a.initSprite());
-  } else {
-    $('btn-sprite').disabled = true;
-    showWarning((isFile
-      ? 'Pagina aperta con doppio click (<code>file://</code>): gli sprite locali non si caricano così — per il confronto A/B ' + serverHint + '.'
-      : 'Sprite non trovati in <code>images/horses/</code> su questo server.') +
-      '<br>Per ora parto con l\'<b>Opzione B (modello 3D)</b>.');
-  }
-  if (!mOK) $('btn-model').disabled = true;
-  setMode(sOK ? 'sprite' : 'model');
+  if (sOK) allActors.forEach(a => a.initSprite());
+  if (!mOK) showWarning('Il modello 3D dei cavalli non si è caricato: per ora uso gli sprite. ' + serverHint + '.');
+  setMode(mOK ? 'model' : 'sprite');
   $('loading').remove();
   ridimensiona();          // fissa la vista ora che le tele overlay esistono tutte
   ambiente.dosa();         // luce del cielo per materiale (anche quelli nati col modello)

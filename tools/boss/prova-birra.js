@@ -8,12 +8,13 @@ const OUT = __dirname + '/', pausa = ms => new Promise(r => setTimeout(r, ms));
   page.on('console', m => { const t = m.text(); if ((m.type() === 'error' && !/404/.test(t)) || /Birra/.test(t)) errori.push(m.type() + ': ' + t.slice(0, 200)); });
   page.on('pageerror', e => errori.push('PAGEERROR: ' + String(e).slice(0, 300)));
   await page.goto('http://127.0.0.1:8902/horse-racing-3d.html?birra=1', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'briefing' && cm3d.birra.pronto, { timeout: 90000 });
+  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'titoli' && cm3d.birra.pronto, { timeout: 90000 });
   const gioco = await page.$('#gioco');
   const leggi = () => page.evaluate(() => { const d = cm3d.birra.dati; return { stato: d.stato, gap: Math.round(cm3d.gapTo(d.pos)), lat: +d.lat.toFixed(2), vB: Math.round(d.speed), effetto: +d.effetto.toFixed(1),
     quando: d.quando === Infinity ? 'mai' : Math.round(d.quando), dist: Math.round(cm3d.game.dist), px: +cm3d.playerX.toFixed(2), kmh: Math.round(cm3d.speed / 60), hp: Math.round(cm3d.pHealth), game: cm3d.game.state }; });
   console.log('avvio            ', JSON.stringify(await leggi()));
-  await page.click('#b-go'); await page.keyboard.press('o');
+  await page.evaluate(() => { cm3d.scegliPannello(); cm3d.scegliPannello(); });   // titoli: NUOVO VIAGGIO, poi VIA!
+  await page.keyboard.press('o');
   let preso = false, n = 0, fotoAvvista = false, fotoPreso = false, kmhMax = 0, fine = false;
   for (let i = 0; i < 90 && !fine; i++) {
     await pausa(500);

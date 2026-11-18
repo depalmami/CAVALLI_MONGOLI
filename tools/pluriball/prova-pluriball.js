@@ -10,12 +10,13 @@ const OUT = (process.argv[2] || __dirname) + '/', pausa = ms => new Promise(r =>
   page.on('console', m => { const t = m.text(); if ((m.type() === 'error' && !/404/.test(t)) || /Pluriball/.test(t)) errori.push(m.type() + ': ' + t.slice(0, 200)); });
   page.on('pageerror', e => errori.push('PAGEERROR: ' + String(e).slice(0, 300)));
   await page.goto('http://127.0.0.1:8902/horse-racing-3d.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'briefing' && cm3d.pluriball.pronto, { timeout: 90000 });
+  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'titoli' && cm3d.pluriball.pronto, { timeout: 90000 });
   const gioco = await page.$('#gioco');
   await page.evaluate(() => cm3d.setMode('model'));
   const leggi = () => page.evaluate(() => ({ scudo: +cm3d.pluriball.scudo.toFixed(1), bolla: cm3d.pluriball.guscio.visible, op: +cm3d.pluriball.guscio.material.opacity.toFixed(2),
     vita: Math.round(cm3d.pHealth), game: cm3d.game.state, rotoli: cm3d.pluriball.rotoli.filter(r => r.gr.visible).length }));
-  await page.click('#b-go'); await page.keyboard.press('o');
+  await page.evaluate(() => { cm3d.scegliPannello(); cm3d.scegliPannello(); });   // titoli: NUOVO VIAGGIO, poi VIA!
+  await page.keyboard.press('o');
   await pausa(2500);
   console.log('prima del rotolo', JSON.stringify(await leggi()));
   // metto il rotolo 22000 unità davanti, sulla corsia del giocatore: il pilota lo prende

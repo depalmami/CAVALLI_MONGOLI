@@ -71,7 +71,7 @@ export function creaPaesaggio({ scene, U, posToWorld, groundAt, roadDist, tappaD
       if (!f || f.mezza < 60) { chiudi(); continue; }
       const a = punti[s], rx = -Math.cos(a.heading), rz = Math.sin(a.heading);
       const cx = a.x + rx * f.lat * ROAD_WIDTH, cz = a.z + rz * f.lat * ROAD_WIDTH;
-      const m = f.mezza * 1.3;               // il letto scavato arriva al pelo dell'acqua ~20-30% oltre la "mezza": il nastro arriva lì, senza sospendersi sulla riva
+      const m = f.mezza * 1.3;               // DEVE combaciare col "bordo" del passo 5b in horse-racing-3d.html (il letto dei fiumi): lì il terreno viene forzato a incontrare esattamente il pelo dell'acqua a questa stessa distanza, altrimenti l'acqua torna a sembrare sospesa sulla riva.
       const L = [cx - rx * m, f.y, cz - rz * m], R = [cx + rx * m, f.y, cz + rz * m];
       const k = tappaDi(s * SEGMENT_LENGTH);
       corsa.push({ L, R, cx, cz, fx: 0, fz: 1, tur: (k === 2 || k === 8) ? 1 : 0.15 });

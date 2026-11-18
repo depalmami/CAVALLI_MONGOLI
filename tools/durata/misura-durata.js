@@ -16,7 +16,7 @@ const pausa = ms => new Promise(r => setTimeout(r, ms));
   page.on('pageerror', e => errori.push('PAGEERROR: ' + String(e).slice(0, 300)));
   const t0 = Date.now();
   await page.goto('http://127.0.0.1:8902/horse-racing-3d.html', { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'briefing', { timeout: 300000 });
+  await page.waitForFunction(() => window.cm3d && cm3d.game.state === 'titoli', { timeout: 300000 });
   const carica = (Date.now() - t0) / 1000;
   const info = await page.evaluate(() => {
     const V = cm3d.MAX_SPEED, P = cm3d.pts, passo = 5, CELLA = 40000, griglia = new Map();
@@ -36,7 +36,7 @@ const pausa = ms => new Promise(r => setTimeout(r, ms));
   });
   console.log('caricamento', carica.toFixed(1), 's');
   console.log(JSON.stringify(info));
-  await page.click('#b-go').catch(() => {});
+  await page.evaluate(() => { cm3d.scegliPannello(); cm3d.scegliPannello(); });   // titoli: NUOVO VIAGGIO, poi VIA!
   await pausa(500);
   const corri = async (avvia, nome, tutta) => {
     await page.evaluate(avvia);
