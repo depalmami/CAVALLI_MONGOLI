@@ -55,3 +55,8 @@ __pycache__/
 # Tracce di prova generate da tools/orecchie/gen-tracce.js (si rigenerano)
 tools/orecchie/tracce/
 *.blend1
+
+# Trailer in Blender: i fotogrammi intermedi dei render (~1,5 GB) si rigenerano con tools/trailer3d/shot*.py
+# e sono già codificati negli mp4 di ogni shot; la cache del rumore la scrive Blender nella cartella da cui parte
+trailer/blender/shot/*/f_*.png
+tools/trailer3d/waveletNoiseTile.bin
